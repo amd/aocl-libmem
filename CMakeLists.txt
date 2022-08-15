@@ -12,6 +12,8 @@ set(DEFAULT_BUILD_TYPE "Release")
 
 option(ENABLE_LOGGING "Enable Logger" OFF)
 
+option(ENABLE_TUNABLES "Enable user input" OFF)
+
 if (ENABLE_LOGGING)
 add_definitions(-DENABLE_LOGGER)
 # uncomment the below for debug logs, LOG_LEVEL=DEBUG.

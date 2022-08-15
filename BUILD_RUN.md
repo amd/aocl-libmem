@@ -13,9 +13,13 @@
     #Configure for GCC build
         # Default
         $ cmake ../aocl-libmem
+        # Enabling Tunable Parameters
+        $ cmake -D ENABLE_TUNABLES=Y ../aocl-libmem
     #Configure for AOCC(Clang) build
         # Default
         $ cmake -D CMAKE_C_COMPILER=clang ../aocl-libmem
+        # Enabling Tunable Parameters
+        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y ./aocl-libmem
     #Build
     $ cmake --build .
     #Install
@@ -37,5 +41,9 @@ A shared library file libaocl-libmem.so will be generated and stored under build
 ## Running application:
  ``Run the application by preloading the libaocl-libmem.so generated from the above build procedure.``
 ```sh
-    $ LD_PRELOAD=<path to build/lib/libaocl-libmem.so> <executable> <params>
+    $ LD_PRELOAD=<path to build/lib/libaocl-libmem.s> <executable> <params>
 ```
+
+## User Config
+###  Default State Run:
+ ``Best fit implementation for the underlying ZEN microarchitecture will be chosen by the library.``

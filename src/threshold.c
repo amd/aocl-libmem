@@ -70,6 +70,20 @@ void configure_thresholds()
             zen_info.zen_thresholds.nt_stop_threshold;
     }
 
+#ifdef ENABLE_TUNABLES
+
+    else if (active_threshold_cfg == USR_CFG)
+    {
+        __repmov_start_threshold = \
+            user_config.user_threshold.repmov_start_threshold;
+        __repmov_stop_threshold = \
+            user_config.user_threshold.repmov_stop_threshold;
+        __nt_start_threshold = \
+            user_config.user_threshold.nt_start_threshold;
+        __nt_stop_threshold = \
+            user_config.user_threshold.nt_stop_threshold;
+    }
+#endif
     LOG_DEBUG("%s: repmov[%lu,%lu], non_temporal[%lu,%lu]\n", \
             active_threshold_cfg == SYS_CFG? "System ":"User ", \
             __repmov_start_threshold, __repmov_stop_threshold, \

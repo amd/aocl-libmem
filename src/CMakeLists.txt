@@ -11,6 +11,11 @@ if (ENABLE_LOGGING)
 set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/logger.c)
 endif ()
 
+if (ENABLE_TUNABLES)
+add_definitions(-DENABLE_TUNABLES)
+set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/env_parser.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem_iface.c)
+endif ()
+
 # include the header files
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
 

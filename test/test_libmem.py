@@ -161,13 +161,19 @@ def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
         #read first data line
         glibc_row = next(glibc_reader, None)
         amd_row = next(amd_reader, None)
+        print("    SIZE".ljust(8)+"     : GAINS")
+        print("    ----------------")
         while glibc_row and amd_row:
-            # print(glibc_row, amd_row)
             res = round(((float(glibc_row[3])/float(amd_row[3]))-1)*100)
             perf_data.append(res)
             perf_writer.writerow([glibc_row[0], glibc_row[1], glibc_row[2],\
-                                                        res])
-            print([glibc_row[0], glibc_row[1], glibc_row[2],res])
+                                                       res])
+            if int(glibc_row[0]) >= 1024*1024:
+                print("   ",((str(int(glibc_row[0])/(1024*1024)))+" MB").ljust(8)+" :"+(str(res)+"%").rjust(6))
+            elif int(glibc_row[0]) >= 1024:
+                print("   ",((str(int(glibc_row[0])/(1024)))+" KB").ljust(8)+" :"+(str(res)+"%").rjust(6))
+            else:
+                print("   ",(glibc_row[0] + " B").ljust(8)+" :"+(str(res)+"%").rjust(6))
             glibc_row = next(glibc_reader, None)
             amd_row = next(amd_reader, None)
 
