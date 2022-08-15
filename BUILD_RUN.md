@@ -71,3 +71,23 @@ The library will choose the implementation based on the tuned parameter at run t
 ```sh
     LD_PRELOAD=<build/lib/libaocl-libmem.so> LIBMEM_OPERATION=avx2,b,b <executable>
 ```
+
+#### 2.2. _LIBMEM_THRESHOLD_ :
+**Setting this tunable will let us configure the threshold values for the supported instruction set.**
+
+ **LIBMEM_THRESHOLD** format: **`<repmov_start_threshold>,<repmov_stop_threshold>,<nt_start_threshold>,<nt_stop_threshold>`**
+
+ ##### Valid options:
+ * `<repmov_start_threshold> = [0, +ve integers]`
+ * `<repmov_stop_threshold> = [0, +ve integers, -1]`
+ * `<nt_start_threshold> = [0, +ve integers]`
+ * `<nt_stop_threshold> = [0, +ve integers, -1]`
+
+ One has to make sure that they provide valid start and stop range values.
+ If the size has to be set to maximum length then pass "-1"
+
+ e.g.: To use **REP MOVE** instructions for a range of 1KB to 2KB and non_temporal instructions for a range of 512KB and above.
+ ```sh
+ LD_PRELOAD=<build/lib/libaocl-libmem.so> LIBMEM_THRESHOLD=1024,2048,524288,-1 <executable>
+ ```
+ **` Kindly refer to User Guide(docs/User_Guide.md) for the detailed tuning of parameters.`**

@@ -22,70 +22,26 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _LIBMEM_H_
-#define _LIBMEM_H_
+#include <stddef.h>
+#include <immintrin.h>
+#include "amd_memcpy.h"
+#include "logger.h"
+#include "threshold.h"
+#include "zen_cpu_info.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern cpu_info zen_info;
 
-#include "libmem_impls.h"
-typedef enum{
-    MEMCPY = 0,
-}func_index;
-
-// A maximum of 16 supported variants
-typedef enum{
-/*System feature & Threshold*/
-    SYSTEM,
-/*User Threshold with avx2, erms, non-temporal*/
-    THRESHOLD,
-/*User AVX2 operation based*/
-    AVX2_UNALIGNED,
-    AVX2_ALIGNED,
-    AVX2_ALIGNED_LOAD,
-    AVX2_ALIGNED_STORE,
-    AVX2_NON_TEMPORAL,
-    AVX2_NON_TEMPORAL_LOAD,
-    AVX2_NON_TEMPORAL_STORE,
-/*User ERMS operation based*/
-    ERMS_MOVSB,
-    ERMS_MOVSW,
-    ERMS_MOVSD,
-    ERMS_MOVSQ,
-/*uArch based*/
-    ARC_ZEN1,
-    ARC_ZEN2,
-    ARC_ZEN3,
-    VAR_COUNT
-}variant_index;
-
-//void * libmem_impls_1[FUNC_COUNT][VAR_COUNT]=
-void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
+void * __memcpy_system(void *dst, const void *src, size_t size)
 {
+    LOG_INFO("\n");
+    if (zen_info.zen_cpu_features.erms && size > __repmov_start_threshold\
+                                     && size < __repmov_stop_threshold)
     {
-        __memcpy_system,
-        __memcpy_threshold,
-        __memcpy_avx2_unaligned,
-        __memcpy_avx2_aligned,
-        __memcpy_avx2_aligned_load,
-        __memcpy_avx2_aligned_store,
-        __memcpy_avx2_nt,
-        __memcpy_avx2_nt_load,
-        __memcpy_avx2_nt_store,
-        __memcpy_erms_b_aligned,
-        __memcpy_erms_w_aligned,
-        __memcpy_erms_d_aligned,
-        __memcpy_erms_q_aligned,
-        __memcpy_zen1,
-        __memcpy_zen2,
-        __memcpy_zen3
+        return __memcpy_erms_b_aligned(dst, src, size);
     }
-};
-
-#ifdef __cplusplus
+    if (size < __nt_start_threshold)
+        return __memcpy_avx2_unaligned(dst, src, size);
+    else
+        return __memcpy_avx2_nt_store(dst, src, size);
 }
-#endif
-
-#endif
 

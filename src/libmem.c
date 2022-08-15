@@ -132,6 +132,11 @@ static variant_index amd_libmem_resolver(void)
             }
         }
     }
+    else if (active_threshold_cfg == USR_CFG) // User Threshold Config
+    {
+        LOG_INFO("User Threshold CFG.\n");
+        var_idx = THRESHOLD;
+    }
     return var_idx;
 }
 #endif

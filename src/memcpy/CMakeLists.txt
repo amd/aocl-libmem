@@ -2,7 +2,7 @@
 set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (ENABLE_TUNABLES)
-set(SOURCE_FILES  ${SRC_PATH}/memcpy_march.c ${SRC_PATH}/memcpy_avx2.c ${SRC_PATH}/memcpy_erms.c)
+set(SOURCE_FILES  ${SRC_PATH}/memcpy_march.c ${SRC_PATH}/memcpy_avx2.c ${SRC_PATH}/memcpy_erms.c ${SRC_PATH}/memcpy_system ${SRC_PATH}/memcpy_threshold)
 else ()
 set(SOURCE_FILES ${SRC_PATH}/amd_memcpy.c)
 endif ()

@@ -35,6 +35,12 @@ extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
 extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
 extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
 
+//System solution which takes in system config and  threshold values.
+extern void * __memcpy_system(void *dest,const void *src, size_t size);
+
+//Generic solution which takes in user threshold values.
+extern void * __memcpy_threshold(void *dest,const void *src, size_t size);
+
 //CPU Feature:AVX2 and Alignment specifc implementations.
 extern void * __memcpy_avx2_unaligned(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx2_aligned(void *dest,const void *src, size_t size);
