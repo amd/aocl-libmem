@@ -23,3 +23,4 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "amd_memcpy.h"
+#include "amd_mempcpy.h"

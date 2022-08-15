@@ -32,4 +32,9 @@ __attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const vo
 LIBMEM_FN_MAP(memcpy);
 WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
 
+__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
+// mempcpy mapping
+LIBMEM_FN_MAP(mempcpy);
+WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
+
 #endif

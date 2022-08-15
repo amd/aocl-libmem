@@ -32,6 +32,7 @@ extern "C" {
 #include "libmem_impls.h"
 typedef enum{
     MEMCPY = 0,
+    MEMPCPY = 1
 }func_index;
 
 // A maximum of 16 supported variants
@@ -79,7 +80,26 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_zen1,
         __memcpy_zen2,
         __memcpy_zen3
-    }
+    },
+    {
+        NULL,
+        NULL,
+        __mempcpy_avx2_unaligned,
+        __mempcpy_avx2_aligned,
+        __mempcpy_avx2_aligned_load,
+        __mempcpy_avx2_aligned_store,
+        __mempcpy_avx2_nt,
+        __mempcpy_avx2_nt_load,
+        __mempcpy_avx2_nt_store,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    },
+
 };
 
 #ifdef __cplusplus
