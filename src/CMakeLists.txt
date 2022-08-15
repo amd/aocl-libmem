@@ -24,5 +24,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
 
 add_subdirectory(memcpy)
+add_subdirectory(mempcpy)
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib)

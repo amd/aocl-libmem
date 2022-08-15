@@ -60,7 +60,6 @@ typedef enum{
     VAR_COUNT
 }variant_index;
 
-//void * libmem_impls_1[FUNC_COUNT][VAR_COUNT]=
 void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
 {
     {
