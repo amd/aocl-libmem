@@ -64,8 +64,8 @@ void parse_env_operation_cfg(void)
 
     if (!strcmp(token, "avx2"))
         user_config.user_operation.avx2 = 1;
-    else if (!strcmp(token, "repmov"))
-        user_config.user_operation.repmov = 1;
+    else if (!strcmp(token, "erms"))
+        user_config.user_operation.erms = 1;
     else
     {
         LOG_WARN("invalid CPU operation: %s\n", token);

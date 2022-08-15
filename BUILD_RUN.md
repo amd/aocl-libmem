@@ -43,6 +43,7 @@ A shared library file libaocl-libmem.so will be generated and stored under build
 ```sh
     $ LD_PRELOAD=<path to build/lib/libaocl-libmem.so> <executable> <params>
 ```
+
 ## User Config:
 ### 1. Default State Run:
  ``Best fit implementation for the underlying ZEN microarchitecture will be chosen by the library.``
@@ -62,7 +63,7 @@ The library will choose the implementation based on the tuned parameter at run t
  **LIBMEM_OPERATION** format: **`<operations>,<source_alignment>,<destination_alignmnet>`**
 
  ##### Valid options:
- * `<operations> = [avx2]`
+ * `<operations> = [avx2|erms]`
  * `<source_alignment> = [b|w|d|q|x|y|n]`
  * `<destination_alignmnet> = [b|w|d|q|x|y|n]`
 

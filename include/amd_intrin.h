@@ -22,39 +22,69 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMCPY_H_
-#define _MEMCPY_H_
-#include <stddef.h>
+#ifndef _AMD_INTRIN_H_
+#define _AMD_INTRIN_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Micro architecture specifc implementations.
-extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
+#include <stdint.h>
 
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memcpy_avx2_unaligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_store(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_store(void *dest,const void *src, size_t size);
+inline void * __erms_movsb(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "cld\n\t"
+    "rep movsb"
+    :
+    : "D"(dst), "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
 
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memcpy_erms_b_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_w_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_d_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_q_aligned(void *dest,const void *src, size_t size);
+inline void * __erms_movsw(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $1, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsw"
+    :
+    : "D"(dst), "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
 
-extern void *(*_memcpy_variant)(void *, const void *, size_t);
+inline void * __erms_movsd(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $2, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsd"
+    :
+    : "D"(dst), "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
 
+inline void * __erms_movsq(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $3, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsq"
+    :
+    : "D"(dst), "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
+

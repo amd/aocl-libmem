@@ -22,39 +22,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMCPY_H_
-#define _MEMCPY_H_
 #include <stddef.h>
+#include "amd_intrin.h"
+#include "logger.h"
+#include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//Micro architecture specifc implementations.
-extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memcpy_avx2_unaligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_store(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_store(void *dest,const void *src, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memcpy_erms_b_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_w_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_d_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_q_aligned(void *dest,const void *src, size_t size);
-
-extern void *(*_memcpy_variant)(void *, const void *, size_t);
-
-
-#ifdef __cplusplus
+// memcpy with byte rep move instruciton:REP MOVSB
+void * __memcpy_erms_b_aligned(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_movsb(dst, src, size);
 }
-#endif
 
-#endif
+// memcpy with word rep move instruciton:REP MOVSW
+void * __memcpy_erms_w_aligned(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_movsw(dst, src, size);
+}
+
+// memcpy with double word rep move instruciton:REP MOVSD
+void * __memcpy_erms_d_aligned(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_movsd(dst, src, size);
+}
+
+// memcpy with quad word rep move instruciton:REP MOVSQ
+void * __memcpy_erms_q_aligned(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_movsq(dst, src, size);
+}
+

@@ -115,6 +115,22 @@ static variant_index amd_libmem_resolver(void)
             else
                 var_idx = AVX2_UNALIGNED;
         }
+        else if (user_config.user_operation.erms) //ERMS operations
+        {
+            LOG_DEBUG("ERMS config\n");
+            var_idx = ERMS_MOVSB;
+            if (user_config.src_aln == user_config.dst_aln)
+            {
+                if (user_config.src_aln == q_align \
+                    || user_config.src_aln == x_align \
+                    || user_config.src_aln == y_align)
+                    var_idx = ERMS_MOVSQ;
+                else if (user_config.src_aln == d_align)
+                    var_idx = ERMS_MOVSD;
+                else if (user_config.src_aln == w_align)
+                    var_idx = ERMS_MOVSW;
+            }
+        }
     }
     return var_idx;
 }

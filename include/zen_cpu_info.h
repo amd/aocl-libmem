@@ -84,7 +84,7 @@ bool avx2;
 
 typedef struct {
 bool avx2;
-bool repmov;
+bool erms;
 } cpu_operation;
 
 typedef struct {

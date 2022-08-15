@@ -46,6 +46,11 @@ typedef enum{
     AVX2_NON_TEMPORAL,
     AVX2_NON_TEMPORAL_LOAD,
     AVX2_NON_TEMPORAL_STORE,
+/*User ERMS operation based*/
+    ERMS_MOVSB,
+    ERMS_MOVSW,
+    ERMS_MOVSD,
+    ERMS_MOVSQ,
 /*uArch based*/
     ARC_ZEN1,
     ARC_ZEN2,
@@ -56,7 +61,7 @@ typedef enum{
 //void * libmem_impls_1[FUNC_COUNT][VAR_COUNT]=
 void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
 {
-    {   
+    {
         NULL,
         __memcpy_avx2_unaligned,
         __memcpy_avx2_aligned,
@@ -65,6 +70,10 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_avx2_nt,
         __memcpy_avx2_nt_load,
         __memcpy_avx2_nt_store,
+        __memcpy_erms_b_aligned,
+        __memcpy_erms_w_aligned,
+        __memcpy_erms_d_aligned,
+        __memcpy_erms_q_aligned,
         __memcpy_zen1,
         __memcpy_zen2,
         __memcpy_zen3
