@@ -1,0 +1,79 @@
+/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+#ifndef _LIBMEM_H_
+#define _LIBMEM_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libmem_impls.h"
+typedef enum{
+    MEMCPY = 0,
+}func_index;
+
+// A maximum of 16 supported variants
+typedef enum{
+/*System feature & Threshold*/
+    SYSTEM,
+/*User AVX2 operation based*/
+    AVX2_UNALIGNED,
+    AVX2_ALIGNED,
+    AVX2_ALIGNED_LOAD,
+    AVX2_ALIGNED_STORE,
+    AVX2_NON_TEMPORAL,
+    AVX2_NON_TEMPORAL_LOAD,
+    AVX2_NON_TEMPORAL_STORE,
+/*uArch based*/
+    ARC_ZEN1,
+    ARC_ZEN2,
+    ARC_ZEN3,
+    VAR_COUNT
+}variant_index;
+
+//void * libmem_impls_1[FUNC_COUNT][VAR_COUNT]=
+void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
+{
+    {   
+        NULL,
+        __memcpy_avx2_unaligned,
+        __memcpy_avx2_aligned,
+        __memcpy_avx2_aligned_load,
+        __memcpy_avx2_aligned_store,
+        __memcpy_avx2_nt,
+        __memcpy_avx2_nt_load,
+        __memcpy_avx2_nt_store,
+        __memcpy_zen1,
+        __memcpy_zen2,
+        __memcpy_zen3
+    }
+};
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+

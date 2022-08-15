@@ -41,9 +41,32 @@ A shared library file libaocl-libmem.so will be generated and stored under build
 ## Running application:
  ``Run the application by preloading the libaocl-libmem.so generated from the above build procedure.``
 ```sh
-    $ LD_PRELOAD=<path to build/lib/libaocl-libmem.s> <executable> <params>
+    $ LD_PRELOAD=<path to build/lib/libaocl-libmem.so> <executable> <params>
 ```
-
-## User Config
-###  Default State Run:
+## User Config:
+### 1. Default State Run:
  ``Best fit implementation for the underlying ZEN microarchitecture will be chosen by the library.``
+
+
+### 2. Tunable State Run:
+
+_There are two tunables that will be parsed by libmem._
+ * **`LIBMEM_OPERATION`** :- instruction based on alignment and cacheability
+ * **`LIBMEM_THRESHOLD`** :- the threshold for ERMS and Non-Temporal instructions
+
+The library will choose the implementation based on the tuned parameter at run time.
+
+#### 2.1. _LIBMEM_OPERATION_ :
+**Setting this tunable will let you choose implementation which is a combination of move instructions and alignment of the source and destination addresses.**
+
+ **LIBMEM_OPERATION** format: **`<operations>,<source_alignment>,<destination_alignmnet>`**
+
+ ##### Valid options:
+ * `<operations> = [avx2]`
+ * `<source_alignment> = [b|w|d|q|x|y|n]`
+ * `<destination_alignmnet> = [b|w|d|q|x|y|n]`
+
+ e.g.:  To use only avx2 based move operations with both unaligned source and destination addresses.
+```sh
+    LD_PRELOAD=<build/lib/libaocl-libmem.so> LIBMEM_OPERATION=avx2,b,b <executable>
+```

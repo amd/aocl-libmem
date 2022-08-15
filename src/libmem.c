@@ -88,6 +88,34 @@ static variant_index amd_libmem_resolver(void)
                 var_idx = SYSTEM;
         }
     }
+    else if (active_operation_cfg == USR_CFG) //User Operation Config
+    {
+        LOG_INFO("User Operation Config\n");
+        if (user_config.user_operation.avx2) //AVX2 operations
+        {
+            LOG_DEBUG("AVX2 config\n");
+            if (user_config.src_aln == n_align)
+            {
+                if (user_config.dst_aln == n_align)
+                    var_idx = AVX2_NON_TEMPORAL;
+                else
+                    var_idx = AVX2_NON_TEMPORAL_LOAD;
+            }
+            else if (user_config.dst_aln == n_align)
+                var_idx = AVX2_NON_TEMPORAL_STORE;
+            else if (user_config.src_aln == y_align)
+            {
+                if (user_config.dst_aln == y_align)
+                    var_idx = AVX2_ALIGNED;
+                else
+                    var_idx = AVX2_ALIGNED_LOAD;
+            }
+            else if (user_config.dst_aln == y_align)
+                var_idx = AVX2_ALIGNED_STORE;
+            else
+                var_idx = AVX2_UNALIGNED;
+        }
+    }
     return var_idx;
 }
 #endif
