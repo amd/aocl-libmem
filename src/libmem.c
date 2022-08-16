@@ -170,5 +170,6 @@ static __attribute__((constructor)) void libmem_init()
     impl_idx  = amd_libmem_resolver();
     
     _memcpy_variant = libmem_impls_1[MEMCPY][impl_idx];
+    _mempcpy_variant = libmem_impls_1[MEMPCPY][impl_idx];
 #endif
 }
