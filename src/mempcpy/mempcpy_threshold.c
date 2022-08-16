@@ -22,40 +22,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMPCPY_H_
-#define _MEMPCPY_H_
+
 #include <stddef.h>
+#include <immintrin.h>
+#include "amd_mempcpy.h"
+#include "logger.h"
+#include "threshold.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//System solution which takes in system config and  threshold values.
-extern void * __mempcpy_system(void *dest,const void *src, size_t size);
-
-//Generic solution which takes in user threshold values.
-extern void * __mempcpy_threshold(void *dest,const void *src, size_t size);
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __mempcpy_avx2_unaligned(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_aligned(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_aligned_load(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_aligned_store(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_nt(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_nt_load(void *dest,const void *src, size_t size);
-extern void * __mempcpy_avx2_nt_store(void *dest,const void *src, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __mempcpy_erms_b_aligned(void *dest,const void *src, size_t size);
-extern void * __mempcpy_erms_w_aligned(void *dest,const void *src, size_t size);
-extern void * __mempcpy_erms_d_aligned(void *dest,const void *src, size_t size);
-extern void * __mempcpy_erms_q_aligned(void *dest,const void *src, size_t size);
-
-extern void *(*_mempcpy_variant)(void *, const void *, size_t);
-
-
-#ifdef __cplusplus
+void * __mempcpy_threshold(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
+        return __mempcpy_erms_b_aligned(dst, src, size);
+    else if (size > __nt_start_threshold && size < __nt_stop_threshold)
+        return __mempcpy_avx2_nt_store(dst, src, size);
+    else
+        return __mempcpy_avx2_unaligned(dst, src, size);
 }
-#endif
 
-#endif
