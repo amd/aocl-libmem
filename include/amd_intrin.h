@@ -82,6 +82,57 @@ inline void * __erms_movsq(void *dst, const void * src, size_t len)
     return dst;
 }
 
+inline void * __erms_movsb_last_byte(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "cld\n\t"
+    "rep movsb"
+    : "+D"(dst)
+    : "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsw_last_byte(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $1, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsw"
+    : "+D"(dst)
+    : "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsd_last_byte(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $2, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsd"
+    : "+D"(dst)
+    : "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $3, %%rcx\n\t"
+    "cld\n\t"
+    "rep movsq"
+    : "+D"(dst)
+    : "S"(src), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
 #ifdef __cplusplus
 }
 #endif
