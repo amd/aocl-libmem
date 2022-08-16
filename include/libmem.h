@@ -95,9 +95,9 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __mempcpy_erms_w_aligned,
         __mempcpy_erms_d_aligned,
         __mempcpy_erms_q_aligned,
-        NULL,
-        NULL,
-        NULL
+        __mempcpy_zen1,
+        __mempcpy_zen2,
+        __mempcpy_zen3
     },
 
 };

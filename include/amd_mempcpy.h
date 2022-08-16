@@ -30,6 +30,11 @@
 extern "C" {
 #endif
 
+//Micro architecture specifc implementations.
+extern void * __mempcpy_zen1(void *dest,const void *src, size_t size);
+extern void * __mempcpy_zen2(void *dest,const void *src, size_t size);
+extern void * __mempcpy_zen3(void *dest,const void *src, size_t size);
+
 //System solution which takes in system config and  threshold values.
 extern void * __mempcpy_system(void *dest,const void *src, size_t size);
 
