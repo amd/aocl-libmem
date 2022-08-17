@@ -101,8 +101,8 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __mempcpy_zen3
     },
     {
-        NULL,
-        NULL,
+        __memmove_system,
+        __memmove_threshold,
         __memmove_avx2_unaligned,
         __memmove_avx2_aligned,
         __memmove_avx2_aligned_load,

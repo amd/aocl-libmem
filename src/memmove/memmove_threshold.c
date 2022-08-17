@@ -22,39 +22,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMMOVE_H_
-#define _MEMMOVE_H_
-#include <stdint.h>
+#include <stddef.h>
+#include "amd_memmove.h"
+#include "logger.h"
+#include "threshold.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//System solution which takes in system config and  threshold values.
-extern void * __memmove_system(void *dest,const void *src, size_t size);
-//Generic solution which takes in user threshold values.
-extern void * __memmove_threshold(void *dest,const void *src, size_t size);
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memmove_avx2_unaligned(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_aligned(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_aligned_load(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_aligned_store(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_nt(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_nt_load(void *dest,const void *src, size_t size);
-extern void * __memmove_avx2_nt_store(void *dest,const void *src, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memmove_erms_b_aligned(void *dest,const void *src, size_t size);
-extern void * __memmove_erms_w_aligned(void *dest,const void *src, size_t size);
-extern void * __memmove_erms_d_aligned(void *dest,const void *src, size_t size);
-extern void * __memmove_erms_q_aligned(void *dest,const void *src, size_t size);
-
-extern void *(*_memmove_variant)(void *, const void *, size_t);
-
-
-#ifdef __cplusplus
+void * __memmove_threshold(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+    if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
+        return __memmove_erms_b_aligned(dst, src, size);
+    else if (size > __nt_start_threshold && size < __nt_stop_threshold)
+        return __memmove_avx2_nt_store(dst, src, size);
+    else
+        return __memmove_avx2_unaligned(dst, src, size);
 }
-#endif
 
-#endif
