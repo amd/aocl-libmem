@@ -1,0 +1,6 @@
+
+set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
+
+set(SOURCE_FILES ${SRC_PATH}/amd_memset.c)
+
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
