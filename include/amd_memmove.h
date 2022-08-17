@@ -22,24 +22,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ENABLE_TUNABLES
+#ifndef _MEMMOVE_H_
+#define _MEMMOVE_H_
+#include <stdint.h>
 
-#include <stddef.h>
-#include "libmem_iface.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+//CPU Feature:AVX2 and Alignment specifc implementations.
+extern void * __memmove_avx2_unaligned(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_aligned(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_aligned_load(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_aligned_store(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_nt(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_nt_load(void *dest,const void *src, size_t size);
+extern void * __memmove_avx2_nt_store(void *dest,const void *src, size_t size);
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
+extern void *(*_memmove_variant)(void *, const void *, size_t);
 
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

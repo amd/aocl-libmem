@@ -24,3 +24,4 @@
  */
 #include "amd_memcpy.h"
 #include "amd_mempcpy.h"
+#include "amd_memmove.h"
