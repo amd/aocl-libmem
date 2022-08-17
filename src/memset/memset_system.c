@@ -22,36 +22,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMSET_H_
-#define _MEMSET_H_
 #include <stddef.h>
+#include "logger.h"
+#include "amd_memset.h"
+#include "threshold.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern cpu_info zen_info;
 
-//System solution which takes in system config and  threshold values.
-extern void * __memset_system(void *mem,int val, size_t size);
-
-//Generic solution which takes in user threshold values.
-extern void * __memset_threshold(void *mem,int val, size_t size);
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memset_avx2_unaligned(void *mem,int val, size_t size);
-extern void * __memset_avx2_aligned(void *mem,int val, size_t size);
-extern void * __memset_avx2_nt(void *mem,int val, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memset_erms_b_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_w_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_d_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_q_aligned(void *mem,int val, size_t size);
-
-extern void *(*_memset_variant)(void *, int, size_t);
-
-
-#ifdef __cplusplus
+void * __memset_system(void *mem, int val, size_t size)
+{
+	LOG_DEBUG("\n");
+	if (zen_info.zen_cpu_features.erms &&(size > __repstore_start_threshold\
+                         && size < __repstore_stop_threshold))
+		return __memset_erms_b_aligned(mem, val, size);
+	else if (size > __nt_start_threshold && size < __nt_stop_threshold)
+		return __memset_avx2_nt(mem, val, size);
+	else
+		return __memset_avx2_unaligned(mem, val, size);
 }
-#endif
-
-#endif

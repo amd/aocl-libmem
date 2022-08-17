@@ -34,6 +34,8 @@ extern "C" {
 //Instruction spcific thresholds.
 extern uint64_t __repmov_start_threshold;
 extern uint64_t __repmov_stop_threshold;
+extern uint64_t __repstore_start_threshold;
+extern uint64_t __repstore_stop_threshold;
 extern uint64_t  __nt_start_threshold;
 extern uint64_t __nt_stop_threshold;
 

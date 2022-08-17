@@ -28,7 +28,9 @@
 
 uint64_t __repmov_start_threshold __attribute__ ((visibility ("default")));
 uint64_t __repmov_stop_threshold __attribute__ ((visibility ("default")));
-uint64_t __nt_start_threshold __attribute__ ((visibility ("default")));
+uint64_t __repstore_start_threshold __attribute__ ((visibility ("default")));
+uint64_t __repstore_stop_threshold __attribute__ ((visibility ("default")));
+uint64_t  __nt_start_threshold __attribute__ ((visibility ("default")));
 uint64_t __nt_stop_threshold __attribute__ ((visibility ("default")));
 
 
@@ -44,11 +46,16 @@ void compute_sys_thresholds(cpu_info *zen_info)
         zen_info->zen_thresholds.repmov_start_threshold = 2*1024;
         zen_info->zen_thresholds.repmov_stop_threshold = \
                     zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.repstore_start_threshold = 2*1024;
+        zen_info->zen_thresholds.repstore_stop_threshold = \
+                    zen_info->zen_cache_info.l2_per_core;
     }
     else //set repmov threshold to zero if ERMS feature is disabled
     {
         zen_info->zen_thresholds.repmov_start_threshold = 0;
         zen_info->zen_thresholds.repmov_stop_threshold = 0;
+        zen_info->zen_thresholds.repstore_start_threshold = 0;
+        zen_info->zen_thresholds.repstore_stop_threshold = 0;
     }
     zen_info->zen_thresholds.nt_start_threshold = \
             3*(zen_info->zen_cache_info.l3_per_ccx)>>2;
@@ -64,6 +71,10 @@ void configure_thresholds()
             zen_info.zen_thresholds.repmov_start_threshold;
         __repmov_stop_threshold = \
             zen_info.zen_thresholds.repmov_stop_threshold;
+        __repstore_start_threshold = \
+            zen_info.zen_thresholds.repstore_start_threshold;
+        __repstore_stop_threshold = \
+            zen_info.zen_thresholds.repstore_stop_threshold;
         __nt_start_threshold = \
             zen_info.zen_thresholds.nt_start_threshold;
         __nt_stop_threshold = \
