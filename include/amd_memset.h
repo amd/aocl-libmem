@@ -22,7 +22,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
+#ifndef _MEMSET_H_
+#define _MEMSET_H_
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+//CPU Feature:AVX2 and Alignment specifc implementations.
+extern void * __memset_avx2_unaligned(void *mem,int val, size_t size);
+extern void * __memset_avx2_aligned(void *mem,int val, size_t size);
+extern void * __memset_avx2_nt(void *mem,int val, size_t size);
+
+extern void *(*_memset_variant)(void *, int, size_t);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

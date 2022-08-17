@@ -121,6 +121,30 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
 
 };
 
+
+void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
+{
+    {
+        NULL,
+        NULL,
+        __memset_avx2_unaligned,
+        __memset_avx2_aligned,
+        __memset_avx2_unaligned,
+        __memset_avx2_aligned,
+        __memset_avx2_nt,
+        __memset_avx2_unaligned,
+        __memset_avx2_nt,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    }
+}
+
+
 #ifdef __cplusplus
 }
 #endif

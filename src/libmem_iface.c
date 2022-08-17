@@ -42,4 +42,9 @@ __attribute__((visibility("default")))void * (*_memmove_variant)(void *, const v
 LIBMEM_FN_MAP(memmove);
 WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
 
+__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
+// memset mapping
+LIBMEM_FN_MAP(memset);
+WEAK_ALIAS(memset, MK_FN_NAME(memset));
+
 #endif
