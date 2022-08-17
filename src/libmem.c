@@ -171,5 +171,6 @@ static __attribute__((constructor)) void libmem_init()
     
     _memcpy_variant = libmem_impls_1[MEMCPY][impl_idx];
     _mempcpy_variant = libmem_impls_1[MEMPCPY][impl_idx];
+    _memmove_variant = libmem_impls_1[MEMMOVE][impl_idx];
 #endif
 }
