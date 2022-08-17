@@ -114,9 +114,9 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_erms_w_aligned,
         __memmove_erms_d_aligned,
         __memmove_erms_q_aligned,
-        NULL,
-        NULL,
-        NULL
+        __memmove_zen1,
+        __memmove_zen2,
+        __memmove_zen3
     },
 
 };
