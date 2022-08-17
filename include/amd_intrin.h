@@ -133,6 +133,57 @@ inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t len)
     return dst;
 }
 
+inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "std\n\t"
+    "rep movsb"
+    :
+    : "D"(dst + len - 1), "S"(src + len - 1), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $1, %%rcx\n\t"
+    "std\n\t"
+    "rep movsw"
+    :
+    : "D"(dst + len - 2), "S"(src + len - 2), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $2, %%rcx\n\t"
+    "std\n\t"
+    "rep movsd"
+    :
+    : "D"(dst + len - 4), "S"(src + len - 4), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
+inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
+{
+    asm volatile (
+    "sar $3, %%rcx\n\t"
+    "std\n\t"
+    "rep movsq"
+    :
+    : "D"(dst + len - 8), "S"(src + len - 8), "c"(len)
+    : "memory"
+    );
+    return dst;
+}
+
 #ifdef __cplusplus
 }
 #endif
