@@ -184,6 +184,66 @@ inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
     return dst;
 }
 
+inline void * __erms_stosb(void *mem, int val, size_t size)
+{
+    asm volatile (
+    "cld\n\t"
+    "rep stosb"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return mem;
+}
+
+inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
+{
+    val = val | val << 8;
+    size = size >> 1;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosw"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return mem;
+}
+
+inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
+{
+    val = val | val << 8;
+    size = size >> 1;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosw"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return mem;
+}
+
+inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
+{
+    val = val | val << 8;
+    val = val | val << 16;
+    val = val | val << 32;
+
+    size = size >> 3;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosq"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return mem;
+}
+
 #ifdef __cplusplus
 }
 #endif

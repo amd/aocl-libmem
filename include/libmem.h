@@ -33,7 +33,8 @@ extern "C" {
 typedef enum{
     MEMCPY = 0,
     MEMPCPY = 1,
-    MEMMOVE = 2
+    MEMMOVE = 2,
+    MEMSET = 0
 }func_index;
 
 // A maximum of 16 supported variants
@@ -117,8 +118,7 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_zen1,
         __memmove_zen2,
         __memmove_zen3
-    },
-
+    }
 };
 
 
@@ -134,15 +134,15 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_avx2_nt,
         __memset_avx2_unaligned,
         __memset_avx2_nt,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
+        __memset_erms_b_aligned,
+        __memset_erms_w_aligned,
+        __memset_erms_d_aligned,
+        __memset_erms_q_aligned,
         NULL,
         NULL,
         NULL
     }
-}
+};
 
 
 #ifdef __cplusplus

@@ -22,30 +22,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMSET_H_
-#define _MEMSET_H_
 #include <stddef.h>
+#include <stdint.h>
+#include "amd_intrin.h"
+#include "logger.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memset_avx2_unaligned(void *mem,int val, size_t size);
-extern void * __memset_avx2_aligned(void *mem,int val, size_t size);
-extern void * __memset_avx2_nt(void *mem,int val, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memset_erms_b_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_w_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_d_aligned(void *mem,int val, size_t size);
-extern void * __memset_erms_q_aligned(void *mem,int val, size_t size);
-
-extern void *(*_memset_variant)(void *, int, size_t);
-
-
-#ifdef __cplusplus
+// memset with byte ; no rep move api for intrinsic
+void * __memset_erms_b_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosb(mem, val, size);
 }
-#endif
 
-#endif
+// memset with word ; no rep move api for intrinsic
+void * __memset_erms_w_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosw(mem, val, size);
+}
+
+// memset with double ; no rep move api for intrinsic
+void * __memset_erms_d_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosd(mem, val, size);
+}
+
+// memset with quad word ; no rep move api for intrinsic
+void * __memset_erms_q_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosq(mem, val, size);
+}
+
