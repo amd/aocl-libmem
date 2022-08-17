@@ -30,6 +30,11 @@
 extern "C" {
 #endif
 
+//Micro architecture specifc implementations.
+extern void * __memset_zen1(void *mem,int val, size_t size);
+extern void * __memset_zen2(void *mem,int val, size_t size);
+extern void * __memset_zen3(void *mem,int val, size_t size);
+
 //System solution which takes in system config and  threshold values.
 extern void * __memset_system(void *mem,int val, size_t size);
 

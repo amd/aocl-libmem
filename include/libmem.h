@@ -138,9 +138,9 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_erms_w_aligned,
         __memset_erms_d_aligned,
         __memset_erms_q_aligned,
-        NULL,
-        NULL,
-        NULL
+        __memset_zen1,
+        __memset_zen2,
+        __memset_zen3
     }
 };
 
