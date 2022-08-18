@@ -22,30 +22,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMCMP_H_
-#define _MEMCMP_H_
 #include <stddef.h>
+#include "amd_intrin.h"
+#include "logger.h"
+#include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern int __memcmp_avx2_unaligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_avx2_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_avx2_nt(const void *mem1,const void *mem2, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern int __memcmp_erms_b_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_w_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_d_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_q_aligned(const void *mem1,const void *mem2, size_t size);
-
-extern int (*_memcmp_variant)(const void *, const void *, size_t);
-
-
-#ifdef __cplusplus
+// memcmp with byte rep move instruciton:REP CMPSB
+int __memcmp_erms_b_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsb(mem1, mem2, size);
 }
-#endif
 
-#endif
+// memcmp with word rep move instruciton:REP CMPSW
+int __memcmp_erms_w_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsw(mem1, mem2, size);
+}
+
+// memcmp with double word rep move instruciton:REP CMPSD
+int __memcmp_erms_d_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsd(mem1, mem2, size);
+}
+
+// memcmp with quad word rep move instruciton:REP CMPSQ
+int __memcmp_erms_q_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsq(mem1, mem2, size);
+}
+

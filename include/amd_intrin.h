@@ -244,6 +244,69 @@ inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
     return mem;
 }
 
+inline int __erms_cmpsb(const void * mem1, const void * mem2, size_t size)
+{
+    int ret = 1;
+
+    asm volatile (
+    "repz cmpsb\n\t"
+    "cmovz %%rcx, %%rax"
+    : "+a"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
+    : "memory"
+    );
+    return ret;
+}
+
+inline int __erms_cmpsw(const void * mem1, const void * mem2, size_t size)
+{
+    int ret = 1;
+
+    size = size >> 1;
+
+    asm volatile (
+    "repz cmpsw\n\t"
+    "cmovz %%rcx, %%rax"
+    : "+a"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
+    : "memory"
+    );
+    return ret;
+}
+
+
+inline int __erms_cmpsd(const void * mem1, const void * mem2, size_t size)
+{
+    int ret = 1;
+
+    size = size >> 2;
+
+    asm volatile (
+    "repz cmpsd\n\t"
+    "cmovz %%rcx, %%rax"
+    : "+a"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
+    : "memory"
+    );
+    return ret;
+}
+
+inline int __erms_cmpsq(const void * mem1, const void * mem2, size_t size)
+{
+    int ret = 1;
+
+    size = size >> 3;
+
+    asm volatile (
+    "repz cmpsq\n\t"
+    "cmovz %%rcx, %%rax"
+    : "+a"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
+    : "memory"
+    );
+    return ret;
+}
+
 #ifdef __cplusplus
 }
 #endif
