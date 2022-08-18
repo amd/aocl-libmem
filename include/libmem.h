@@ -34,7 +34,8 @@ typedef enum{
     MEMCPY = 0,
     MEMPCPY = 1,
     MEMMOVE = 2,
-    MEMSET = 0
+    MEMSET = 0,
+    MEMCMP = 0
 }func_index;
 
 // A maximum of 16 supported variants
@@ -141,6 +142,27 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_zen1,
         __memset_zen2,
         __memset_zen3
+    }
+};
+int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
+{
+    {
+        NULL,
+        NULL,
+        __memcmp_avx2_unaligned,
+        __memcmp_avx2_aligned,
+        __memcmp_avx2_unaligned,
+        __memcmp_avx2_unaligned,
+        __memcmp_avx2_nt,
+        __memcmp_avx2_unaligned,
+        __memcmp_avx2_unaligned,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
     }
 };
 
