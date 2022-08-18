@@ -147,8 +147,8 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
 int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
 {
     {
-        NULL,
-        NULL,
+        __memcmp_system,
+        __memcmp_threshold,
         __memcmp_avx2_unaligned,
         __memcmp_avx2_aligned,
         __memcmp_avx2_unaligned,

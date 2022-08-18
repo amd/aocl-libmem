@@ -22,36 +22,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MEMCMP_H_
-#define _MEMCMP_H_
 #include <stddef.h>
+#include <immintrin.h>
+#include "amd_memcmp.h"
+#include "logger.h"
+#include "threshold.h"
+#include "zen_cpu_info.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern cpu_info zen_info;
 
-//System solution which takes in system config and  threshold values.
-extern int __memcmp_system(const void *mem1,const void *mem2, size_t size);
-
-//Generic solution which takes in user threshold values.
-extern int __memcmp_threshold(const void *mem1,const void *mem2, size_t size);
-
-//CPU Feature:AVX2 and Alignment specifc implementations.
-extern int __memcmp_avx2_unaligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_avx2_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_avx2_nt(const void *mem1,const void *mem2, size_t size);
-
-//CPU Feature:ERMS and Alignment specifc implementations.
-extern int __memcmp_erms_b_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_w_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_d_aligned(const void *mem1,const void *mem2, size_t size);
-extern int __memcmp_erms_q_aligned(const void *mem1,const void *mem2, size_t size);
-
-extern int (*_memcmp_variant)(const void *, const void *, size_t);
-
-
-#ifdef __cplusplus
+int __memcmp_system(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    if (zen_info.zen_cpu_features.erms && size > __repmov_start_threshold\
+                                     && size < __repmov_stop_threshold)
+    {
+        return __memcmp_erms_b_aligned(mem1, mem2, size);
+    }
+    return __memcmp_avx2_nt(mem1, mem2, size);
 }
-#endif
 
-#endif
