@@ -160,9 +160,9 @@ int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
         __memcmp_erms_w_aligned,
         __memcmp_erms_d_aligned,
         __memcmp_erms_q_aligned,
-        NULL,
-        NULL,
-        NULL
+        __memcmp_zen1,
+        __memcmp_zen2,
+        __memcmp_zen3
     }
 };
 
