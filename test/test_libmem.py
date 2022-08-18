@@ -33,7 +33,7 @@ import csv
 import argparse
 import datetime
 
-supp_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset']
+supp_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp']
 
 def data_validator(mem_func, size_range, alignment, iterator):
     """
