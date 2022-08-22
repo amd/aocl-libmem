@@ -1,0 +1,32 @@
+(C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
+
+AMD String Library - AOCL-LibMem Release Notes 3.2.1
+-----------------------------------------------------
+
+AMD AOCL-LibMem Contents
+---------------------------
+
+AOCL-LibMem is a library of the most widely used string/memory functions of
+Glibc optimized for AMD Zen microarchitecture. This shared library should be
+preloaded by application to replace standard string/memory functions for
+better performance gains on AMD Zen microarchitectures.
+a) By default this library will choose the best fit implementation w.r.t
+the underlying micro-architectural support for CPU features, instructions,
+cache, and threads per CCX.
+b) This library also provides tunables for the user to choose specific
+implementation of the function as per the application requirements.
+
+Highlights of AMD AOCL-LibMem version 3.2.1
+--------------------------------------------
+ * Optimized functions for Zen1, Zen2 and Zen3 architectures.
+    1. memcpy
+    2. mempcpy
+    3. memmove
+    4. memset
+    5. memcmp
+ * Customized variants based on user choice via tunables from cmdline.
+ * Micro architecture optimized default implementations.
+ * Support for choosing AVX2 mov operations: {VMOVDQU, VMOVDQA,
+         VMOVNTDQ, VMOVNTDQA} based on alignment/cache requirements.
+ * Support for choosing ERMS rep-movs and rep-stos operations.
+ * Support for tuning threshold for temporal, erms and non-temporal operations.
