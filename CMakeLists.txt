@@ -20,6 +20,26 @@ add_definitions(-DENABLE_LOGGER)
 #add_definitions(-DLOG_LEVEL=4)
 endif ()
 
+execute_process(COMMAND bash "-c" "lscpu | grep erms"
+        RESULT_VARIABLE ERMS_FEATURE OUTPUT_QUIET)
+
+if (NOT ERMS_FEATURE)
+    add_definitions(-DERMS_FEATURE_ENABLED)
+    message("ERMS CPU Feature Enabled.")
+endif ()
+
+option(USE_AVX512 "Use AVX512 Feature" OFF)
+
+execute_process(COMMAND bash "-c" "lscpu | grep avx512"
+        RESULT_VARIABLE AVX512_STATUS OUTPUT_QUIET)
+
+if (USE_AVX512 OR NOT AVX512_STATUS)
+    #uncomment after addng AVX512 support for all funcs
+    #set(AVX512_FEATURE_AVAILABLE true)
+    #add_definitions(-DAVX512_FEATURE_ENABLED)
+    message("AVX512 CPU Feature Enabled.")
+endif ()
+
 # option for building shared lib
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 

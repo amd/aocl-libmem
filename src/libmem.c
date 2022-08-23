@@ -43,6 +43,11 @@ static void get_cpu_capabilities()
     cpuid_regs.ecx = 0;
     __get_cpu_features(&cpuid_regs);
 
+    if (cpuid_regs.ebx & AVX512_MASK)
+    {
+        zen_info.zen_cpu_features.avx512 = 1;
+        LOG_INFO("AVX512 Enabled\n");
+    }
     if (cpuid_regs.ebx & AVX2_MASK)
     {
         zen_info.zen_cpu_features.avx2 = 1;

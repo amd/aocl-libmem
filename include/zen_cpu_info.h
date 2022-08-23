@@ -55,13 +55,17 @@ uint64_t nt_stop_threshold;
 } thresholds;
 
 #define    AVX2_MASK    0x20
+#define    AVX512_MASK  0x10000
 #define    ERMS_MASK    0x200
 #define    FSRM_MASK    0x10
 
 #define ZEN1_L3 8*1024*1024     //8MB per CCX
 #define ZEN2_L3 16*1024*1024    //16MB per CCX
 #define ZEN3_L3 32*1024*1024    //32MB per CCX
+#define ZEN4_L3 32*1024*1024    //32MB per CCX
 
+#define ZEN3_L2 512*1024        //512MB per CORE
+#define ZEN4_L2 1*1024*1024     //1MB per CORE
 
 typedef enum
 {
@@ -80,10 +84,12 @@ typedef struct {
 bool fsrm;
 bool erms;
 bool avx2;
+bool avx512;
 } cpu_features;
 
 typedef struct {
 bool avx2;
+bool avx512;
 bool erms;
 } cpu_operation;
 
