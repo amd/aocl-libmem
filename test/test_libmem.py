@@ -201,8 +201,8 @@ def main():
                             type=int, default = [8, 32*1024*1024])
     parser.add_argument("-a", "--align", nargs = 2, help="alignemnt of source\
                                 and destination addresses. Default alignment\
-                                is 32B for both source and destination.",
-                            type=int, default = (32, 32))
+                                is 64B for both source and destination.",
+                            type=int, default = (64, 64))
     parser.add_argument("-t", "--iterator", help="iteration pattern for a \
                             given range of data sizes. Default expression\
                             is set to 2x of starting size - '<<1'.",

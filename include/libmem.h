@@ -52,6 +52,16 @@ typedef enum{
     AVX2_NON_TEMPORAL,
     AVX2_NON_TEMPORAL_LOAD,
     AVX2_NON_TEMPORAL_STORE,
+#ifdef AVX512_FEATURE_ENABLED
+/*User AVX512 operation based*/
+    AVX512_UNALIGNED,
+    AVX512_ALIGNED,
+    AVX512_ALIGNED_LOAD,
+    AVX512_ALIGNED_STORE,
+    AVX512_NON_TEMPORAL,
+    AVX512_NON_TEMPORAL_LOAD,
+    AVX512_NON_TEMPORAL_STORE,
+#endif
 /*User ERMS operation based*/
     ERMS_MOVSB,
     ERMS_MOVSW,
@@ -76,6 +86,15 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_avx2_nt,
         __memcpy_avx2_nt_load,
         __memcpy_avx2_nt_store,
+#ifdef AVX512_FEATURE_ENABLED
+        __memcpy_avx512_unaligned,
+        __memcpy_avx512_aligned,
+        __memcpy_avx512_aligned_load,
+        __memcpy_avx512_aligned_store,
+        __memcpy_avx512_nt,
+        __memcpy_avx512_nt_load,
+        __memcpy_avx512_nt_store,
+#endif
         __memcpy_erms_b_aligned,
         __memcpy_erms_w_aligned,
         __memcpy_erms_d_aligned,
@@ -122,7 +141,6 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
     }
 };
 
-
 void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
 {
     {
@@ -144,6 +162,7 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_zen3
     }
 };
+
 int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
 {
     {

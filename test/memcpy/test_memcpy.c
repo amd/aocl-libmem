@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     char *src, *src_alnd;
     char *dst, *dst_alnd;
     char test_mode = 'v';
-    unsigned int offset, src_alignment = 32, dst_alignment = 32;
+    unsigned int offset, src_alignment = 64, dst_alignment = 64;
 
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -80,9 +80,9 @@ int main(int argc, char **argv)
     }
     // compute aligned address for src
     if (src_alignment == 0)
-        src_alignment = 32;
+        src_alignment = 64;
     if (dst_alignment == 0)
-        dst_alignment = 32;
+        dst_alignment = 64;
     offset = (uint64_t)src & (src_alignment-1);
     src_alnd = (offset==0)?src:(src+src_alignment-offset);
 

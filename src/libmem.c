@@ -120,6 +120,32 @@ static variant_index amd_libmem_resolver(void)
             else
                 var_idx = AVX2_UNALIGNED;
         }
+#ifdef AVX512_FEATURE_ENABLED
+        else if (user_config.user_operation.avx512) //AVX512 operations
+        {
+            LOG_DEBUG("AVX512 config\n");
+            if (user_config.src_aln == n_align)
+            {
+                if (user_config.dst_aln == n_align)
+                    var_idx = AVX512_NON_TEMPORAL;
+                else
+                    var_idx = AVX512_NON_TEMPORAL_LOAD;
+            }
+            else if (user_config.dst_aln == n_align)
+                var_idx = AVX512_NON_TEMPORAL_STORE;
+            else if (user_config.src_aln == y_align)
+            {
+                if (user_config.dst_aln == y_align)
+                    var_idx = AVX512_ALIGNED;
+                else
+                    var_idx = AVX512_ALIGNED_LOAD;
+            }
+            else if (user_config.dst_aln == y_align)
+                var_idx = AVX512_ALIGNED_STORE;
+            else
+                var_idx = AVX512_UNALIGNED;
+        }
+#endif
         else if (user_config.user_operation.erms) //ERMS operations
         {
             LOG_DEBUG("ERMS config\n");

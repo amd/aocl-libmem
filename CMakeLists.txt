@@ -24,7 +24,8 @@ execute_process(COMMAND bash "-c" "lscpu | grep erms"
         RESULT_VARIABLE ERMS_FEATURE OUTPUT_QUIET)
 
 if (NOT ERMS_FEATURE)
-    add_definitions(-DERMS_FEATURE_ENABLED)
+    #uncomment after addng ERMS support for all funcs
+    #add_definitions(-DERMS_FEATURE_ENABLED)
     message("ERMS CPU Feature Enabled.")
 endif ()
 

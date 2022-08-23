@@ -62,7 +62,9 @@ void parse_env_operation_cfg(void)
         return;
     }
 
-    if (!strcmp(token, "avx2"))
+    if (!strcmp(token, "avx512"))
+        user_config.user_operation.avx512 = 1;
+    else if (!strcmp(token, "avx2"))
         user_config.user_operation.avx2 = 1;
     else if (!strcmp(token, "erms"))
         user_config.user_operation.erms = 1;
