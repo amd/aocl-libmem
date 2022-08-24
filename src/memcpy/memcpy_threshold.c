@@ -31,11 +31,20 @@
 void * __memcpy_threshold(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
+
     if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
         return __memcpy_erms_b_aligned(dst, src, size);
     else if (size > __nt_start_threshold && size < __nt_stop_threshold)
+#ifdef AVX512_FEATURE_ENABLED
+        return __memcpy_avx512_nt_store(dst, src, size);
+#else
         return __memcpy_avx2_nt_store(dst, src, size);
+#endif
     else
+#ifdef AVX512_FEATURE_ENABLED
+        return __memcpy_avx512_unaligned(dst, src, size);
+#else
         return __memcpy_avx2_unaligned(dst, src, size);
+#endif
 }
 

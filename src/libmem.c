@@ -93,7 +93,7 @@ static variant_index amd_libmem_resolver(void)
 #endif
                 break;
             default:
-                //System operation/feature & computerd threshold Config
+                //System operation/feature & computed threshold Config
                 LOG_DEBUG("Operation & Threshold CFG\n");
                 var_idx = SYSTEM;
         }
