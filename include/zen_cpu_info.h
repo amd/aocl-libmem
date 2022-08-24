@@ -71,7 +71,8 @@ typedef enum
 {
     ZEN1,
     ZEN2,
-    ZEN3
+    ZEN3,
+    ZEN4
 } microarch;
 
 typedef struct {

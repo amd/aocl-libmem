@@ -71,6 +71,9 @@ typedef enum{
     ARC_ZEN1,
     ARC_ZEN2,
     ARC_ZEN3,
+#ifdef AVX512_FEATURE_ENABLED
+    ARC_ZEN4,
+#endif
     VAR_COUNT
 }variant_index;
 
@@ -101,7 +104,10 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_erms_q_aligned,
         __memcpy_zen1,
         __memcpy_zen2,
-        __memcpy_zen3
+        __memcpy_zen3,
+#ifdef AVX512_FEATURE_ENABLED
+        __memcpy_zen4
+#endif
     },
     {
         __mempcpy_system,

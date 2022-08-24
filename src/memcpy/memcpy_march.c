@@ -174,6 +174,78 @@ static inline void *nt_store(void *dst, const void *src, size_t size)
 }
 
 
+#ifdef AVX512_FEATURE_ENABLED
+static inline void *memcpy_below_128(void *dst, const void *src, size_t size)
+{
+    __m512i z0, z1;
+
+    if (size <= 64)
+        return memcpy_below_64(dst, src, size);
+    // above 64B uses ZMM registers
+    z0 = _mm512_loadu_si512(src);
+    z1 = _mm512_loadu_si512(src + size - 64);
+    _mm512_storeu_si512(dst, z0);
+    _mm512_storeu_si512(dst + size - 64, z1);
+
+    return dst;
+}
+
+static inline void *unaligned_ld_st_avx512(void *dst, const void *src, size_t size)
+{
+    __m512i z0, z1, z2, z3;
+    __m512i z4, z5, z6, z7;
+    size_t offset = 0;
+
+    if (size <= 256)
+    {
+        z0 = _mm512_loadu_si512(src + 0 * 64);
+        z1 = _mm512_loadu_si512(src + 1 * 64);
+        z2 = _mm512_loadu_si512(src + size - 2 * 64);
+        z3 = _mm512_loadu_si512(src + size - 1 * 64);
+
+        _mm512_storeu_si512 (dst + 0 * 64, z0);
+        _mm512_storeu_si512 (dst + 1 * 64, z1);
+        _mm512_storeu_si512 (dst + size - 2 * 64, z2);
+        _mm512_storeu_si512 (dst + size - 1 * 64, z3);
+        return dst;
+    }
+        z0 = _mm512_loadu_si512(src + 0 * 64);
+        z1 = _mm512_loadu_si512(src + 1 * 64);
+        z2 = _mm512_loadu_si512(src + 2 * 64);
+        z3 = _mm512_loadu_si512(src + 3 * 64);
+        z4 = _mm512_loadu_si512(src + size - 4 * 64);
+        z5 = _mm512_loadu_si512(src + size - 3 * 64);
+        z6 = _mm512_loadu_si512(src + size - 2 * 64);
+        z7 = _mm512_loadu_si512(src + size - 1 * 64);
+
+        _mm512_storeu_si512 (dst + 0 * 64, z0);
+        _mm512_storeu_si512 (dst + 1 * 64, z1);
+        _mm512_storeu_si512 (dst + 2 * 64, z2);
+        _mm512_storeu_si512 (dst + 3 * 64, z3);
+        _mm512_storeu_si512 (dst + size - 4 * 64, z4);
+        _mm512_storeu_si512 (dst + size - 3 * 64, z5);
+        _mm512_storeu_si512 (dst + size - 2 * 64, z6);
+        _mm512_storeu_si512 (dst + size - 1 * 64, z7);
+
+        size -= 256;
+        offset +=256;
+
+        while(offset < size)
+        {
+            z0 = _mm512_loadu_si512(src + offset + 0 * 64);
+            z1 = _mm512_loadu_si512(src + offset + 1 * 64);
+            z2 = _mm512_loadu_si512(src + offset + 2 * 64);
+            z3 = _mm512_loadu_si512(src + offset + 3 * 64);
+            _mm512_storeu_si512 (dst + offset + 0 * 64, z0);
+            _mm512_storeu_si512 (dst + offset + 1 * 64, z1);
+            _mm512_storeu_si512 (dst + offset + 2 * 64, z2);
+            _mm512_storeu_si512 (dst + offset + 3 * 64, z3);
+            offset += 256;
+        }
+    return dst;
+}
+#endif
+
 void *__memcpy_zen1(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
@@ -201,12 +273,25 @@ void *__memcpy_zen3(void *dst, const void *src, size_t size)
     LOG_INFO("\n");
     if (size <= 64)
         return memcpy_below_64(dst, src, size);
-#ifdef ERMS_MICROCODE_FIXED //Disabling erms due to microcode bug:SWDEV-289143
-    if (size < __repmove_stop_threshold)
-        return __memcpy_repmove_unaligned(dst, src, size);
-#endif
     if (size < __nt_start_threshold)
         return unaligned_ld_st(dst, src, size);
     else
         return nt_store(dst, src, size);
+}
+
+void *__memcpy_zen4(void *dst, const void *src, size_t size)
+{
+    LOG_INFO("\n");
+#ifdef AVX512_FEATURE_ENABLED
+    if (size <= 128)
+        return memcpy_below_128(dst, src, size);
+    return unaligned_ld_st_avx512(dst, src, size);
+#else
+    if (size <= 64)
+        return memcpy_below_64(dst, src, size);
+    if (size < __nt_start_threshold)
+        return unaligned_ld_st(dst, src, size);
+    else
+        return nt_store(dst, src, size);
+#endif
 }

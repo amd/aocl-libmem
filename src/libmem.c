@@ -85,7 +85,12 @@ static variant_index amd_libmem_resolver(void)
                 var_idx = ARC_ZEN2;
                 break;
             case ZEN3_L3:
-                var_idx = ARC_ZEN3;
+                if(zen_info.zen_cache_info.l2_per_core == ZEN3_L2)
+                    var_idx = ARC_ZEN3;
+#ifdef AVX512_FEATURE_ENABLED
+                else
+                    var_idx = ARC_ZEN4;
+#endif
                 break;
             default:
                 //System operation/feature & computerd threshold Config
