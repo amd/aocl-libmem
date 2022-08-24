@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     char *src, *src_alnd;
     char *dst, *dst_alnd;
     char test_mode = 'v';
-    unsigned int offset, src_alignment = 32, dst_alignment = 32;
+    unsigned int offset, src_alignment = 64, dst_alignment = 64;
 
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -75,9 +75,9 @@ int main(int argc, char **argv)
         dst_alignment = atoi(argv[4]);
 
     if (src_alignment == 0)
-        src_alignment = 32;
+        src_alignment = 64;
     if (dst_alignment == 0)
-        dst_alignment = 32;
+        dst_alignment = 64;
 
     src = (char *) malloc(len + src_alignment);
     if (src == NULL)
