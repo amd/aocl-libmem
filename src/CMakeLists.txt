@@ -6,6 +6,10 @@ if (AVX512_FEATURE_AVAILABLE)
     add_compile_options(-mavx512f)
 endif ()
 
+if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ENABLE_TUNABLES)
+    add_definitions(-DALMEM_CMPSD_CLANG_WORKAROUND)
+endif ()
+
 # build a shared library
 add_library(${PROJECT_NAME} SHARED "")
 

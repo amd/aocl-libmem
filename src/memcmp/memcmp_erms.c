@@ -45,7 +45,11 @@ int __memcmp_erms_w_aligned(const void * mem1, const void *mem2, size_t size)
 int __memcmp_erms_d_aligned(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
+#ifdef ALMEM_CMPSD_CLANG_WORKAROUND //Work around for rep-cmpsd in Clang.
+    return __erms_cmpsw(mem1, mem2, size);
+#else
     return __erms_cmpsd(mem1, mem2, size);
+#endif
 }
 
 // memcmp with quad word rep move instruciton:REP CMPSQ
