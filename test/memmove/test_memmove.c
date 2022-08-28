@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     char *src, *back_src, *src_alnd, *back_src_alnd;
     char *dst, *back_dst, *dst_alnd, *back_dst_alnd;
     char test_mode = 'v';
-    unsigned int offset, src_alignment = 32, dst_alignment = 32;
+    unsigned int offset, src_alignment = 64, dst_alignment = 64;
     srand(time(0));
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -73,12 +73,12 @@ int main(int argc, char **argv)
     if (argv[4] != NULL)
         dst_alignment = atoi(argv[4]);
 
-    src_alignment = src_alignment%32;
-    dst_alignment = dst_alignment%32;
+    src_alignment = src_alignment%64;
+    dst_alignment = dst_alignment%64;
     // generate a random overlap region
     int64_t back_overlap = 0, fwd_overlap = 0; // = rand()%len;
 
-    overlap_mem = (char *) malloc(len + 64);
+    overlap_mem = (char *) malloc(len + 128);
     if (overlap_mem == NULL)
     {
         perror("Overlap memory allocation failure\n");
@@ -87,39 +87,22 @@ int main(int argc, char **argv)
     //compute src address from overlap memory based on src alignment
     back_src = overlap_mem;
     back_src_alnd = back_src + src_alignment;
-    //offset = (uint64_t)back_src & (src_alignment-1);
-    offset = (uint64_t)back_src & 32;//(src_alignment-1);
+    offset = (uint64_t)back_src & 64;
     if (offset !=0)
-        back_src_alnd += 32 - offset;
+        back_src_alnd += 64 - offset;
 
     //compute dst address from src_alnd memory based on dst alignment + overlap
-    dst = overlap_mem + 32; // - overlap;
+    dst = overlap_mem + 64; // - overlap;
     dst_alnd = dst + dst_alignment;
-    //offset = (uint64_t)dst & (dst_alignment-1);
-    offset = (uint64_t)dst & 32;//(dst_alignment-1);
+    offset = (uint64_t)dst & 64;
     
     if (offset != 0)
-        dst_alnd += 32 - offset;
-    //printf("back_src: %p, dst: %p\n", back_src_alnd, dst_alnd);
+        dst_alnd += 64 - offset;
 
     back_dst = overlap_mem;
-    back_dst_alnd = dst_alnd - 32;
- /*   back_dst_alnd = back_dst + dst_alignment;
-    //offset = (uint64_t)back_dst & (dst_alignment-1);
-    offset = (uint64_t)back_dst & (0x1f);
-    if (offset != 0)
-        back_dst_alnd += 32 - offset;
-*/
-    src = overlap_mem + 32;
-    src_alnd = back_src_alnd + 32;
-/*    //offset = (uint64_t)src & (src_alignment-1);
-    offset = (uint64_t)src & (0x1f);
-    if (offset ==0 && src_alignment == 32)
-        src_alnd = src;
-    else
-        src_alnd = (src + src_alignment - offset);
-*/
-    //printf("src: %p, back_dst: %p\n", src_alnd, back_dst_alnd);
+    back_dst_alnd = dst_alnd - 64;
+    src = overlap_mem + 64;
+    src_alnd = back_src_alnd + 64;
     //allocate memory for validator
     validator = (char *) malloc(len);
     if (validator == NULL)
