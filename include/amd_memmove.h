@@ -49,6 +49,17 @@ extern void * __memmove_avx2_nt(void *dest,const void *src, size_t size);
 extern void * __memmove_avx2_nt_load(void *dest,const void *src, size_t size);
 extern void * __memmove_avx2_nt_store(void *dest,const void *src, size_t size);
 
+#ifdef AVX512_FEATURE_ENABLED
+//CPU Feature:AVX512 and Alignment specifc implementations.
+extern void * __memmove_avx512_unaligned(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_aligned(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_aligned_load(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_aligned_store(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_nt(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_nt_load(void *dest,const void *src, size_t size);
+extern void * __memmove_avx512_nt_store(void *dest,const void *src, size_t size);
+#endif
+
 //CPU Feature:ERMS and Alignment specifc implementations.
 extern void * __memmove_erms_b_aligned(void *dest,const void *src, size_t size);
 extern void * __memmove_erms_w_aligned(void *dest,const void *src, size_t size);

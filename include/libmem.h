@@ -149,6 +149,15 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_avx2_nt,
         __memmove_avx2_nt_load,
         __memmove_avx2_nt_store,
+#ifdef AVX512_FEATURE_ENABLED
+        __memmove_avx512_unaligned,
+        __memmove_avx512_aligned,
+        __memmove_avx512_aligned_load,
+        __memmove_avx512_aligned_store,
+        __memmove_avx512_nt,
+        __memmove_avx512_nt_load,
+        __memmove_avx512_nt_store,
+#endif
         __memmove_erms_b_aligned,
         __memmove_erms_w_aligned,
         __memmove_erms_d_aligned,
