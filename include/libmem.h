@@ -198,7 +198,10 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_erms_q_aligned,
         __memset_zen1,
         __memset_zen2,
-        __memset_zen3
+        __memset_zen3,
+#ifdef AVX512_FEATURE_ENABLED
+        __memset_zen4
+#endif
     }
 };
 

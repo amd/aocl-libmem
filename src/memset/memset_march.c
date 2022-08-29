@@ -28,48 +28,48 @@
 #include <immintrin.h>
 #include <stdint.h>
 
-static inline void *memset_below_64(void *mem, int val, size_t size)
+static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 {
     __m256i y0;
     __m128i x0;
 
-    if (size > 15)
+    if (size >= XMM_SZ)
     {
         x0 = _mm_set1_epi8(val);
-        if (size > 31)
+        if (size >= YMM_SZ)
         {
             y0 = _mm256_broadcastb_epi8(x0);
             _mm256_storeu_si256(mem, y0);
-            _mm256_storeu_si256(mem + size - 32, y0);
+            _mm256_storeu_si256(mem + size - YMM_SZ, y0);
             return mem;
         }
         _mm_storeu_si128(mem, x0);
-        _mm_storeu_si128(mem + size - 16, x0);
+        _mm_storeu_si128(mem + size - XMM_SZ, x0);
         return mem;
     }
-    if (size > 8)
+    if (size > QWORD_SZ)
     {
         uint64_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
         shft_val = shft_val | (shft_val << 16);
         shft_val = shft_val | (shft_val << 32);
 
         *((uint64_t*)mem) = shft_val;
-        *((uint64_t*)(mem + size - 8)) = shft_val;
+        *((uint64_t*)(mem + size - QWORD_SZ)) = shft_val;
         return mem;
     }
-    if (size > 4)
+    if (size > DWORD_SZ)
     {
         uint32_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
         shft_val = shft_val | (shft_val << 16);
         *((uint32_t*)mem) = shft_val;
-        *((uint32_t*)(mem + size - 4)) = shft_val;
+        *((uint32_t*)(mem + size - DWORD_SZ)) = shft_val;
         return mem;
     }
-    if (size > 1)
+    if (size >= WORD_SZ)
     {
         uint16_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
         *((uint16_t*)mem) = shft_val;
-        *((uint16_t*)(mem + size - 2)) = shft_val;
+        *((uint16_t*)(mem + size - WORD_SZ)) = shft_val;
         return mem;
     }
     *((uint8_t*)mem) = (uint8_t)val;
@@ -83,32 +83,32 @@ static inline void *avx2_unaligned_st(void *mem, int val, size_t size)
     size_t offset = 0;
 
     y0 = _mm256_broadcastb_epi8(x0);
-    if (size < 128)
+    if (size < 4 * YMM_SZ)
     {
-        _mm256_storeu_si256 (mem , y0);
-        _mm256_storeu_si256 (mem + 32, y0);
-        _mm256_storeu_si256 (mem + size - 64, y0);
-        _mm256_storeu_si256 (mem + size - 32, y0);
+        _mm256_storeu_si256(mem , y0);
+        _mm256_storeu_si256(mem + YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - YMM_SZ, y0);
         return mem;
     }
-    _mm256_storeu_si256 (mem + 0 * 32, y0);
-    _mm256_storeu_si256 (mem + 1 * 32, y0);
-    _mm256_storeu_si256 (mem + 2 * 32, y0);
-    _mm256_storeu_si256 (mem + 3 * 32, y0);
-    _mm256_storeu_si256 (mem + size - 4 * 32, y0);
-    _mm256_storeu_si256 (mem + size - 3 * 32, y0);
-    _mm256_storeu_si256 (mem + size - 2 * 32, y0);
-    _mm256_storeu_si256 (mem + size - 1 * 32, y0);
+    _mm256_storeu_si256(mem + 0 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 1 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 4 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 1 * YMM_SZ, y0);
 
-    offset += 128;
-    size -= 128;
+    offset += 4 * YMM_SZ;
+    size -= 4 * YMM_SZ;
     while( offset < size )
     {
-        _mm256_storeu_si256 (mem + offset + 0 * 32, y0);
-        _mm256_storeu_si256 (mem + offset + 1 * 32, y0);
-        _mm256_storeu_si256 (mem + offset + 2 * 32, y0);
-        _mm256_storeu_si256 (mem + offset + 3 * 32, y0);
-        offset += 128;
+        _mm256_storeu_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + offset + 3 * YMM_SZ, y0);
+        offset += 4 * YMM_SZ;
     }
     return mem;
 }
@@ -121,44 +121,94 @@ static inline void *nt_store(void *mem, int val, size_t size)
 
     x0 = _mm_set1_epi8(val);
     y0 = _mm256_broadcastb_epi8(x0);
-    offset = 0x20 - ((size_t)mem & 0x1F);
-    _mm256_storeu_si256 (mem, y0);
+    offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
+    _mm256_storeu_si256(mem, y0);
     size -= offset;
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        _mm256_stream_si256 (mem + offset + 0 * 32, y0);
-        _mm256_stream_si256 (mem + offset + 1 * 32, y0);
-        _mm256_stream_si256 (mem + offset + 2 * 32, y0);
-        _mm256_stream_si256 (mem + offset + 3 * 32, y0);
+        _mm256_stream_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 3 * YMM_SZ, y0);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        _mm256_stream_si256 (mem + offset + 0 * 32, y0);
-        _mm256_stream_si256 (mem + offset + 1 * 32, y0);
+        _mm256_stream_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 1 * YMM_SZ, y0);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if ((size > YMM_SZ))
     {
-        _mm256_stream_si256 (mem + offset, y0);
+        _mm256_stream_si256(mem + offset, y0);
     }
-    //copy last 32B
-    _mm256_storeu_si256 (mem + size - 32 + offset , y0);
+    //copy last YMM_SZB
+    _mm256_storeu_si256(mem + size - YMM_SZ + offset , y0);
 
     return mem;
 }
 
+#ifdef AVX512_FEATURE_ENABLED
+static inline void *unaligned_st_avx512(void *mem, int val, size_t size)
+{
+    __m512i z0;
+    __m128i x0 = _mm_set1_epi8(val);
+    size_t offset = 0;
+
+    if (size <= 2 * YMM_SZ)
+        return memset_le_2ymm(mem, val, size);
+
+    z0 = _mm512_broadcastb_epi8(x0);
+
+    if (size <= 2 * ZMM_SZ)
+    {
+        _mm512_storeu_si512(mem , z0);
+        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        return mem;
+    }
+
+    if (size <= 4 * ZMM_SZ)
+    {
+        _mm512_storeu_si512(mem , z0);
+        _mm512_storeu_si512(mem + ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        return mem;
+    }
+    _mm512_storeu_si512(mem + 0 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 1 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 1 * ZMM_SZ, z0);
+
+    offset += 4 * ZMM_SZ;
+    size -= 4 * ZMM_SZ;
+    while( offset < size )
+    {
+        _mm512_storeu_si512(mem + offset + 0 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + offset + 1 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + offset + 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + offset + 3 * ZMM_SZ, z0);
+        offset += 4 * ZMM_SZ;
+    }
+    return mem;
+}
+#endif
+
 void *__memset_zen1(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
-        return memset_below_64(mem, val, size);
+    if (size <= 2 * YMM_SZ)
+        return memset_le_2ymm(mem, val, size);
     if (size < __nt_start_threshold)
         return avx2_unaligned_st(mem, val, size);
     else
@@ -168,8 +218,8 @@ void *__memset_zen1(void *mem, int val, size_t size)
 void *__memset_zen2(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
-        return memset_below_64(mem, val, size);
+    if (size <= 2 * YMM_SZ)
+        return memset_le_2ymm(mem, val, size);
     if (size < __nt_start_threshold)
         return avx2_unaligned_st(mem, val, size);
     else
@@ -179,14 +229,25 @@ void *__memset_zen2(void *mem, int val, size_t size)
 void *__memset_zen3(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
-        return memset_below_64(mem, val, size);
-#ifdef ERMS_MICROCODE_FIXED //Disabling erms due to microcode bug:SWDEV-289143
-    if (size < __repmove_stop_threshold)
-        return __memset_repmove_unaligned(mem, val, size);
-#endif
+    if (size <= 2 * YMM_SZ)
+        return memset_le_2ymm(mem, val, size);
     if (size < __nt_start_threshold)
         return avx2_unaligned_st(mem, val, size);
     else
         return nt_store(mem, val, size);
+}
+
+void *__memset_zen4(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    if (size <= 2 * YMM_SZ)
+        return memset_le_2ymm(mem, val, size);
+#ifdef AVX512_FEATURE_ENABLED
+        return unaligned_st_avx512(mem, val, size);
+#else
+    if (size < __nt_start_threshold)
+        return avx2_unaligned_st(mem, val, size);
+    else
+        return nt_store(mem, val, size);
+#endif
 }
