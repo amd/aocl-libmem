@@ -164,7 +164,10 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_erms_q_aligned,
         __memmove_zen1,
         __memmove_zen2,
-        __memmove_zen3
+        __memmove_zen3,
+#ifdef AVX512_FEATURE_ENABLED
+        __memmove_zen4
+#endif
     }
 };
 

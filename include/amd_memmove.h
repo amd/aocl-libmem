@@ -34,6 +34,7 @@ extern "C" {
 extern void * __memmove_zen1(void *dest,const void *src, size_t size);
 extern void * __memmove_zen2(void *dest,const void *src, size_t size);
 extern void * __memmove_zen3(void *dest,const void *src, size_t size);
+extern void * __memmove_zen4(void *dest,const void *src, size_t size);
 
 //System solution which takes in system config and  threshold values.
 extern void * __memmove_system(void *dest,const void *src, size_t size);
