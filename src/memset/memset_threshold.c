@@ -35,7 +35,15 @@ void * __memset_threshold(void *mem, int val, size_t size)
 	if (size > __repstore_start_threshold && size < __repstore_stop_threshold)
 		return __memset_erms_b_aligned(mem, val, size);
 	else if (size > __nt_start_threshold && size < __nt_stop_threshold)
+#ifdef AVX512_FEATURE_ENABLED
+		return __memset_avx512_nt(mem, val, size);
+#else
 		return __memset_avx2_nt(mem, val, size);
+#endif
 	else
+#ifdef AVX512_FEATURE_ENABLED
+		return __memset_avx512_unaligned(mem, val, size);
+#else
 		return __memset_avx2_unaligned(mem, val, size);
+#endif
 }

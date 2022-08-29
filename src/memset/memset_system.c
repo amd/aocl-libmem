@@ -32,6 +32,9 @@ extern cpu_info zen_info;
 void * __memset_system(void *mem, int val, size_t size)
 {
 	LOG_DEBUG("\n");
+#ifdef AVX512_FEATURE_ENABLED
+	return __memset_avx512_unaligned(mem, val, size);
+#else
 	if (zen_info.zen_cpu_features.erms &&(size > __repstore_start_threshold\
                          && size < __repstore_stop_threshold))
 		return __memset_erms_b_aligned(mem, val, size);
@@ -39,4 +42,5 @@ void * __memset_system(void *mem, int val, size_t size)
 		return __memset_avx2_nt(mem, val, size);
 	else
 		return __memset_avx2_unaligned(mem, val, size);
+#endif
 }
