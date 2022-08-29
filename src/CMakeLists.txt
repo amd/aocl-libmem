@@ -3,7 +3,7 @@
 add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fPIC -flto -fvisibility=hidden -mavx2 -O1)
 
 if (AVX512_FEATURE_AVAILABLE)
-    add_compile_options(-mavx512f)
+    add_compile_options(-mavx512f -mavx512bw)
 endif ()
 
 if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ENABLE_TUNABLES)

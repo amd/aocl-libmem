@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     char *mem, *mem_alnd;
     int val = 'c';
     char test_mode = 'v';
-    unsigned int offset, mem_alignment = 32;
+    unsigned int offset, mem_alignment = 64;
 
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -69,10 +69,14 @@ int main(int argc, char **argv)
     len = strtoul(argv[2], &ptr, 10);
     if (argv[3] != NULL)
     {
+#ifdef AVX512_FEATURE_ENABLED
+        mem_alignment = atoi(argv[3])%64;
+#else
         mem_alignment = atoi(argv[3])%32;
+#endif
     }
 
-    mem = (char *) malloc(len + 32);
+    mem = (char *) malloc(len + 64);
     if (mem == NULL)
     {
         perror("SRC allocation failure\n");
@@ -80,10 +84,20 @@ int main(int argc, char **argv)
     }
     // compute aligned address for mem
     mem_alnd = (char *)(mem + mem_alignment);
+#ifdef AVX512_FEATURE_ENABLED
+    offset = (uint64_t)mem & 64;
+#else
     offset = (uint64_t)mem & 32;
-    if (offset != 0)
-        mem_alnd += 32 - offset;
+#endif
 
+    if (offset != 0)
+    {
+#ifdef AVX512_FEATURE_ENABLED
+        mem_alnd += 64 - offset;
+#else
+        mem_alnd += 32 - offset;
+#endif
+    }
     if (test_mode == 'v')
     {
         uint64_t i;
