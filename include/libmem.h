@@ -183,6 +183,15 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_avx2_nt,
         __memset_avx2_unaligned,
         __memset_avx2_nt,
+#ifdef AVX512_FEATURE_ENABLED
+        __memset_avx512_unaligned,
+        __memset_avx512_aligned,
+        __memset_avx512_unaligned,
+        __memset_avx512_aligned,
+        __memset_avx512_nt,
+        __memset_avx512_unaligned,
+        __memset_avx512_nt,
+#endif
         __memset_erms_b_aligned,
         __memset_erms_w_aligned,
         __memset_erms_d_aligned,
