@@ -26,8 +26,9 @@
 #include <immintrin.h>
 #include "logger.h"
 #include <stdint.h>
+#include "zen_cpu_info.h"
 
-static inline void *memmove_below_64(void *dst, const void *src, size_t size)
+static inline void *memmove_le_2ymm(void *dst, const void *src, size_t size)
 {
     __m256i y0, y1;
     __m128i x0, x1;
@@ -41,39 +42,39 @@ static inline void *memmove_below_64(void *dst, const void *src, size_t size)
         *((uint8_t *)dst) = *((uint8_t *)src);
         return dst;
     }
-    if (size <= 4)
+    if (size <= 2 * WORD_SZ)
     {
         temp = *((uint16_t *)src);
-        *((uint16_t *)(dst + size - 2)) = *((uint16_t *)(src + size - 2));
+        *((uint16_t *)(dst + size - WORD_SZ)) = *((uint16_t *)(src + size - WORD_SZ));
         *((uint16_t *)dst) = temp;
         return dst;
     }
-    if (size <= 8)
+    if (size <= 2 * DWORD_SZ)
     {
         temp = *((uint32_t *)src);
-        *((uint32_t *)(dst + size - 4)) = *((uint32_t *)(src + size - 4));
+        *((uint32_t *)(dst + size - DWORD_SZ)) = *((uint32_t *)(src + size - DWORD_SZ));
         *((uint32_t *)dst) = temp;
         return dst;
     }
-    if (size <= 16)
+    if (size <= 2 * QWORD_SZ)
     {
         temp = *((uint64_t *)src);
-        *((uint64_t *)(dst + size - 8)) = *((uint64_t *)(src + size - 8));
+        *((uint64_t *)(dst + size - QWORD_SZ)) = *((uint64_t *)(src + size - QWORD_SZ));
         *((uint64_t *)dst) = temp;
         return dst;
     }
-    if (size <= 32)
+    if (size <= 2 * XMM_SZ)
     {
         x0 = _mm_loadu_si128(src);
-        x1 = _mm_loadu_si128(src + size - 16);
+        x1 = _mm_loadu_si128(src + size - XMM_SZ);
         _mm_storeu_si128(dst, x0);
-        _mm_storeu_si128(dst + size - 16, x1);
+        _mm_storeu_si128(dst + size - XMM_SZ, x1);
         return dst;
     }
     y0 = _mm256_loadu_si256(src);
-    y1 = _mm256_loadu_si256(src + size - 32);
+    y1 = _mm256_loadu_si256(src + size - YMM_SZ);
     _mm256_storeu_si256(dst, y0);
-    _mm256_storeu_si256(dst + size - 32, y1);
+    _mm256_storeu_si256(dst + size - YMM_SZ, y1);
 
     return dst;
 }
@@ -84,87 +85,87 @@ void *__memmove_avx2_unaligned(void *dst, const void *src, size_t size)
     size_t offset = 0;
     LOG_INFO("\n");
 
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - 32);
+    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
-        y2 = _mm256_loadu_si256(src + offset + 2 * 32);
-        y3 = _mm256_loadu_si256(src + offset + 3 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_loadu_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_loadu_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
-        _mm256_storeu_si256(dst + offset + 2 * 32, y2);
-        _mm256_storeu_si256(dst + offset + 3 * 32, y3);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_storeu_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_storeu_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
 
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_loadu_si256(src + offset);
         _mm256_storeu_si256(dst + offset, y0);
     }
-    //copy last 32B
+    //copy last YMM_SZ Bytes
     if (size !=0)
-        _mm256_storeu_si256(dst + size - 32 + offset, y4);
+        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 
 BACKWARD_COPY:
 
     y4 = _mm256_loadu_si256(src);
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        y1 = _mm256_loadu_si256(src + size - 64);
-        y2 = _mm256_loadu_si256(src + size - 96);
-        y3 = _mm256_loadu_si256(src + size - 128);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
+        y2 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
+        y3 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + size - 32, y0);
-        _mm256_storeu_si256(dst + size - 64, y1);
-        _mm256_storeu_si256(dst + size - 96, y2);
-        _mm256_storeu_si256(dst + size - 128, y3);
+        _mm256_storeu_si256(dst + size - YMM_SZ, y0);
+        _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
+        _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y2);
+        _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y3);
 
-        size -= 4 * 32;
+        size -= 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        y1 = _mm256_loadu_si256(src + size - 64);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
 
         _mm256_storeu_si256(dst + size -32, y0);
         _mm256_storeu_si256(dst + size -64 , y1);
 
-        size -= 2 * 32;
+        size -= 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        _mm256_storeu_si256(dst + size - 32, y0);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        _mm256_storeu_si256(dst + size - YMM_SZ, y0);
     }
-    //copy first 32B
+    //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_storeu_si256(dst, y4);
     return dst;
@@ -176,90 +177,90 @@ void *__memmove_avx2_aligned(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - 32);
+    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_load_si256(src + offset + 1 * 32);
-        y2 = _mm256_load_si256(src + offset + 2 * 32);
-        y3 = _mm256_load_si256(src + offset + 3 * 32);
+        y0 = _mm256_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_load_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_load_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_load_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_store_si256(dst + offset + 0 * 32, y0);
-        _mm256_store_si256(dst + offset + 1 * 32, y1);
-        _mm256_store_si256(dst + offset + 2 * 32, y2);
-        _mm256_store_si256(dst + offset + 3 * 32, y3);
+        _mm256_store_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_store_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_store_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_load_si256(src + offset + 1 * 32);
+        y0 = _mm256_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_load_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_store_si256(dst + offset + 0 * 32, y0);
-        _mm256_store_si256(dst + offset + 1 * 32, y1);
+        _mm256_store_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_load_si256(src + offset);
         _mm256_store_si256(dst + offset, y0);
     }
-    //copy last 32B
+    //copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - 32 + offset, y4);
+        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 
 BACKWARD_COPY:
 
     y4 = _mm256_load_si256(src);
-    y0 = _mm256_loadu_si256(src + size - 32);
-    _mm256_storeu_si256(dst + size - 32, y0);
+    y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+    _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
     size = size & (~0x1F);
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        y1 = _mm256_load_si256(src + size - 64);
-        y2 = _mm256_load_si256(src + size - 96);
-        y3 = _mm256_load_si256(src + size - 128);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
+        y2 = _mm256_load_si256(src + size - 3 * YMM_SZ);
+        y3 = _mm256_load_si256(src + size - 4 * YMM_SZ);
 
-        _mm256_store_si256(dst + size - 32, y0);
-        _mm256_store_si256(dst + size - 64, y1);
-        _mm256_store_si256(dst + size - 96, y2);
-        _mm256_store_si256(dst + size - 128, y3);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
+        _mm256_store_si256(dst + size - 2 * YMM_SZ, y1);
+        _mm256_store_si256(dst + size - 3 * YMM_SZ, y2);
+        _mm256_store_si256(dst + size - 4 * YMM_SZ, y3);
 
-        size -= 4 * 32;
+        size -= 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        y1 = _mm256_load_si256(src + size - 64);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
 
         _mm256_store_si256(dst + size -32, y0);
         _mm256_store_si256(dst + size -64 , y1);
 
-        size -= 2 * 32;
+        size -= 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        _mm256_store_si256(dst + size - 32, y0);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
     }
-    //copy first 32B
+    //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_store_si256(dst, y4);
     return dst;
@@ -271,99 +272,99 @@ void *__memmove_avx2_aligned_load(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - 32);
-    //compute the offset to align the src to 32B boundary
-    offset = 0x20 - ((size_t)src & 0x1F);
+    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
     size -= offset;
 
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
         
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_load_si256(src + offset + 1 * 32);
-        y2 = _mm256_load_si256(src + offset + 2 * 32);
-        y3 = _mm256_load_si256(src + offset + 3 * 32);
+        y0 = _mm256_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_load_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_load_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_load_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
-        _mm256_storeu_si256(dst + offset + 2 * 32, y2);
-        _mm256_storeu_si256(dst + offset + 3 * 32, y3);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_storeu_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_storeu_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_load_si256(src + offset + 1 * 32);
+        y0 = _mm256_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_load_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_load_si256(src + offset);
         _mm256_storeu_si256(dst + offset, y0);
     }
-    //copy last 32B
+    //copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - 32 + offset, y4);
+        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 
 BACKWARD_COPY:
 
     y4 = _mm256_loadu_si256(src);
     
-    y0 = _mm256_loadu_si256(src + size - 32);
-    _mm256_storeu_si256(dst + size - 32, y0);
+    y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+    _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
-    //compute the offset to align the src to 32B boundary
-    offset = 0x20 - ((size_t)(src + size) & 0x1F);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)(src + size) & (YMM_SZ - 1));
     size = size - offset;
     
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        y1 = _mm256_load_si256(src + size - 64);
-        y2 = _mm256_load_si256(src + size - 96);
-        y3 = _mm256_load_si256(src + size - 128);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
+        y2 = _mm256_load_si256(src + size - 3 * YMM_SZ);
+        y3 = _mm256_load_si256(src + size - 4 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + size - 32, y0);
-        _mm256_storeu_si256(dst + size - 64, y1);
-        _mm256_storeu_si256(dst + size - 96, y2);
-        _mm256_storeu_si256(dst + size - 128, y3);
+        _mm256_storeu_si256(dst + size - YMM_SZ, y0);
+        _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
+        _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y2);
+        _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y3);
 
-        size -= 4 * 32;
+        size -= 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        y1 = _mm256_load_si256(src + size - 64);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
 
         _mm256_storeu_si256(dst + size -32, y0);
         _mm256_storeu_si256(dst + size -64 , y1);
 
-        size -= 2 * 32;
+        size -= 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
-        y0 = _mm256_load_si256(src + size - 32);
-        _mm256_storeu_si256(dst + size - 32, y0);
+        y0 = _mm256_load_si256(src + size - YMM_SZ);
+        _mm256_storeu_si256(dst + size - YMM_SZ, y0);
     }
-    //copy first 32B
+    //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_storeu_si256(dst, y4);
     return dst;
@@ -375,98 +376,98 @@ void *__memmove_avx2_aligned_store(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - 32);
-    //compute the offset to align the dst to 32B boundary
-    offset = 0x20 - ((size_t)dst & 0x1F);
+    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
+    //compute the offset to align the dst to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
     size -= offset;
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
-        y2 = _mm256_loadu_si256(src + offset + 2 * 32);
-        y3 = _mm256_loadu_si256(src + offset + 3 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_loadu_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_loadu_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_store_si256(dst + offset + 0 * 32, y0);
-        _mm256_store_si256(dst + offset + 1 * 32, y1);
-        _mm256_store_si256(dst + offset + 2 * 32, y2);
-        _mm256_store_si256(dst + offset + 3 * 32, y3);
+        _mm256_store_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_store_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_store_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_store_si256(dst + offset + 0 * 32, y0);
-        _mm256_store_si256(dst + offset + 1 * 32, y1);
+        _mm256_store_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_loadu_si256(src + offset);
         _mm256_storeu_si256(dst + offset, y0);
     }
-    //copy last 32B
+    //copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - 32 + offset, y4);
+        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 
 BACKWARD_COPY:
 
     y4 = _mm256_loadu_si256(src);
 
-    y0 = _mm256_loadu_si256(src + size - 32);
-    _mm256_storeu_si256(dst + size - 32, y0);
+    y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+    _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
-    //compute the offset to align the src to 32B boundary
-    offset = 0x20 - ((size_t)(dst + size) & 0x1F);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)(dst + size) & (YMM_SZ - 1));
     size = size - offset;
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        y1 = _mm256_loadu_si256(src + size - 64);
-        y2 = _mm256_loadu_si256(src + size - 96);
-        y3 = _mm256_loadu_si256(src + size - 128);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
+        y2 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
+        y3 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
 
-        _mm256_store_si256(dst + size - 32, y0);
-        _mm256_store_si256(dst + size - 64, y1);
-        _mm256_store_si256(dst + size - 96, y2);
-        _mm256_store_si256(dst + size - 128, y3);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
+        _mm256_store_si256(dst + size - 2 * YMM_SZ, y1);
+        _mm256_store_si256(dst + size - 3 * YMM_SZ, y2);
+        _mm256_store_si256(dst + size - 4 * YMM_SZ, y3);
 
-        size -= 4 * 32;
+        size -= 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        y1 = _mm256_loadu_si256(src + size - 64);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
 
-        _mm256_store_si256(dst + size - 32, y0);
-        _mm256_store_si256(dst + size - 64, y1);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
+        _mm256_store_si256(dst + size - 2 * YMM_SZ, y1);
 
-        size -= 2 * 32;
+        size -= 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + size - 32);
-        _mm256_store_si256(dst + size - 32, y0);
+        y0 = _mm256_loadu_si256(src + size - YMM_SZ);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
     }
-    //copy first 32B
+    //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_storeu_si256(dst, y4);
     return dst;
@@ -478,45 +479,45 @@ void *__memmove_avx2_nt(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
-    y4 = _mm256_loadu_si256(src + size + offset - 32);
-    while ((size) > 127)
+    y4 = _mm256_loadu_si256(src + size + offset - YMM_SZ);
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_stream_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_stream_load_si256(src + offset + 1 * 32);
-        y2 = _mm256_stream_load_si256(src + offset + 2 * 32);
-        y3 = _mm256_stream_load_si256(src + offset + 3 * 32);
+        y0 = _mm256_stream_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_stream_load_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_stream_load_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_stream_load_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_stream_si256(dst + offset + 0 * 32, y0);
-        _mm256_stream_si256(dst + offset + 1 * 32, y1);
-        _mm256_stream_si256(dst + offset + 2 * 32, y2);
-        _mm256_stream_si256(dst + offset + 3 * 32, y3);
+        _mm256_stream_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_stream_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_stream_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_stream_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_stream_load_si256(src + offset + 1 * 32);
+        y0 = _mm256_stream_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_stream_load_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_stream_si256(dst + offset + 0 * 32, y0);
-        _mm256_stream_si256(dst + offset + 1 * 32, y1);
+        _mm256_stream_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size >= 32))
+    if ((size >= YMM_SZ))
     {
         y0 = _mm256_stream_load_si256(src + offset);
         _mm256_stream_si256(dst + offset, y0);
     }
-    //copy last 32B
+    //copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - 32 + offset, y4);
+        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 
 }
@@ -526,50 +527,50 @@ void *__memmove_avx2_nt_load(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
-    //compute the offset to align the src to 32B boundary
-    offset = 0x20 - ((size_t)src & 0x1F);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
     size -= offset;
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_stream_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_stream_load_si256(src + offset + 1 * 32);
-        y2 = _mm256_stream_load_si256(src + offset + 2 * 32);
-        y3 = _mm256_stream_load_si256(src + offset + 3 * 32);
+        y0 = _mm256_stream_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_stream_load_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_stream_load_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_stream_load_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
-        _mm256_storeu_si256(dst + offset + 2 * 32, y2);
-        _mm256_storeu_si256(dst + offset + 3 * 32, y3);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_storeu_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_storeu_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_stream_load_si256(src + offset + 0 * 32);
-        y1 = _mm256_stream_load_si256(src + offset + 1 * 32);
+        y0 = _mm256_stream_load_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_stream_load_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + offset + 0 * 32, y0);
-        _mm256_storeu_si256(dst + offset + 1 * 32, y1);
+        _mm256_storeu_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_storeu_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_stream_load_si256(src + offset);
         _mm256_storeu_si256(dst + offset, y0);
     }
-    //copy last 32B
-    y4 = _mm256_loadu_si256(src + size + offset - 32);
-    _mm256_storeu_si256(dst + size - 32 + offset, y4);
+    //copy last YMM_SZ Bytes
+    y4 = _mm256_loadu_si256(src + size + offset - YMM_SZ);
+    _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 }
 
@@ -580,49 +581,49 @@ void *__memmove_avx2_nt_store(void *dst, const void *src, size_t size)
     size_t offset = 0;
 
     LOG_INFO("\n");
-    if (size <= 64)
-        return memmove_below_64(dst, src, size);
+    if (size <= 2 * YMM_SZ)
+        return memmove_le_2ymm(dst, src, size);
 
-    //compute the offset to align the dst to 32B boundary
-    offset = 0x20 - ((size_t)dst & 0x1F);
+    //compute the offset to align the dst to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
     size -= offset;
 
-    while ((size) > 127)
+    while (size >= 4 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
-        y2 = _mm256_loadu_si256(src + offset + 2 * 32);
-        y3 = _mm256_loadu_si256(src + offset + 3 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
+        y2 = _mm256_loadu_si256(src + offset + 2 * YMM_SZ);
+        y3 = _mm256_loadu_si256(src + offset + 3 * YMM_SZ);
 
-        _mm256_stream_si256(dst + offset + 0 * 32, y0);
-        _mm256_stream_si256(dst + offset + 1 * 32, y1);
-        _mm256_stream_si256(dst + offset + 2 * 32, y2);
-        _mm256_stream_si256(dst + offset + 3 * 32, y3);
+        _mm256_stream_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(dst + offset + 1 * YMM_SZ, y1);
+        _mm256_stream_si256(dst + offset + 2 * YMM_SZ, y2);
+        _mm256_stream_si256(dst + offset + 3 * YMM_SZ, y3);
 
-        size -= 4 * 32;
-        offset += 4 * 32;
+        size -= 4 * YMM_SZ;
+        offset += 4 * YMM_SZ;
     }
-    if ((size) > 63)
+    if (size >= 2 * YMM_SZ)
     {
-        y0 = _mm256_loadu_si256(src + offset + 0 * 32);
-        y1 = _mm256_loadu_si256(src + offset + 1 * 32);
+        y0 = _mm256_loadu_si256(src + offset + 0 * YMM_SZ);
+        y1 = _mm256_loadu_si256(src + offset + 1 * YMM_SZ);
 
-        _mm256_stream_si256(dst + offset + 0 * 32, y0);
-        _mm256_stream_si256(dst + offset + 1 * 32, y1);
+        _mm256_stream_si256(dst + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(dst + offset + 1 * YMM_SZ, y1);
 
-        size -= 2 * 32;
-        offset += 2 * 32;
+        size -= 2 * YMM_SZ;
+        offset += 2 * YMM_SZ;
     }
 
-    if ((size > 32))
+    if (size > YMM_SZ)
     {
         y0 = _mm256_loadu_si256(src + offset);
         _mm256_stream_si256(dst + offset, y0);
     }
-    //copy last 32B
-    y4 = _mm256_loadu_si256(src + size + offset - 32);
-    _mm256_storeu_si256(dst + size - 32 + offset, y4);
+    //copy last YMM_SZ Bytes
+    y4 = _mm256_loadu_si256(src + size + offset - YMM_SZ);
+    _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
     return dst;
 }
