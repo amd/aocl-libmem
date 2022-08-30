@@ -71,9 +71,7 @@ typedef enum{
     ARC_ZEN1,
     ARC_ZEN2,
     ARC_ZEN3,
-#ifdef AVX512_FEATURE_ENABLED
     ARC_ZEN4,
-#endif
     VAR_COUNT
 }variant_index;
 
@@ -105,9 +103,7 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_zen1,
         __memcpy_zen2,
         __memcpy_zen3,
-#ifdef AVX512_FEATURE_ENABLED
         __memcpy_zen4
-#endif
     },
     {
         __mempcpy_system,
@@ -135,9 +131,7 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __mempcpy_zen1,
         __mempcpy_zen2,
         __mempcpy_zen3,
-#ifdef AVX512_FEATURE_ENABLED
         __mempcpy_zen4
-#endif
     },
     {
         __memmove_system,
@@ -165,9 +159,7 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_zen1,
         __memmove_zen2,
         __memmove_zen3,
-#ifdef AVX512_FEATURE_ENABLED
         __memmove_zen4
-#endif
     }
 };
 
@@ -199,9 +191,7 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_zen1,
         __memset_zen2,
         __memset_zen3,
-#ifdef AVX512_FEATURE_ENABLED
         __memset_zen4
-#endif
     }
 };
 
@@ -233,9 +223,7 @@ int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
         __memcmp_zen1,
         __memcmp_zen2,
         __memcmp_zen3,
-#ifdef AVX512_FEATURE_ENABLED
         __memcmp_zen4
-#endif
     }
 };
 

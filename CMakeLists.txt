@@ -35,9 +35,8 @@ execute_process(COMMAND bash "-c" "lscpu | grep avx512"
         RESULT_VARIABLE AVX512_STATUS OUTPUT_QUIET)
 
 if (USE_AVX512 OR NOT AVX512_STATUS)
-    #uncomment after addng AVX512 support for all funcs
-    #set(AVX512_FEATURE_AVAILABLE true)
-    #add_definitions(-DAVX512_FEATURE_ENABLED)
+    set(AVX512_FEATURE_AVAILABLE true)
+    add_definitions(-DAVX512_FEATURE_ENABLED)
     message("AVX512 CPU Feature Enabled.")
 endif ()
 
