@@ -183,7 +183,7 @@ static variant_index amd_libmem_resolver(void)
  */
 static __attribute__((constructor)) void libmem_init()
 {
-    LOG_INFO("aocl-libmem Version: 3.2.1\n");
+    LOG_INFO("aocl-libmem Version: %s\n", LIBMEM_BUILD_VERSION);
 #ifdef ENABLE_TUNABLES
     parse_env_operation_cfg();
     if (active_operation_cfg == SYS_CFG)

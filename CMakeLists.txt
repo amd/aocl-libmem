@@ -5,8 +5,19 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR “In-source build detected!”)
 endif()
 
+
 # set the project name and version
-project(aocl-libmem VERSION 3.2.1 LANGUAGES C DESCRIPTION "Library of AMD optimized string/memory functions")
+set(LIBMEM_VERSION_STRING 4.0)
+
+project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
+                        "Library of AMD optimized string/memory functions")
+
+string(TIMESTAMP BUILD_DATE "%Y%m%d")
+
+set(LIBMEM_BUILD_VERSION_STR
+    "AOCL-LibMem ${LIBMEM_VERSION_STRING} Build ${BUILD_DATE}")
+
+add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
@@ -48,3 +59,5 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # let the build system know the test directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+file(WRITE ${CMAKE_BINARY_DIR}/version.h ${LIBMEM_BUILD_VERSION_STR})
