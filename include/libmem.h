@@ -232,7 +232,10 @@ int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
         __memcmp_erms_q_aligned,
         __memcmp_zen1,
         __memcmp_zen2,
-        __memcmp_zen3
+        __memcmp_zen3,
+#ifdef AVX512_FEATURE_ENABLED
+        __memcmp_zen4
+#endif
     }
 };
 

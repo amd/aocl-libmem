@@ -34,6 +34,7 @@ extern "C" {
 extern int __memcmp_zen1(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen2(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen3(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_zen4(const void *mem1,const void *mem2, size_t size);
 
 //System solution which takes in system config and  threshold values.
 extern int __memcmp_system(const void *mem1,const void *mem2, size_t size);
