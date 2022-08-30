@@ -31,7 +31,7 @@ alignment of the source and destination addresses.
     **`<operations>,<source_alignment>,<destination_alignmnet>`**
 
  ##### Valid options:
- * `<operations> = [avx2|erms]`
+ * `<operations> = [avx2|avx512|erms]`
  * `<source_alignment> = [b|w|d|q|x|y|n]`
  * `<destination_alignmnet> = [b|w|d|q|x|y|n]`
 
@@ -39,13 +39,13 @@ Refer to the below table for choosing the right implementation of <func> for you
 
 Application Requirement | LIBMEM_OPERATION | Implementation | Instructions |Side effects
 ------------------------|------------------|----------------|--------------|------------
-**vector unaligned `source` & `destination`**|**avx2,b,b**|*__<func>_avx2_unaligned*| Load:VMOVDQU; Store:VMOVDQU| None
-**vector 32B(YMM) aligned `source` and `destination`**|**avx2,y,y**|*__<func>_avx2_aligned*| Load:VMOVDQA; Store:VMOVDQA| _**unaligned source &/ destination** address will lead to_ **_`CRASH`_**.
-**vector 32B(YMM) aligned `source` and unaligned `destination`**|**avx2,y,[b\|w\|d\|q\|x]**|*__<func>_avx2_aligned_load*| Load:VMOVDQA; Store:VMOVDQU| None.
-**vector unaligned `source` and 32B(YMM) aligned `destination`**|**avx2,[b\|w\|d\|q\|x], y**|*__<func>_avx2_aligned_store*| Load:VMOVDQU; Store:VMOVDQA| None.
-**vector `non temporal load and store`**|**avx2,n,n**|*__<func>_avx2_nt_load*| Load:VMOVNTDQA; Store:VMOVNTDQ| _**unaligned source & destination** address will lead to_ **_`CRASH`_**.
-**vector `non temporal load`**|**avx2,n,[b\|w\|d\|q\|x\|y]**|*__<func>_avx2_nt_load*| Load:VMOVNTDQA; Store:VMOVDQU| None.
-**vector `non temporal store`**|**avx2,[b\|w\|d\|q\|x\|y],n**|*__<func>_avx2_nt_store*| Load:VMOVDQU; Store:VMOVNTDQ| None.
+**vector unaligned `source` & `destination`**|**[avx2\|avx512],b,b**|*__<func>_[avx2\|avx512]_unaligned*| Load:VMOVDQU; Store:VMOVDQU| None
+**vector aligned `source` and `destination`**|**[avx2\|avx512],y,y**|*__<func>_[avx2\|avx512]_aligned*| Load:VMOVDQA; Store:VMOVDQA| _**unaligned source &/ destination** address will lead to_ **_`CRASH`_**.
+**vector aligned `source` and unaligned `destination`**|**[avx2\|avx512],y,[b\|w\|d\|q\|x]**|*__<func>_[avx2\|avx512]_aligned_load*| Load:VMOVDQA; Store:VMOVDQU| None.
+**vector unaligned `source` and aligned `destination`**|**[avx2\|avx512],[b\|w\|d\|q\|x], y**|*__<func>_[avx2\|avx512]_aligned_store*| Load:VMOVDQU; Store:VMOVDQA| None.
+**vector `non temporal load and store`**|**[avx2\|avx512],n,n**|*__<func>_[avx2\|avx512]_nt_load*| Load:VMOVNTDQA; Store:VMOVNTDQ| _**unaligned source & destination** address will lead to_ **_`CRASH`_**.
+**vector `non temporal load`**|**[avx2\|avx512],n,[b\|w\|d\|q\|x\|y]**|*__<func>_[avx2\|avx512]_nt_load*| Load:VMOVNTDQA; Store:VMOVDQU| None.
+**vector `non temporal store`**|**[avx2\|avx512],[b\|w\|d\|q\|x\|y],n**|*__<func>_[avx2\|avx512]_nt_store*| Load:VMOVDQU; Store:VMOVNTDQ| None.
 **rep movs `unaligned source or destination`**|**erms,b,b**|*__<func>_erms_b_aligned*| REP MOVSB | None
 **rep movs `word aligned source & destination`**|**erms,w,w**|*__<func>_erms_w_aligned*| REP MOVSW | **`Data Coruption or Crash`** if length is not multiple of WORD.
 **rep movs `double word aligned source & destination`**|**erms,d,d**|*__<func>_erms_d_aligned*| REP MOVSD | **`Data Coruption or Crash`** if length is not multiple of DOUBLE WORD.

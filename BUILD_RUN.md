@@ -12,14 +12,18 @@
     $ cd build
     #Configure for GCC build
         # Default
-        $ cmake ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc ../aocl-libmem
         # Enabling Tunable Parameters
-        $ cmake -D ENABLE_TUNABLES=Y ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y ../aocl-libmem
+        # Compiling AVX512 on non-avx512 machine
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D USE_AVX512=Y ../aocl-libmem
     #Configure for AOCC(Clang) build
         # Default
         $ cmake -D CMAKE_C_COMPILER=clang ../aocl-libmem
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y ./aocl-libmem
+        # Compiling AVX512 on non-avx512 machine
+        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D USE_AVX512=Y ../aocl-libmem
     #Build
     $ cmake --build .
     #Install
@@ -63,7 +67,7 @@ The library will choose the implementation based on the tuned parameter at run t
  **LIBMEM_OPERATION** format: **`<operations>,<source_alignment>,<destination_alignmnet>`**
 
  ##### Valid options:
- * `<operations> = [avx2|erms]`
+ * `<operations> = [avx2|avx512|erms]`
  * `<source_alignment> = [b|w|d|q|x|y|n]`
  * `<destination_alignmnet> = [b|w|d|q|x|y|n]`
 
