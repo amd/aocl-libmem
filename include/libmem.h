@@ -217,6 +217,15 @@ int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
         __memcmp_avx2_nt,
         __memcmp_avx2_unaligned,
         __memcmp_avx2_unaligned,
+#ifdef AVX512_FEATURE_ENABLED
+        __memcmp_avx512_unaligned,
+        __memcmp_avx512_aligned,
+        __memcmp_avx512_unaligned,
+        __memcmp_avx512_unaligned,
+        __memcmp_avx512_nt,
+        __memcmp_avx512_unaligned,
+        __memcmp_avx512_unaligned,
+#endif
         __memcmp_erms_b_aligned,
         __memcmp_erms_w_aligned,
         __memcmp_erms_d_aligned,
