@@ -39,6 +39,10 @@ int __memcmp_system(const void * mem1, const void *mem2, size_t size)
     {
         return __memcmp_erms_b_aligned(mem1, mem2, size);
     }
-    return __memcmp_avx2_nt(mem1, mem2, size);
+#ifdef AVX512_FEATURE_ENABLED
+    return __memcmp_avx512_unaligned(mem1, mem2, size);
+#else
+    return __memcmp_avx2_unaligned(mem1, mem2, size);
+#endif
 }
 

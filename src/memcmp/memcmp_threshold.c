@@ -31,8 +31,13 @@
 int __memcmp_threshold(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
+
     if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
         return __memcmp_erms_b_aligned(mem1, mem2, size);
+#ifdef AVX512_FEATURE_ENABLED
+    return __memcmp_avx512_unaligned(mem1, mem2, size);
+#else
     return __memcmp_avx2_unaligned(mem1, mem2, size);
+#endif
 }
 
