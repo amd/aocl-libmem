@@ -56,9 +56,9 @@ static int memcmp_le_2ymm(const void *mem1, const void *mem2, size_t size)
     }
     if (size <= 2 * QWORD_SZ)
     {
-        return ((*((uint64_t*)mem1)) != (*((uint64_t*)mem2))) |
-        ((*((uint64_t *)(mem1 + size - QWORD_SZ))) != \
-                    (*((uint64_t*)(mem2 + size - QWORD_SZ))));
+        return ((*((uint64_t*)mem1) != *((uint64_t*)mem2)) |
+        (*((uint64_t *)(mem1 + size - QWORD_SZ)) != \
+                    *((uint64_t*)(mem2 + size - QWORD_SZ))));
     }
     if (size <= 2 * XMM_SZ)
     {
@@ -88,6 +88,9 @@ int __memcmp_avx2_unaligned(const void *mem1, const void *mem2, size_t size)
     __m256i y0, y1, y2, y3, y4, y5, y6, y7;
     size_t offset = 0;
     uint32_t cmp_mask = 0;
+
+    if (size <= 2 * YMM_SZ)
+        return memcmp_le_2ymm(mem1, mem2, size);
 
     if (size <= 4 * YMM_SZ)
     {

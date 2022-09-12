@@ -225,6 +225,9 @@ def main():
     test_status = 'Test Status : '
     status = True
 
+    if os.path.exists("*.csv"):
+        os.remove("*.csv")
+
     # Validate data
     if args.mode in ('v','a'):
         validation = data_validator(args.func, args.range, args.align, args.iterator)

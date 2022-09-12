@@ -56,8 +56,8 @@ static int memcmp_le_2zmm(const void *mem1, const void *mem2, size_t size)
     }
     if (size <= 2 * QWORD_SZ)
     {
-        return ((*((uint64_t*)mem1)) != (*((uint64_t*)mem2))) | 
-        ((*((uint64_t *)(mem1 + size - QWORD_SZ))) != (*((uint64_t*)(mem2 + size - QWORD_SZ))));
+        return ((*((uint64_t *)mem1) != *((uint64_t *)mem2)) |
+        (*((uint64_t *)(mem1 + size - QWORD_SZ)) != *((uint64_t *)(mem2 + size - QWORD_SZ))));
     }
     if (size <= 2 * XMM_SZ)
     {

@@ -482,6 +482,10 @@ void *__memmove_avx2_nt(void *dst, const void *src, size_t size)
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
 
+    //Non-temporal not recommended on overlapping memory zones.
+    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+	return __memmove_avx2_unaligned(dst, src, size);
+
     y4 = _mm256_loadu_si256(src + size + offset - YMM_SZ);
     while (size >= 4 * YMM_SZ)
     {
@@ -529,6 +533,9 @@ void *__memmove_avx2_nt_load(void *dst, const void *src, size_t size)
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
+    //Non-temporal not recommended on overlapping memory zones.
+    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+	return __memmove_avx2_unaligned(dst, src, size);
 
     //compute the offset to align the src to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
@@ -583,6 +590,10 @@ void *__memmove_avx2_nt_store(void *dst, const void *src, size_t size)
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
+
+    //Non-temporal not recommended on overlapping memory zones.
+    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+	return __memmove_avx2_unaligned(dst, src, size);
 
     //compute the offset to align the dst to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
