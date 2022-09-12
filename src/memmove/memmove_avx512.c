@@ -234,7 +234,9 @@ BACKWARD_COPY:
     z0 = _mm512_loadu_si512(src + size - ZMM_SZ);
     _mm512_storeu_si512(dst + size - ZMM_SZ, z0);
 
-    size = size & (~(ZMM_SZ - 1));
+    //compute the offset to align the src to ZMM_SZ Bytes boundary
+    offset = size & (ZMM_SZ - 1);
+    size = size - offset;
 
     while (size >= 4 * ZMM_SZ)
     {
@@ -255,8 +257,8 @@ BACKWARD_COPY:
         z0 = _mm512_load_si512(src + size - ZMM_SZ);
         z1 = _mm512_load_si512(src + size - 2 * ZMM_SZ);
 
-        _mm512_store_si512(dst + size -32, z0);
-        _mm512_store_si512(dst + size -2 * ZMM_SZ , z1);
+        _mm512_store_si512(dst + size - ZMM_SZ, z0);
+        _mm512_store_si512(dst + size - 2 * ZMM_SZ , z1);
 
         size -= 2 * ZMM_SZ;
     }
@@ -341,7 +343,7 @@ BACKWARD_COPY:
     _mm512_storeu_si512(dst + size - ZMM_SZ, z0);
 
     //compute the offset to align the src to ZMM_SZ Bytes boundary
-    offset = ZMM_SZ - ((size_t)(src + size) & (ZMM_SZ - 1));
+    offset = ((size_t)(src + size) & (ZMM_SZ - 1));
     size = size - offset;
     
     while (size >= 4 * ZMM_SZ)
@@ -447,7 +449,7 @@ BACKWARD_COPY:
     _mm512_storeu_si512(dst + size - ZMM_SZ, z0);
 
     //compute the offset to align the src to ZMM_SZ Bytes boundary
-    offset = ZMM_SZ - ((size_t)(dst + size) & (ZMM_SZ - 1));
+    offset = ((size_t)(dst + size) & (ZMM_SZ - 1));
     size = size - offset;
 
     while (size >= 4 * ZMM_SZ)

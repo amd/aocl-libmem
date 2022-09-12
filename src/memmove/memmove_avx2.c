@@ -228,7 +228,9 @@ BACKWARD_COPY:
     y0 = _mm256_loadu_si256(src + size - YMM_SZ);
     _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
-    size = size & (~0x1F);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = size & (YMM_SZ - 1);
+    size = size - offset;
 
     while (size >= 4 * YMM_SZ)
     {
@@ -249,8 +251,8 @@ BACKWARD_COPY:
         y0 = _mm256_load_si256(src + size - YMM_SZ);
         y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
 
-        _mm256_store_si256(dst + size -32, y0);
-        _mm256_store_si256(dst + size -64 , y1);
+        _mm256_store_si256(dst + size - YMM_SZ, y0);
+        _mm256_store_si256(dst + size - 2 * YMM_SZ , y1);
 
         size -= 2 * YMM_SZ;
     }
@@ -331,7 +333,7 @@ BACKWARD_COPY:
     _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
     //compute the offset to align the src to YMM_SZ Bytes boundary
-    offset = YMM_SZ - ((size_t)(src + size) & (YMM_SZ - 1));
+    offset = (size_t)(src + size) & (YMM_SZ - 1);
     size = size - offset;
     
     while (size >= 4 * YMM_SZ)
@@ -353,8 +355,8 @@ BACKWARD_COPY:
         y0 = _mm256_load_si256(src + size - YMM_SZ);
         y1 = _mm256_load_si256(src + size - 2 * YMM_SZ);
 
-        _mm256_storeu_si256(dst + size -32, y0);
-        _mm256_storeu_si256(dst + size -64 , y1);
+        _mm256_storeu_si256(dst + size - YMM_SZ, y0);
+        _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
 
         size -= 2 * YMM_SZ;
     }
@@ -434,7 +436,7 @@ BACKWARD_COPY:
     _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
     //compute the offset to align the src to YMM_SZ Bytes boundary
-    offset = YMM_SZ - ((size_t)(dst + size) & (YMM_SZ - 1));
+    offset = (size_t)(dst + size) & (YMM_SZ - 1);
     size = size - offset;
 
     while (size >= 4 * YMM_SZ)
