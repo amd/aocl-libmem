@@ -73,7 +73,7 @@ static inline void *memset_le_2zmm(void *mem, int val, size_t size)
         *((uint32_t*)(mem + size - 4)) = shft_val;
         return mem;
     }
-    if (size > WORD_SZ)
+    if (size >= WORD_SZ)
     {
         uint16_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
         *((uint16_t*)mem) = shft_val;

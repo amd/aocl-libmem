@@ -33,6 +33,7 @@ static inline void *memmove_le_2zmm(void *dst, const void *src, size_t size)
     __m512i z0, z1;
     __m256i y0, y1;
     __m128i x0, x1;
+    uint64_t temp;
 
     if (size == 0)
         return dst;
@@ -44,20 +45,23 @@ static inline void *memmove_le_2zmm(void *dst, const void *src, size_t size)
     }
     if (size <= 2 * WORD_SZ)
     {
-        *((uint16_t *)dst) = *((uint16_t *)src);
+        temp = *((uint16_t *)src);
         *((uint16_t *)(dst + size - WORD_SZ)) = *((uint16_t *)(src + size - WORD_SZ));
+        *((uint16_t *)dst) = temp;
         return dst;
     }
     if (size <= 2 * DWORD_SZ)
     {
-        *((uint32_t *)dst) = *((uint32_t *)src);
+        temp = *((uint32_t *)src);
         *((uint32_t *)(dst + size - DWORD_SZ)) = *((uint32_t *)(src + size - DWORD_SZ));
+        *((uint32_t *)dst) = temp;
         return dst;
     }
     if (size <= 2 * QWORD_SZ)
     {
-        *((uint64_t *)dst) = *((uint64_t *)src);
+        temp = *((uint64_t *)src);
         *((uint64_t *)(dst + size - QWORD_SZ)) = *((uint64_t *)(src + size - QWORD_SZ));
+        *((uint64_t *)dst) = temp;
         return dst;
     }
     if (size <= 2 * XMM_SZ)
@@ -276,23 +280,26 @@ BACKWARD_COPY:
 
 void *__memmove_avx512_aligned_load(void *dst, const void *src, size_t size)
 {
-    __m512i z0, z1, z2, z3, z4;
-    size_t offset = 0;
+    __m512i z0, z1, z2, z3, z4, z5;
+    size_t offset = 0, len = size;
 
     LOG_INFO("\n");
     if (size <= 2 * ZMM_SZ)
         return memmove_le_2zmm(dst, src, size);
 
+    /* load first and last ZMM_SZ size data into ZMM regs and store them at end
+     * as per the backward/forward copy based to avoid data corruption/crash
+     * when there is huge overlap and unaligned load/store offsetting.
+     */
+    z4 = _mm512_loadu_si512(src);
+    z5 = _mm512_loadu_si512(src + size - ZMM_SZ);
+
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    z4 = _mm512_loadu_si512(src + size - ZMM_SZ);
     //compute the offset to align the src to ZMM_SZ Bytes boundary
     offset = ZMM_SZ - ((size_t)src & (ZMM_SZ - 1));
     size -= offset;
-
-    z0 = _mm512_loadu_si512(src);
-    _mm512_storeu_si512(dst, z0);
         
     while (size >= 4 * ZMM_SZ)
     {
@@ -332,15 +339,12 @@ void *__memmove_avx512_aligned_load(void *dst, const void *src, size_t size)
     }
     //copy last ZMM_SZ Bytes
     if (size != 0)
-        _mm512_storeu_si512(dst + size - ZMM_SZ + offset, z4);
+        _mm512_storeu_si512(dst + len - ZMM_SZ, z5);
+    // store the first ZMM_SZ bytes for forward copy
+    _mm512_storeu_si512(dst, z4);
     return dst;
 
 BACKWARD_COPY:
-
-    z4 = _mm512_loadu_si512(src);
-    
-    z0 = _mm512_loadu_si512(src + size - ZMM_SZ);
-    _mm512_storeu_si512(dst + size - ZMM_SZ, z0);
 
     //compute the offset to align the src to ZMM_SZ Bytes boundary
     offset = ((size_t)(src + size) & (ZMM_SZ - 1));
@@ -383,28 +387,33 @@ BACKWARD_COPY:
     //copy first ZMM_SZ Bytes
     if (size != 0)
         _mm512_storeu_si512(dst, z4);
+    // store the last ZMM_SZ bytes for backward copy
+    _mm512_storeu_si512(dst + len - ZMM_SZ, z5);
     return dst;
 }
 
 void *__memmove_avx512_aligned_store(void *dst, const void *src, size_t size)
 {
-    __m512i z0, z1, z2, z3, z4;
-    size_t offset = 0;
+    __m512i z0, z1, z2, z3, z4, z5;
+    size_t offset = 0, len = size;
 
     LOG_INFO("\n");
     if (size <= 2 * ZMM_SZ)
         return memmove_le_2zmm(dst, src, size);
 
+    /* load first and last ZMM_SZ size data into ZMM regs and store them at end
+     * as per the backward/forward copy based to avoid data corruption/crash
+     * when there is huge overlap and unaligned load/store offsetting.
+     */
+    z4 = _mm512_loadu_si512(src);
+    z5 = _mm512_loadu_si512(src + size - ZMM_SZ);
+
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    z4 = _mm512_loadu_si512(src + size - ZMM_SZ);
     //compute the offset to align the dst to ZMM_SZ Bytes boundary
     offset = ZMM_SZ - ((size_t)dst & (ZMM_SZ - 1));
-    size -= offset;
-    z0 = _mm512_loadu_si512(src);
-    _mm512_storeu_si512(dst, z0);
-
+    size -= offset ;
     while (size >= 4 * ZMM_SZ)
     {
         z0 = _mm512_loadu_si512(src + offset + 0 * ZMM_SZ);
@@ -439,17 +448,15 @@ void *__memmove_avx512_aligned_store(void *dst, const void *src, size_t size)
     }
     //copy last ZMM_SZ Bytes
     if (size != 0)
-        _mm512_storeu_si512(dst + size - ZMM_SZ + offset, z4);
+        _mm512_storeu_si512(dst + len - ZMM_SZ, z5);
+    // store the first ZMM_SZ bytes for forward copy
+    _mm512_storeu_si512(dst, z4);
     return dst;
 
 BACKWARD_COPY:
-    z4 = _mm512_loadu_si512(src);
-
-    z0 = _mm512_loadu_si512(src + size - ZMM_SZ);
-    _mm512_storeu_si512(dst + size - ZMM_SZ, z0);
 
     //compute the offset to align the src to ZMM_SZ Bytes boundary
-    offset = ((size_t)(dst + size) & (ZMM_SZ - 1));
+    offset = (size_t)(dst + size) & (ZMM_SZ - 1);
     size = size - offset;
 
     while (size >= 4 * ZMM_SZ)
@@ -485,6 +492,8 @@ BACKWARD_COPY:
     //copy first ZMM_SZ Bytes
     if (size != 0)
         _mm512_storeu_si512(dst, z4);
+    // store the last ZMM_SZ bytes for backward copy
+    _mm512_storeu_si512(dst + len - ZMM_SZ, z5);
     return dst;
 }
 
@@ -498,7 +507,7 @@ void *__memmove_avx512_nt(void *dst, const void *src, size_t size)
         return memmove_le_2zmm(dst, src, size);
 
     //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+    if (!(((src + size) < dst) || ((dst + size) < src)))
 	return __memmove_avx512_unaligned(dst, src, size);
 
     z4 = _mm512_loadu_si512(src + size + offset - ZMM_SZ);
@@ -550,13 +559,13 @@ void *__memmove_avx512_nt_load(void *dst, const void *src, size_t size)
         return memmove_le_2zmm(dst, src, size);
 
     //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+    if (!(((src + size) < dst) || ((dst + size) < src)))
 	return __memmove_avx512_unaligned(dst, src, size);
 
-    //compute the offset to align the src to ZMM_SZ Bytes boundary
-    offset = ZMM_SZ - ((size_t)src & (ZMM_SZ - 1));
     z0 = _mm512_loadu_si512(src);
     _mm512_storeu_si512(dst, z0);
+    //compute the offset to align the src to ZMM_SZ Bytes boundary
+    offset = ZMM_SZ - ((size_t)src & (ZMM_SZ - 1));
     size -= offset;
 
     while (size >= 4 * ZMM_SZ)
@@ -597,7 +606,6 @@ void *__memmove_avx512_nt_load(void *dst, const void *src, size_t size)
     return dst;
 }
 
-
 void *__memmove_avx512_nt_store(void *dst, const void *src, size_t size)
 {
     __m512i z0, z1, z2, z3, z4;
@@ -608,13 +616,13 @@ void *__memmove_avx512_nt_store(void *dst, const void *src, size_t size)
         return memmove_le_2zmm(dst, src, size);
 
     //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+    if (!(((src + size) < dst) || ((dst + size) < src)))
 	return __memmove_avx512_unaligned(dst, src, size);
 
-    //compute the offset to align the dst to ZMM_SZ Bytes boundary
-    offset = ZMM_SZ - ((size_t)dst & (ZMM_SZ - 1));
     z0 = _mm512_loadu_si512(src);
     _mm512_storeu_si512(dst, z0);
+    //compute the offset to align the dst to ZMM_SZ Bytes boundary
+    offset = ZMM_SZ - ((size_t)dst & (ZMM_SZ - 1));
     size -= offset;
 
     while (size >= 4 * ZMM_SZ)

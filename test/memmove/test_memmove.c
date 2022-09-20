@@ -60,6 +60,8 @@ int main(int argc, char **argv)
     char *dst, *back_dst, *dst_alnd, *back_dst_alnd;
     char test_mode = 'v';
     unsigned int offset, src_alignment = 64, dst_alignment = 64;
+    int64_t back_overlap = 0, fwd_overlap = 0;
+
     srand(time(0));
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -75,10 +77,8 @@ int main(int argc, char **argv)
 
     src_alignment = src_alignment%64;
     dst_alignment = dst_alignment%64;
-    // generate a random overlap region
-    int64_t back_overlap = 0, fwd_overlap = 0; // = rand()%len;
 
-    overlap_mem = (char *) malloc(len + 128);
+    overlap_mem = (char *) malloc(len + 256);
     if (overlap_mem == NULL)
     {
         perror("Overlap memory allocation failure\n");
@@ -87,22 +87,20 @@ int main(int argc, char **argv)
     //compute src address from overlap memory based on src alignment
     back_src = overlap_mem;
     back_src_alnd = back_src + src_alignment;
-    offset = (uint64_t)back_src & 64;
-    if (offset !=0)
+    offset = (uint64_t)back_src & 63;
+    if (offset != 0)
         back_src_alnd += 64 - offset;
 
     //compute dst address from src_alnd memory based on dst alignment + overlap
-    dst = overlap_mem + 64; // - overlap;
+    dst = overlap_mem + 64;
     dst_alnd = dst + dst_alignment;
-    offset = (uint64_t)dst & 64;
-    
+    offset = (uint64_t)dst & 63;
     if (offset != 0)
         dst_alnd += 64 - offset;
 
-    back_dst = overlap_mem;
     back_dst_alnd = dst_alnd - 64;
-    src = overlap_mem + 64;
     src_alnd = back_src_alnd + 64;
+
     //allocate memory for validator
     validator = (char *) malloc(len);
     if (validator == NULL)
@@ -118,8 +116,6 @@ int main(int argc, char **argv)
         fwd_overlap = 0;
     if (back_overlap < 0)
         back_overlap = 0;
-   // fwd_overlap = fwd_overlap < 0?0:fwd_overlap > len? (fwd_overlap - len): fwd_overlap;
-   // back_overlap = back_overlap < 0?0:back_overlap > len? (back_overlap - len): back_overlap;
 
     if (test_mode == 'v')
     {
@@ -127,9 +123,9 @@ int main(int argc, char **argv)
 
 	// backward copy
         for (i=0; i< len; i++)
-	    {
+	{
             *(back_src_alnd + i) = *(validator + i) = 'a' + rand()%26;
-	    }
+	}
         memmove(dst_alnd , back_src_alnd, len);
 
         for (i=0; i<len; i++)
@@ -148,11 +144,13 @@ int main(int argc, char **argv)
             printf("Backward Copy Validation successfull for size = %luB with SRC "
                 "alignment = %u, DST alignment = %u and Overlap = %luB\n", \
                  len, src_alignment, dst_alignment, back_overlap);
-	    }
+	}
 
         //forward copy
-	    for (i=0; i<len; i++)
-		    *(src_alnd + i) = *(validator + i);
+	for (i=0; i<len; i++)
+	{
+	    *(src_alnd + i) = *(validator + i);
+	}
 
         memmove(back_dst_alnd , src_alnd, len);
 
@@ -172,7 +170,7 @@ int main(int argc, char **argv)
             printf("Forward Copy Validation successfull for size = %luB with "
                 "SRC alignment = %u, DST alignment = %u and Overlap = %luB\n",\
                  len, src_alignment, dst_alignment, fwd_overlap);
-	    }
+	}
     }
     else //Latency Measure test
     {   //dummy call to avoid resolver latency on first call

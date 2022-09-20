@@ -42,28 +42,28 @@ static inline void *memmove_le_2ymm(void *dst, const void *src, size_t size)
         *((uint8_t *)dst) = *((uint8_t *)src);
         return dst;
     }
-    if (size < 2 * WORD_SZ)
+    if (size <= 2 * WORD_SZ)
     {
         temp = *((uint16_t *)src);
         *((uint16_t *)(dst + size - WORD_SZ)) = *((uint16_t *)(src + size - WORD_SZ));
         *((uint16_t *)dst) = temp;
         return dst;
     }
-    if (size < DWORD_SZ)
+    if (size <= 2 * DWORD_SZ)
     {
         temp = *((uint32_t *)src);
         *((uint32_t *)(dst + size - DWORD_SZ)) = *((uint32_t *)(src + size - DWORD_SZ));
         *((uint32_t *)dst) = temp;
         return dst;
     }
-    if (size < 2 * QWORD_SZ)
+    if (size <= 2 * QWORD_SZ)
     {
         temp = *((uint64_t *)src);
         *((uint64_t *)(dst + size - QWORD_SZ)) = *((uint64_t *)(src + size - QWORD_SZ));
         *((uint64_t *)dst) = temp;
         return dst;
     }
-    if (size < 2 * XMM_SZ)
+    if (size <= 2 * XMM_SZ)
     {
         x0 = _mm_loadu_si128(src);
         x1 = _mm_loadu_si128(src + size - XMM_SZ);

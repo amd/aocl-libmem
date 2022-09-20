@@ -270,23 +270,27 @@ BACKWARD_COPY:
 
 void *__memmove_avx2_aligned_load(void *dst, const void *src, size_t size)
 {
-    __m256i y0, y1, y2, y3, y4;
-    size_t offset = 0;
+    __m256i y0, y1, y2, y3, y4, y5;
+    size_t offset = 0, len = size;
 
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
 
+    /* load first and last YMM_SZ size data into YMM regs and store them at end
+     * as per the backward/forward copy based to avoid data corruption/crash
+     * when there is huge overlap and unaligned load/store offsetting.
+     */
+    y4 = _mm256_loadu_si256(src);
+    y5 = _mm256_loadu_si256(src + size - YMM_SZ);
+
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
     //compute the offset to align the src to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
     size -= offset;
 
-    y0 = _mm256_loadu_si256(src);
-    _mm256_storeu_si256(dst, y0);
         
     while (size >= 4 * YMM_SZ)
     {
@@ -320,17 +324,14 @@ void *__memmove_avx2_aligned_load(void *dst, const void *src, size_t size)
         y0 = _mm256_load_si256(src + offset);
         _mm256_storeu_si256(dst + offset, y0);
     }
-    //copy last YMM_SZ Bytes
+    // copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
+        _mm256_storeu_si256(dst + len - YMM_SZ, y5);
+    // store the first YMM_SZ bytes for forward copy
+    _mm256_storeu_si256(dst, y4);
     return dst;
 
 BACKWARD_COPY:
-
-    y4 = _mm256_loadu_si256(src);
-    
-    y0 = _mm256_loadu_si256(src + size - YMM_SZ);
-    _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
     //compute the offset to align the src to YMM_SZ Bytes boundary
     offset = (size_t)(src + size) & (YMM_SZ - 1);
@@ -369,27 +370,33 @@ BACKWARD_COPY:
     //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_storeu_si256(dst, y4);
+    // store the last YMM_SZ bytes for backward copy
+    _mm256_storeu_si256(dst + len - YMM_SZ, y5);
     return dst;
 }
 
 void *__memmove_avx2_aligned_store(void *dst, const void *src, size_t size)
 {
-    __m256i y0, y1, y2, y3, y4;
-    size_t offset = 0;
+    __m256i y0, y1, y2, y3, y4, y5;
+    size_t offset = 0, len = size;
 
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
 
+    /* load first and last VEC size data into YMM regs and store them at end
+     * as per the backward/forward copy based to avoid data corruption/crash
+     * when there is huge overlap and unaligned load/store offsetting.
+     */
+    y4 = _mm256_loadu_si256(src);
+    y5 = _mm256_loadu_si256(src + size - YMM_SZ);
+
     if ((dst < src + size) && (src < dst))
         goto BACKWARD_COPY;
 
-    y4 = _mm256_loadu_si256(src + size - YMM_SZ);
     //compute the offset to align the dst to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
     size -= offset;
-    y0 = _mm256_loadu_si256(src);
-    _mm256_storeu_si256(dst, y0);
 
     while (size >= 4 * YMM_SZ)
     {
@@ -425,15 +432,12 @@ void *__memmove_avx2_aligned_store(void *dst, const void *src, size_t size)
     }
     //copy last YMM_SZ Bytes
     if (size != 0)
-        _mm256_storeu_si256(dst + size - YMM_SZ + offset, y4);
+        _mm256_storeu_si256(dst + len - YMM_SZ, y5);
+    // store the first YMM_SZ bytes for forward copy
+    _mm256_storeu_si256(dst, y4);
     return dst;
 
 BACKWARD_COPY:
-
-    y4 = _mm256_loadu_si256(src);
-
-    y0 = _mm256_loadu_si256(src + size - YMM_SZ);
-    _mm256_storeu_si256(dst + size - YMM_SZ, y0);
 
     //compute the offset to align the src to YMM_SZ Bytes boundary
     offset = (size_t)(dst + size) & (YMM_SZ - 1);
@@ -472,6 +476,8 @@ BACKWARD_COPY:
     //copy first YMM_SZ Bytes
     if (size != 0)
         _mm256_storeu_si256(dst, y4);
+    // store the last YMM_SZ bytes for backward copy
+    _mm256_storeu_si256(dst + len - YMM_SZ, y5);
     return dst;
 }
 
@@ -484,8 +490,13 @@ void *__memmove_avx2_nt(void *dst, const void *src, size_t size)
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
 
-    //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
+    /* Non-temporal operations use WC Buffers to store stream writes and
+     * data is written back to memory only after the entire buffer line fill.
+     * Any interruptions/evictions from SMP/SMT environment may delay writes,
+     * thus leads to data corruptions for overlapped memory buffers.
+     * Henceforth, avoid non-temporal operations on overlapped memory buffers.
+     */
+    if (!(((src + size) < dst) || ((dst + size) < src)))
 	return __memmove_avx2_unaligned(dst, src, size);
 
     y4 = _mm256_loadu_si256(src + size + offset - YMM_SZ);
@@ -527,6 +538,7 @@ void *__memmove_avx2_nt(void *dst, const void *src, size_t size)
     return dst;
 
 }
+
 void *__memmove_avx2_nt_load(void *dst, const void *src, size_t size)
 {
     __m256i y0, y1, y2, y3, y4;
@@ -535,14 +547,20 @@ void *__memmove_avx2_nt_load(void *dst, const void *src, size_t size)
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
-    //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
-	return __memmove_avx2_unaligned(dst, src, size);
 
-    //compute the offset to align the src to YMM_SZ Bytes boundary
-    offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
+    /* Non-temporal operations use WC Buffers to store stream writes and
+     * data is written back to memory only after the entire buffer line fill.
+     * Any interruptions/evictions from SMP/SMT environment may delay writes,
+     * thus leads to data corruptions for overlapped memory buffers.
+     * Henceforth, avoid non-temporal operations on overlapped memory buffers.
+     */
+    if (!(((src + size) < dst) || ((dst + size) < src)))
+	    return __memmove_avx2_unaligned(dst, src, size);
+
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
+    //compute the offset to align the src to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)src & (YMM_SZ - 1));
     size -= offset;
 
     while (size >= 4 * YMM_SZ)
@@ -593,14 +611,19 @@ void *__memmove_avx2_nt_store(void *dst, const void *src, size_t size)
     if (size <= 2 * YMM_SZ)
         return memmove_le_2ymm(dst, src, size);
 
-    //Non-temporal not recommended on overlapping memory zones.
-    if (((uintptr_t)src ^ (uintptr_t)dst) < size)
-	return __memmove_avx2_unaligned(dst, src, size);
+    /* Non-temporal operations use WC Buffers to store stream writes and
+     * data is written back to memory only after the entire buffer line fill.
+     * Any interruptions/evictions from SMP/SMT environment may delay writes,
+     * thus leads to data corruptions for overlapped memory buffers.
+     * Henceforth, avoid non-temporal operations on overlapped memory buffers.
+     */
+    if (!(((src + size) < dst) || ((dst + size) < src)))
+	    return __memmove_avx2_unaligned(dst, src, size);
 
-    //compute the offset to align the dst to YMM_SZ Bytes boundary
-    offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
     y0 = _mm256_loadu_si256(src);
     _mm256_storeu_si256(dst, y0);
+    //compute the offset to align the dst to YMM_SZ Bytes boundary
+    offset = YMM_SZ - ((size_t)dst & (YMM_SZ - 1));
     size -= offset;
 
     while (size >= 4 * YMM_SZ)
