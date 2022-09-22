@@ -147,6 +147,7 @@ static int unaligned_ld_cmp(const void *mem1, const void *mem2, size_t size)
 }
 
 #ifdef AVX512_FEATURE_ENABLED
+#ifdef FORCE_ENABLE_AVX512_MEMCMP
 static int unaligned_avx512_ld_cmp(const void *mem1, const void *mem2, size_t size)
 {
     __m512i z0, z1, z2, z3, z4, z5, z6, z7;
@@ -225,12 +226,12 @@ static int unaligned_avx512_ld_cmp(const void *mem1, const void *mem2, size_t si
     return (mask1 != (uint64_t)-1);
 }
 #endif
-
+#endif
 
 int __memcmp_zen1(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
+    if (size <= 2 * YMM_SZ)
         return memcmp_le_2ymm(mem1, mem2, size);
     return unaligned_ld_cmp(mem1, mem2, size);
 }
@@ -238,7 +239,7 @@ int __memcmp_zen1(const void * mem1, const void *mem2, size_t size)
 int __memcmp_zen2(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
+    if (size <= 2 * YMM_SZ)
         return memcmp_le_2ymm(mem1, mem2, size);
     return unaligned_ld_cmp(mem1, mem2, size);
 }
@@ -246,7 +247,7 @@ int __memcmp_zen2(const void * mem1, const void *mem2, size_t size)
 int __memcmp_zen3(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
-    if (size <= 64)
+    if (size <= 2 * YMM_SZ)
         return memcmp_le_2ymm(mem1, mem2, size);
     return unaligned_ld_cmp(mem1, mem2, size);
 }
@@ -257,9 +258,11 @@ int __memcmp_zen4(const void *mem1, const void *mem2, size_t size)
     if (size <= 2 * YMM_SZ)
         return memcmp_le_2ymm(mem1, mem2, size);
 #ifdef AVX512_FEATURE_ENABLED
+//AVX2 out performing AVX512, hence AVX512 implementation will be bypassed.
+#ifdef FORCE_ENABLE_AVX512_MEMCMP
    return unaligned_avx512_ld_cmp(mem1, mem2, size);
-#else
-   return unaligned_ld_cmp(mem1, mem2, size);
 #endif
+#endif
+   return unaligned_ld_cmp(mem1, mem2, size);
 }
 

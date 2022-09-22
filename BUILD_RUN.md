@@ -47,6 +47,7 @@ A shared library file libaocl-libmem.so will be generated and stored under build
 ```sh
     $ LD_PRELOAD=<path to build/lib/libaocl-libmem.so> <executable> <params>
 ```
+ * **`WARNING: Do not load/run AVX512 library on Non-AVX512 machine. Running AVX512 on non-AVX512 will lead to crash(invalid instructions).`**
 
 ## User Config:
 ### 1. Default State Run:
