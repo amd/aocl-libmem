@@ -48,7 +48,7 @@ execute_process(COMMAND bash "-c" "lscpu | grep avx512"
 if (USE_AVX512 OR NOT AVX512_STATUS)
     set(AVX512_FEATURE_AVAILABLE true)
     add_definitions(-DAVX512_FEATURE_ENABLED)
-    message("AVX512 CPU Feature Enabled.")
+    message("AVX512 Build...")
 endif ()
 
 # option for building shared lib

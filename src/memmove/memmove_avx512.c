@@ -314,8 +314,6 @@ void *__memmove_avx512_aligned_load(void *dst, const void *src, size_t size)
         _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z3);
 
         size -= 4 * ZMM_SZ;
-        if (size == 0)
-            return dst;
         offset += 4 * ZMM_SZ;
     }
     if (size >= 2 * ZMM_SZ)
@@ -328,8 +326,6 @@ void *__memmove_avx512_aligned_load(void *dst, const void *src, size_t size)
 
         size -= 2 * ZMM_SZ;
         offset += 2 * ZMM_SZ;
-        if (size == 0)
-            return dst;
     }
 
     if (size > ZMM_SZ)
@@ -349,7 +345,7 @@ BACKWARD_COPY:
     //compute the offset to align the src to ZMM_SZ Bytes boundary
     offset = ((size_t)(src + size) & (ZMM_SZ - 1));
     size = size - offset;
-    
+
     while (size >= 4 * ZMM_SZ)
     {
         z0 = _mm512_load_si512(src + size - ZMM_SZ);
@@ -363,8 +359,6 @@ BACKWARD_COPY:
         _mm512_storeu_si512(dst + size - 4 * ZMM_SZ, z3);
 
         size -= 4 * ZMM_SZ;
-        if (size == 0)
-            return dst;
     }
     if (size >= 2 * ZMM_SZ)
     {
@@ -375,8 +369,6 @@ BACKWARD_COPY:
         _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z1);
 
         size -= 2 * ZMM_SZ;
-        if (size == 0)
-            return dst;
     }
 
     if (size > ZMM_SZ)

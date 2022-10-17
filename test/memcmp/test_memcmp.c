@@ -53,12 +53,14 @@ static __inline__ int64_t rdtscp_end(void)
 int main(int argc, char **argv)
 {
     uint64_t diff;
-    uint64_t len, clk_start, clk_end;
+    uint64_t len, clk_start, clk_end, i;
     char *ptr;
     char *src, *src_alnd;
     char *dst, *dst_alnd;
     char test_mode = 'v';
     unsigned int offset, src_alignment = 32, dst_alignment = 32;
+    unsigned int validation_passed = 1;
+    int ret = 0;
 
     if (argc < 3 || argv[1] == NULL || argv[2] == NULL)
     {
@@ -101,9 +103,7 @@ int main(int argc, char **argv)
 
     if (test_mode == 'v')
     {
-        uint64_t i;
-        int ret = 0;
-
+        srand(time(0));
         for (i=0; i< len; i++)
         {
             *(dst_alnd + i) = *(src_alnd + i) = 'a' + rand()%26;
@@ -111,30 +111,36 @@ int main(int argc, char **argv)
         ret = memcmp(dst_alnd , src_alnd, len);
         if (ret != 0)
         {
-            printf("ERROR: Validation failed for matching strings of length: %lu\n", len);
+            printf("ERROR: Validation failed for matching strings of length: %lu, return_value = %d\n", len, ret);
         }
         else
         {
             printf("Validation successfull for matching string of length: %lu\n", len);
         }
-        *(dst_alnd + i - 1) = '@';
-        ret = memcmp(dst_alnd , src_alnd, len);
-
-        if (ret == 0)
+        for (i=0; i< len; i++)
         {
-            printf("ERROR: Validation failed for non-matching string of length: %lu\n", len);
+           int expected;
+	   //set a byte of source different from destination
+           while(*(src_alnd + i) == *(dst_alnd + i))
+                *(src_alnd + i) = (char)rand();
+	   //set one more byte from the end
+	   *(src_alnd + len - 1) = '$';
+           ret = memcmp(src_alnd , dst_alnd, len);
+           expected = (*(uint8_t *)(src_alnd + i) - *(uint8_t *)(dst_alnd + i));
+           if (ret != expected)
+           {
+               printf("ERROR: Validation failed for non-matching string of length: %lu(index = %lu), return_value (actual= %d, expected = %d)\n", len, i, ret, expected);
+	       validation_passed = 0;
+           }
+           *(src_alnd + i) = *(dst_alnd + i);
         }
-        else
-        {
-            printf("Validation successfull for non-matching string of length: %lu\n", len);
-        }
+	if (validation_passed)
+               printf("Validation successfull for non-matching string of length: %lu\n", len);
     }
     else //Latency Measure test
     {   //dummy call to avoid resolver latency on first call
         int ret = memcmp(dst_alnd,src_alnd, 0);
-        *(dst_alnd) = '@';
-
-        //rdtscp
+        *(dst_alnd + len -1) = '@';
         clk_start = rdtscp_start();
         ret = memcmp(dst_alnd , src_alnd, len);
         clk_end = rdtscp_end();

@@ -1,6 +1,6 @@
 # libmem source directory
 
-add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fPIC -flto -fvisibility=hidden -mavx2 -O1)
+add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fPIC -flto -fvisibility=hidden -mavx2 -O1 -mbmi)
 
 if (AVX512_FEATURE_AVAILABLE)
     add_compile_options(-mavx512f -mavx512bw)
