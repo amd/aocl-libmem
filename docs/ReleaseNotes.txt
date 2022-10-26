@@ -18,6 +18,6 @@ implementation of the function as per the application requirements.
 
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------
- * Adding support for Zen4 architecture.
- * Adding support for AVX512 and choose the instruction and alignment
+ * Added support for Zen4 architecture.
+ * Added support for AVX512 and to choose the instruction and alignment
      with help of tunables.
