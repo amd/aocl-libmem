@@ -19,20 +19,5 @@ implementation of the function as per the application requirements.
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------
  * Adding support for Zen4 architecture.
- * Adding support for AVX512 and choose the intruction and alignment
+ * Adding support for AVX512 and choose the instruction and alignment
      with help of tunables.
-
-Highlights of AMD AOCL-LibMem version 3.2.1
---------------------------------------------
- * Optimized functions for Zen1, Zen2 and Zen3 architectures.
-    1. memcpy
-    2. mempcpy
-    3. memmove
-    4. memset
-    5. memcmp
- * Customized variants based on user choice via tunables from cmdline.
- * Micro architecture optimized default implementations.
- * Support for choosing AVX2 mov operations: {VMOVDQU, VMOVDQA,
-         VMOVNTDQ, VMOVNTDQA} based on alignment/cache requirements.
- * Support for choosing ERMS rep-movs and rep-stos operations.
- * Support for tuning threshold for temporal, erms and non-temporal operations.
