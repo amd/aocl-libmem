@@ -54,7 +54,7 @@ def data_validator(mem_func, size_range, alignment, iterator):
           +str(size_range[0])+"-"+str(size_range[1])+'] with src_alignment = '\
           +src_align+', dst_alignment = '+dst_align)
 
-    env['LD_PRELOAD'] = '../lib/libaocl-libmem.so'
+    env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
 
     validation_status = 'Success'
     with open("validation_report.csv", 'a+') as v_result:
@@ -98,7 +98,7 @@ def measure_latency(mem_func, size_range, alignment, iterator, iterations,\
         #set the early binding option for the loader
         os.environ['LD_BIND_NOW'] = '1'
         if lib_variant == 'amd':
-            env['LD_PRELOAD'] = '../lib/libaocl-libmem.so'
+            env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
         else:
             env['LD_PRELOAD'] = ''
 

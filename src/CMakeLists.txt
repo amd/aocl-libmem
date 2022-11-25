@@ -1,6 +1,6 @@
 # libmem source directory
 
-add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fPIC -flto -fvisibility=hidden -mavx2 -O1 -mbmi)
+add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -mavx2 -O1 -mbmi)
 
 if (AVX512_FEATURE_AVAILABLE)
     add_compile_options(-mavx512f -mavx512bw)
@@ -10,8 +10,14 @@ if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ENABLE_TUNABLES)
     add_definitions(-DALMEM_CMPSD_CLANG_WORKAROUND)
 endif ()
 
+if (${BUILD_SHARED_LIBS})
 # build a shared library
-add_library(${PROJECT_NAME} SHARED "")
+add_compile_options(-fPIC -flto)
+add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+else ()
+# build a static library
+add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
+endif()
 
 set(SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/cache_info.c   ${CMAKE_CURRENT_SOURCE_DIR}/cpu_features.c  ${CMAKE_CURRENT_SOURCE_DIR}/threshold.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem.c)
 
@@ -25,7 +31,7 @@ set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/env_parser.c  ${CMA
 endif ()
 
 # include the header files
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
@@ -37,4 +43,8 @@ add_subdirectory(memmove)
 add_subdirectory(memset)
 add_subdirectory(memcmp)
 
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib)
+if (${BUILD_SHARED_LIBS})
+install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib/shared)
+else ()
+install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_BINARY_DIR}/lib/static)
+endif ()

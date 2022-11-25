@@ -21,6 +21,8 @@ add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+
 option(ENABLE_LOGGING "Enable Logger" OFF)
 
 option(ENABLE_TUNABLES "Enable user input" OFF)

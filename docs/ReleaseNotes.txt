@@ -21,6 +21,7 @@ Highlights of AMD AOCL-LibMem version 4.0.1
  * Added support for cross-compiling AVX2 binaries and AVX512 machine
     and vice-versa.
    Note: Running avx512 binary on non-avx512 machine will crash.
+ * Added static library support.
 
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------
