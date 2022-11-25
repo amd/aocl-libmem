@@ -1,6 +1,6 @@
 (C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 4.0
+AMD Memory/String Library - AOCL-LibMem Release Notes 4.0.1
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
@@ -15,6 +15,12 @@ the underlying micro-architectural support for CPU features, instructions,
 cache, and threads per CCX.
 b) This library also provides tunables for the user to choose specific
 implementation of the function as per the application requirements.
+
+Highlights of AMD AOCL-LibMem version 4.0.1
+--------------------------------------------
+ * Added support for cross-compiling AVX2 binaries and AVX512 machine
+    and vice-versa.
+   Note: Running avx512 binary on non-avx512 machine will crash.
 
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------

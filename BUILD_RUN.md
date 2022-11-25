@@ -11,19 +11,23 @@
     $ mkdir build
     $ cd build
     #Configure for GCC build
-        # Default
+        # Default Native Build
         $ cmake -D CMAKE_C_COMPILER=gcc ../aocl-libmem
+        # Cross Compiling AVX2 binary on AVX512 machine
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 ../aocl-libmem
+        # Cross Compiling AVX512 binary on AVX2 machine
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 ../aocl-libmem
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y ../aocl-libmem
-        # Compiling AVX512 on non-avx512 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D USE_AVX512=Y ../aocl-libmem
     #Configure for AOCC(Clang) build
-        # Default
+        # Default Native Build
         $ cmake -D CMAKE_C_COMPILER=clang ../aocl-libmem
+        # Cross Compiling AVX2 binary on AVX512 machine
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 ../aocl-libmem
+        # Cross Compiling AVX512 binary on AVX2 machine
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 ../aocl-libmem
         # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y ./aocl-libmem
-        # Compiling AVX512 on non-avx512 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D USE_AVX512=Y ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y ../aocl-libmem
     #Build
     $ cmake --build .
     #Install

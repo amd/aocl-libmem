@@ -7,7 +7,7 @@ endif()
 
 
 # set the project name and version
-set(LIBMEM_VERSION_STRING 4.0)
+set(LIBMEM_VERSION_STRING 4.0.1)
 
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
                         "Library of AMD optimized string/memory functions")
@@ -31,24 +31,42 @@ add_definitions(-DENABLE_LOGGER)
 #add_definitions(-DLOG_LEVEL=4)
 endif ()
 
+option(ALMEM_ARCH "ISA_ARCH_TYPE" ON)
+
 execute_process(COMMAND bash "-c" "lscpu | grep erms"
         RESULT_VARIABLE ERMS_FEATURE OUTPUT_QUIET)
 
-if (NOT ERMS_FEATURE)
+if (NOT ${ERMS_FEATURE})
     #uncomment after addng ERMS support for all funcs
     #add_definitions(-DERMS_FEATURE_ENABLED)
-    message("ERMS CPU Feature Enabled.")
+    message("ERMS Feature Enabled on Build machine.")
 endif ()
 
-option(USE_AVX512 "Use AVX512 Feature" OFF)
-
 execute_process(COMMAND bash "-c" "lscpu | grep avx512"
-        RESULT_VARIABLE AVX512_STATUS OUTPUT_QUIET)
+        RESULT_VARIABLE AVX512_FEATURE OUTPUT_QUIET)
 
-if (USE_AVX512 OR NOT AVX512_STATUS)
+if (NOT ${AVX512_FEATURE})
+    message("AVX512 Feature Enabled on Build machine.")
+    if (NOT ${ALMEM_ARCH} STREQUAL "avx2")
+        message("Setting Arch to AVX512")
+        set(ALMEM_ARCH  "avx512")
+    endif ()
+endif ()
+
+if (ALMEM_ARCH MATCHES "avx512")
     set(AVX512_FEATURE_AVAILABLE true)
     add_definitions(-DAVX512_FEATURE_ENABLED)
-    message("AVX512 Build...")
+    if (${AVX512_FEATURE})
+        message("Cross-Compiling for AVX512 Arch...")
+    else ()
+        message("Native-Compiling for AVX512 Arch...")
+    endif ()
+else ()
+    if (NOT ${AVX512_FEATURE})
+        message("Cross-Compiling for AVX2 Arch...")
+    else ()
+        message("Native-Compiling for AVX2 Arch...")
+    endif ()
 endif ()
 
 # option for building shared lib
