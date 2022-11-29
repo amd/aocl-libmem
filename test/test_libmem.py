@@ -87,6 +87,9 @@ def measure_latency(mem_func, size_range, alignment, iterator, iterations,\
     size = size_range[0]
     src_align = str(alignment[0])
     dst_align = str(alignment[1])
+    #Global Variables for Graph Plot
+    global func
+    func = mem_func
 
     print('>>> Measuring Latency of ['+lib_variant+' '+mem_func+\
             '] for size_range: ['+str(size_range[0])+"-"+str(size_range[1])+\
@@ -211,6 +214,11 @@ def main():
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
                             type=int, default=1000)
+    parser.add_argument("-g", "--graph", help="Generates the Latency and Throughput\
+                            Reports by plotting LibMem vs Glibc graphs with gains,\
+                            h - Histogram Report , l - Linechart Report\
+                            Default choice is Histogram .",
+                            type=str, default = 'h', choices = ['h','l'] )
 
     args = parser.parse_args()
 
@@ -276,6 +284,27 @@ def main():
         test_status += 'FAILURE\n'
 
     print(test_status,test_result)
+
+    # Generate Graph
+    if args.graph and args.mode not in ('v','l') :
+        global result
+        result = result_dir
+        #Check for req modules
+        try:
+            import matplotlib.pyplot
+            from matplotlib import colors
+            import pandas
+            import numpy
+        except ImportError as e:
+            print(e)
+            print("FAILED to generate performance Graphs due to MISSING modules")
+        else:
+            if args.graph == 'l':
+                print('Linechart Report Generation in PROGRESS..and may take some time...')
+                import linechart
+            elif args.graph == 'h':
+                print('Histogram Report Generation in PROGRESS..and may take some time...')
+                import histogram
 
     print("\n*** Test reports copied to directory ["+result_dir+"] ***\n")
 
