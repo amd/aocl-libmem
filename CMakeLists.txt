@@ -80,4 +80,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
 # let the build system know the test directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
+# let the build system know the tools directory
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+
 file(WRITE ${CMAKE_BINARY_DIR}/version.h ${LIBMEM_BUILD_VERSION_STR})

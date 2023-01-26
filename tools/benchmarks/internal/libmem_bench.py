@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -35,43 +35,8 @@ import datetime
 
 supp_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp']
 
-def data_validator(mem_func, size_range, alignment, iterator):
-    """
-    This function validates the data integrity of a string
-    function.
-    args:
-        mem_func: string function name.
-        size_range: data size range.
-        alignment: src and dst alignment.
-        iterator: expression for iterating over data range.
-    returns: string
-        'Success' / 'Failure'
-    """
-    size = size_range[0]
-    src_align = str(alignment[0])
-    dst_align = str(alignment[1])
-    print('>>> Data validaton of [amd '+mem_func+'] for size_range: ['\
-          +str(size_range[0])+"-"+str(size_range[1])+'] with src_alignment = '\
-          +src_align+', dst_alignment = '+dst_align)
-
-    env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
-
-    validation_status = 'Success'
-    with open("validation_report.csv", 'a+') as v_result:
-        while size <= size_range[1]:
-            print('   > Validation for size ['+str(size)+'] in progress...')
-            subprocess.run([mem_func+'/test_'+mem_func, 'v',str(size),\
-                    src_align, dst_align], stdout=v_result, env = env, check=True)
-            size = eval('size'+' '+ iterator)
-        print(v_result.read())
-    if 'ERROR' in open("validation_report.csv", 'r').read():
-        validation_status = 'Failure'
-
-    return validation_status
-
-
 def measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                lib_variant):
+                                                lib_variant, mode):
     """
     This function measures the latency in performing the string operation of
     a specifc library.
@@ -111,24 +76,26 @@ def measure_latency(mem_func, size_range, alignment, iterator, iterations,\
             data = []
             with open(str(size)+".csv", 'a+') as latency_sz:
                 for i in range(0, iterations):
-                    subprocess.run(['taskset', '-c', '7', mem_func+'/test_'+\
-                            mem_func, 'l', str(size), src_align, dst_align],\
+                    subprocess.run(['taskset', '-c', '7', \
+                            '../tools/benchmarks/internal/libmem_bench_fw', \
+                            mem_func, str(size), src_align, dst_align, mode],\
                             stdout=latency_sz, env = env)
                 latency_sz.seek(0)
                 csv_rdr = csv.reader(latency_sz)
 
-                sort = sorted(csv_rdr, key=lambda x: int(x[3]))
+                sort = sorted(csv_rdr, key=lambda x: int(x[1]))
                 best = int(len(sort)*0.6)
                 sort_best = sort[0:best]
-                avg = round(sum(int(x[3]) for x in sort_best)/best,2)
-                data = list(map(int, (sort_best[0])[0:3]))
+                avg = round(sum(int(x[1]) for x in sort_best)/best,2)
+                data = list(map(int, (sort_best[0])[0:1]))
                 data.append(avg)
                 report_writer.writerow(data)
                 subprocess.run(['rm', str(size)+".csv"])
             size = eval('size'+' '+ iterator)
 
 
-def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
+def performance_analyser(mem_func, size_range, alignment, iterator, \
+                                                iterations, mode):
     """
     This function generates the performance report of amd string function
     against glibc string function.
@@ -143,10 +110,10 @@ def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
     """
 
     measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                                    'glibc')
+                                                             'glibc', mode)
 
     measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                                    'amd')
+                                                              'amd', mode)
     perf_data = []
     with open('glibc_latency_report.csv', 'r') as glibc,\
          open('amd_latency_report.csv', 'r') as amd,\
@@ -158,8 +125,7 @@ def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
         #Omit headers
         amd_row = next(amd_reader, None)
         glibc_row = next(glibc_reader, None)
-        perf_writer.writerow([glibc_row[0], glibc_row[1], glibc_row[2],\
-                                                'performance gains(%)'])
+        perf_writer.writerow([glibc_row[0], 'performance gains(%)'])
 
         #read first data line
         glibc_row = next(glibc_reader, None)
@@ -167,16 +133,18 @@ def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
         print("    SIZE".ljust(8)+"     : GAINS")
         print("    ----------------")
         while glibc_row and amd_row:
-            res = round(((float(glibc_row[3])/float(amd_row[3]))-1)*100)
+            res = round(((float(glibc_row[1])/float(amd_row[1]))-1)*100)
             perf_data.append(res)
-            perf_writer.writerow([glibc_row[0], glibc_row[1], glibc_row[2],\
-                                                       res])
+            perf_writer.writerow([glibc_row[0], res])
             if int(glibc_row[0]) >= 1024*1024:
-                print("   ",((str(int(glibc_row[0])/(1024*1024)))+" MB").ljust(8)+" :"+(str(res)+"%").rjust(6))
+                print("   ",((str(int(glibc_row[0])/(1024*1024)))+" MB").\
+                                    ljust(8)+" :"+(str(res)+"%").rjust(6))
             elif int(glibc_row[0]) >= 1024:
-                print("   ",((str(int(glibc_row[0])/(1024)))+" KB").ljust(8)+" :"+(str(res)+"%").rjust(6))
+                print("   ",((str(int(glibc_row[0])/(1024)))+" KB").\
+                                ljust(8)+" :"+(str(res)+"%").rjust(6))
             else:
-                print("   ",(glibc_row[0] + " B").ljust(8)+" :"+(str(res)+"%").rjust(6))
+                print("   ",(glibc_row[0] + " B").ljust(8)+" :"+\
+                                            (str(res)+"%").rjust(6))
             glibc_row = next(glibc_reader, None)
             amd_row = next(amd_reader, None)
 
@@ -184,83 +152,61 @@ def performance_analyser(mem_func, size_range, alignment, iterator, iterations):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='test_libmem', description='This\
+    parser = argparse.ArgumentParser(prog='bench_libmem', description='This\
                             program will perform data validation, latency \
                             measurement and performance of the specified \
                             string function for a given range of data \
                             lengths and alignments.')
-    parser.add_argument("func", help="string function to be verified",
-                            type=str, choices = supp_funcs)
-    parser.add_argument("-m", "--mode", help="Testing mode v-data validation,\
-                         l - latency measurement, p - perfromance analysis\
-                         Default choice is to run validation and performance.",
-                            type=str, default = 'a', choices = ['v', 'l', 'p'])
-    parser.add_argument("-l", "--lib", help="String library against which \
-                            testing should be done.\
-                            g - Glibc, a - AMD. default choice is AMD library.",
-                            type=str, default = 'a', choices = ['g', 'a'])
+    parser.add_argument("func", help = "string function to be verified",
+                            type = str, choices = supp_funcs)
+    parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
+                            c - cached, u - un-cached, w - walk, p - page_walk\
+                            Default choice is to run un-cached benchmark.",\
+                            type = str, default = 'u', \
+                            choices = ['c', 'u', 'w', 'p'])
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\
                                 lengths to be verified.",
-                            type=int, default = [8, 32*1024*1024])
-    parser.add_argument("-a", "--align", nargs = 2, help="alignemnt of source\
+                            type = int, default = [8, 32*1024*1024])
+    parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
                                 and destination addresses. Default alignment\
                                 is 64B for both source and destination.",
-                            type=int, default = (64, 64))
-    parser.add_argument("-t", "--iterator", help="iteration pattern for a \
+                            type = int, default = (64, 64))
+    parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default expression\
                             is set to 2x of starting size - '<<1'.",
-                            type=str, default='<<1')
-    parser.add_argument("-i", "--iterations", help="Number of iterations for\
+                            type = str, default = '<<1')
+    parser.add_argument("-i", "--iterations", help = "Number of iterations for\
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
-                            type=int, default=1000)
-    parser.add_argument("-g", "--graph", help="Generates the Latency and Throughput\
-                            Reports by plotting LibMem vs Glibc graphs with gains,\
+                            type = int, default = 1000)
+    parser.add_argument("-g", "--graph", help = "Generates the Latency and \
+                            Throughput reports by plotting LibMem vs Glibc\
+                             graphs with gains,\
                             h - Histogram Report , l - Linechart Report\
-                            Default choice is Histogram .",
-                            type=str, default = 'none', choices = ['h','l'] )
+                            Default choice is Histogram.",
+                            type = str, default = 'none', choices = ['h','l'] )
 
     args = parser.parse_args()
 
 
-    library = 'amd'
-    if args.lib == 'a':
-        library = 'amd'
-    elif args.lib == 'g':
-        library = 'glibc'
-
-    test_result = 'Test Summary:\n'
+    test_result = 'Bench Summary:\n'
     test_status = 'Test Status : '
     status = True
 
-    if os.path.exists("*.csv"):
-        os.remove("*.csv")
-
-    # Validate data
-    if args.mode in ('v','a'):
-        validation = data_validator(args.func, args.range, args.align, args.iterator)
-        if validation == 'Failure':
-            status = False
-        test_result += ' * Data Validation '+ validation +\
-                '. Refer to <validation_report.csv> for more details.\n'
-
+    subprocess.call(['rm *.csv'], shell = True)
     # Analyse performance
-    if args.mode in ('p','a'):
+    if args.mode in ('c', 'u', 'w', 'p'):
         perf_result = performance_analyser(args.func, args.range, args.align,\
-                                        args.iterator, args.iterations)
+                                   args.iterator, args.iterations, args.mode)
         if perf_result[0] < -5:
             status = False
             test_result += ' * Performance Test Failure. Drop of performance'+\
                     ' for one/more data sizes'
         else:
-            test_result += ' * Performance Test Success. Performance gains of'+\
-                            ' range : '+str(perf_result)
+            test_result += ' * Performance Test Success. Performance gains '+\
+                            'of range : '+str(perf_result)
         test_result += '. Refer to <perf_report.csv> for more details.\n'
 
-    # Measure Latency
-    if args.mode == 'l':
-        measure_latency(args.func, args.range, args.align, args.iterator,\
-                                                args.iterations, library)
     env['LD_PRELOAD'] = ''
 
     result_dir = 'out/' + args.func + '/' + \
@@ -297,13 +243,13 @@ def main():
             import numpy
         except ImportError as e:
             print(e)
-            print("FAILED to generate performance Graphs due to MISSING modules")
+            print("FAILED to generate graphs due to MISSING modules")
         else:
             if args.graph == 'l':
-                print('Linechart Report Generation in PROGRESS..and may take some time...')
+                print('Linechart graph generation in PROGRESS...')
                 import linechart
             elif args.graph == 'h':
-                print('Histogram Report Generation in PROGRESS..and may take some time...')
+                print('Histogram report generation in PROGRESS...')
                 import histogram
 
     print("\n*** Test reports copied to directory ["+result_dir+"] ***\n")
