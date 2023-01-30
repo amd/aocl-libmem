@@ -1,0 +1,117 @@
+#include "../benchmark/benchmark.h"
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+static void cached_memcpy(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  char* dst = new char[state.range(0)];
+  //memset(src, 'x', state.range(0));
+
+  for (auto _ : state)
+  benchmark::DoNotOptimize(memcpy(dst, src, state.range(0)));
+
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+  delete[] dst;
+}
+
+static void cached_memset(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  //memset(src, 'x', state.range(0));
+
+  for (auto _ : state)
+  benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
+
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+}
+
+
+
+static void uncached_memset(benchmark::State& state)
+{
+  for (auto _ : state)
+{
+   state.PauseTiming();
+   char *src = new char[state.range(0)];
+   state.ResumeTiming();
+   benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
+
+   state.PauseTiming();
+   delete[] src;
+   state.ResumeTiming();
+}
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+
+}
+
+static void uncached_memcpy(benchmark::State& state)
+{
+  for (auto _ : state)
+{
+   state.PauseTiming();
+   char *src = new char[state.range(0)];
+   char *dst = new char[state.range(0)];
+   state.ResumeTiming();
+   benchmark::DoNotOptimize(memcpy(dst, src, state.range(0)));
+
+   state.PauseTiming();
+   delete[] src;
+   delete[] dst;
+   state.ResumeTiming();
+}
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+
+}
+
+int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int end)
+{
+if(func=="memcpy")
+ { if(mode=='c')
+	BENCHMARK(cached_memcpy)->RangeMultiplier(2)->Range(start,end);
+   else if(mode =='u')
+        BENCHMARK(uncached_memcpy)->RangeMultiplier(2)->Range(start,end);
+ }
+
+if(func=="memset")
+ { if(mode =='c')
+	 BENCHMARK(cached_memset)->RangeMultiplier(2)->Range(start,end);
+   else if(mode =='u')
+        BENCHMARK(uncached_memset)->RangeMultiplier(2)->Range(start,end);
+ }
+return 0;
+
+}
+int main(int argc, char** argv)
+{
+        char mode='c';
+ unsigned  int size_start, size_end;
+ std::string func;
+
+func = argv[2];
+
+std::cout<<func<<"FUNCTION";
+
+if(argv[3]!=NULL)
+ mode= *argv[3];
+
+    if (argv[4] != NULL)
+    {
+        size_start = atoi(argv[4]);
+    }
+    if (argv[5] != NULL)
+        size_end = atoi(argv[5]);
+
+std::cout<<"SIZE"<<size_start<<" "<<size_end;
+	AddBenchmarks(func, mode, size_start, size_end);
+	::benchmark::Initialize(&argc, argv);
+        ::benchmark::RunSpecifiedBenchmarks();
+
+return 0;
+
+}
+
