@@ -33,140 +33,144 @@ import csv
 import argparse
 import datetime
 
-supp_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp']
+class Libmem_Bench:
+    def __init__(self, args):
+       self.libmem_func = str(args.func)
+       self.start_size = args.range[0]
+       self.end_size = args.range[1]
+       self.src_align = str(args.align[0])
+       self.dst_align = str(args.align[1])
+       self.iterator = str(args.iterator)
+       self.iterations = args.iterations
+       self.mode = str(args.mode)
+       self.core_id = str(args.core_id)
+       self.mixed_bench_marker = 1024 * 1024
 
-def measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                lib_variant, mode):
-    """
-    This function measures the latency in performing the string operation of
-    a specifc library.
-    args:
-        mem_func: string function name.
-        size_range: data size range.
-        alignment: src and dst alignment.
-        iterator: expression for iterating over data range.
-        iterations: number of iterations for each data size.
-        lib_variant: library name(glibc or amd)
-    returns: none
-    """
-    size = size_range[0]
-    src_align = str(alignment[0])
-    dst_align = str(alignment[1])
-    #Global Variables for Graph Plot
-    global func
-    func = mem_func
+    def measure_latency(self, lib_variant):
+        """
+        This function measures the latency in performing the string operation
+        of a specifc libmem_function and writes to csv files.
+        args:
+            lib_variant: library name(glibc or amd)
+        returns: none
+        """
 
-    print('>>> Measuring Latency of ['+lib_variant+' '+mem_func+\
-            '] for size_range: ['+str(size_range[0])+"-"+str(size_range[1])+\
-          '] with src_alignment = '+src_align+', dst_alignment = '+dst_align)
-    with open(lib_variant+'_latency_report.csv', 'a+') as latency_report:
-        report_writer = csv.writer(latency_report)
+        print('>>> Measuring Latency of ['+lib_variant+' '+self.libmem_func+\
+                '] for size_range: ['+str(self.start_size)+"-"+\
+                str(self.end_size)+'] with src_alignment = '+ \
+                str(self.src_align)+', dst_alignment = '+str(self.dst_align))
+        with open(lib_variant+'_latency_report.csv', 'a+') as latency_report:
+            report_writer = csv.writer(latency_report)
 
-        report_writer.writerow(['size','src_align', 'dst_align', 'latency'])
-        #set the early binding option for the loader
-        os.environ['LD_BIND_NOW'] = '1'
-        if lib_variant == 'amd':
-            env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
-        else:
-            env['LD_PRELOAD'] = ''
-
-        while size <= size_range[1]:
-            print('   > Latency measurement for size ['+str(size)+\
-                    '] in progress...')
-            data = []
-            with open(str(size)+".csv", 'a+') as latency_sz:
-                for i in range(0, iterations):
-                    subprocess.run(['taskset', '-c', '7', \
-                            '../tools/benchmarks/internal/libmem_bench_fw', \
-                            mem_func, str(size), src_align, dst_align, mode],\
-                            stdout=latency_sz, env = env)
-                latency_sz.seek(0)
-                csv_rdr = csv.reader(latency_sz)
-
-                sort = sorted(csv_rdr, key=lambda x: int(x[1]))
-                best = int(len(sort)*0.6)
-                sort_best = sort[0:best]
-                avg = round(sum(int(x[1]) for x in sort_best)/best,2)
-                data = list(map(int, (sort_best[0])[0:1]))
-                data.append(avg)
-                report_writer.writerow(data)
-                subprocess.run(['rm', str(size)+".csv"])
-            size = eval('size'+' '+ iterator)
-
-
-def performance_analyser(mem_func, size_range, alignment, iterator, \
-                                                iterations, mode):
-    """
-    This function generates the performance report of amd string function
-    against glibc string function.
-    args:
-        mem_func: string function name.
-        size_range: data size range.
-        alignment: src and dst alignment.
-        iterator: expression for iterating over data range.
-        iterations: number of iterations for each data size.
-    returns: list
-        [perf_min,perf_max]
-    """
-
-    measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                             'glibc', mode)
-
-    measure_latency(mem_func, size_range, alignment, iterator, iterations,\
-                                                              'amd', mode)
-    perf_data = []
-    with open('glibc_latency_report.csv', 'r') as glibc,\
-         open('amd_latency_report.csv', 'r') as amd,\
-         open('perf_report.csv','a+') as perf:
-        glibc_reader = csv.reader(glibc)
-        amd_reader = csv.reader(amd)
-        perf_writer = csv.writer(perf)
-
-        #Omit headers
-        amd_row = next(amd_reader, None)
-        glibc_row = next(glibc_reader, None)
-        perf_writer.writerow([glibc_row[0], 'performance gains(%)'])
-
-        #read first data line
-        glibc_row = next(glibc_reader, None)
-        amd_row = next(amd_reader, None)
-        print("    SIZE".ljust(8)+"     : GAINS")
-        print("    ----------------")
-        while glibc_row and amd_row:
-            res = round(((float(glibc_row[1])/float(amd_row[1]))-1)*100)
-            perf_data.append(res)
-            perf_writer.writerow([glibc_row[0], res])
-            if int(glibc_row[0]) >= 1024*1024:
-                print("   ",((str(int(glibc_row[0])/(1024*1024)))+" MB").\
-                                    ljust(8)+" :"+(str(res)+"%").rjust(6))
-            elif int(glibc_row[0]) >= 1024:
-                print("   ",((str(int(glibc_row[0])/(1024)))+" KB").\
-                                ljust(8)+" :"+(str(res)+"%").rjust(6))
+            report_writer.writerow(['size', 'latency'])
+            #set the early binding option for the loader
+            os.environ['LD_BIND_NOW'] = '1'
+            if lib_variant == 'amd':
+                env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
             else:
-                print("   ",(glibc_row[0] + " B").ljust(8)+" :"+\
-                                            (str(res)+"%").rjust(6))
+                env['LD_PRELOAD'] = ''
+            size = self.start_size
+            while size <= self.end_size:
+                print('   > Latency measurement for size ['+str(size)+\
+                        '] in progress...')
+                data = []
+                bench_mode = self.mode
+                if self.mode == 'm': # mixed benchmarking
+                    bench_mode = 'c'
+                    if size >= self.mixed_bench_marker:
+                        bench_mode = 'u'
+
+                with open(str(size)+".csv", 'a+') as latency_sz:
+                    for i in range(0, self.iterations):
+                        subprocess.run(['taskset', '-c', self.core_id, \
+                           '../tools/benchmarks/internal/libmem_bench_fw', \
+                           self.libmem_func, str(size), self.src_align, \
+                           self.dst_align, bench_mode],\
+                           stdout=latency_sz, env = env)
+                    latency_sz.seek(0)
+                    csv_rdr = csv.reader(latency_sz)
+
+                    sort = sorted(csv_rdr, key=lambda x: int(x[1]))
+                    best = int(len(sort)*0.6)
+                    sort_best = sort[0:best]
+                    avg = round(sum(int(x[1]) for x in sort_best)/best,2)
+                    data = list(map(int, (sort_best[0])[0:1]))
+                    data.append(avg)
+                    report_writer.writerow(data)
+                    subprocess.run(['rm', str(size)+".csv"])
+                size = eval('size'+' '+ self.iterator)
+
+
+    def performance_analyser(self):
+        """
+        This function generates the performance report of amd string function
+        against glibc string function.
+        args: none
+        returns: list
+            [perf_min,perf_max]
+        """
+        self.measure_latency('glibc')
+        self.measure_latency('amd')
+
+        perf_data = []
+        with open('glibc_latency_report.csv', 'r') as glibc,\
+             open('amd_latency_report.csv', 'r') as amd,\
+             open('perf_report.csv','a+') as perf:
+            glibc_reader = csv.reader(glibc)
+            amd_reader = csv.reader(amd)
+            perf_writer = csv.writer(perf)
+
+            #Omit headers
+            amd_row = next(amd_reader, None)
+            glibc_row = next(glibc_reader, None)
+            perf_writer.writerow([glibc_row[0], 'performance gains(%)'])
+
+            #read first data line
             glibc_row = next(glibc_reader, None)
             amd_row = next(amd_reader, None)
+            print("    SIZE".ljust(8)+"     : GAINS")
+            print("    ----------------")
+            while glibc_row and amd_row:
+                res = round(((float(glibc_row[1])/float(amd_row[1]))-1)*100)
+                perf_data.append(res)
+                perf_writer.writerow([glibc_row[0], res])
+                if int(glibc_row[0]) >= 1024*1024:
+                    print("   ",((str(int(glibc_row[0])/(1024*1024)))+" MB").\
+                                    ljust(8)+" :"+(str(res)+"%").rjust(6))
+                elif int(glibc_row[0]) >= 1024:
+                    print("   ",((str(int(glibc_row[0])/(1024)))+" KB").\
+                                    ljust(8)+" :"+(str(res)+"%").rjust(6))
+                else:
+                    print("   ",(glibc_row[0] + " B").ljust(8)+" :"+\
+                                                (str(res)+"%").rjust(6))
+                glibc_row = next(glibc_reader, None)
+                amd_row = next(amd_reader, None)
 
-    return [min(perf_data),max(perf_data)]
+        return [min(perf_data),max(perf_data)]
 
 
 def main():
+    libmem_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp']
+
+    avaliable_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
+         awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
+
     parser = argparse.ArgumentParser(prog='bench_libmem', description='This\
                             program will perform data validation, latency \
                             measurement and performance of the specified \
                             string function for a given range of data \
                             lengths and alignments.')
     parser.add_argument("func", help = "string function to be verified",
-                            type = str, choices = supp_funcs)
+                            type = str, choices = libmem_funcs)
     parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
                             c - cached, u - un-cached, w - walk, p - page_walk\
-                            Default choice is to run un-cached benchmark.",\
-                            type = str, default = 'u', \
+                            Default choice is to run cached upto 1MB and \
+                            un-cached benchmark for larger sizes(>=1MB).",\
+                            type = str, default = 'm', \
                             choices = ['c', 'u', 'w', 'p'])
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\
                                 lengths to be verified.",
-                            type = int, default = [8, 32*1024*1024])
+                            type = int, default = [8, 64 * 1024 * 1024])
     parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
                                 and destination addresses. Default alignment\
                                 is 64B for both source and destination.",
@@ -185,25 +189,26 @@ def main():
                             h - Histogram Report , l - Linechart Report\
                             Default choice is Histogram.",
                             type = str, default = 'none', choices = ['h','l'] )
+    parser.add_argument("-x", "--core_id", help = "CPU core_id on which \
+                            benchmark has to be performed. Default choice of \
+                            core-id is 8", type = int, default = 8,
+                            choices = range(0, int(avaliable_cores)))
 
     args = parser.parse_args()
-
-
+    lbm = Libmem_Bench(args)
     test_result = 'Bench Summary:\n'
     test_status = 'Test Status : '
     status = True
 
     subprocess.call(['rm *.csv'], shell = True)
     # Analyse performance
-    if args.mode in ('c', 'u', 'w', 'p'):
-        perf_result = performance_analyser(args.func, args.range, args.align,\
-                                   args.iterator, args.iterations, args.mode)
-        if perf_result[0] < -5:
-            status = False
-            test_result += ' * Performance Test Failure. Drop of performance'+\
+    perf_result = lbm.performance_analyser()
+    if perf_result[0] < -5:
+        status = False
+        test_result += ' * Performance Test Failure. Drop of performance'+\
                     ' for one/more data sizes'
-        else:
-            test_result += ' * Performance Test Success. Performance gains '+\
+    else:
+        test_result += ' * Performance Test Success. Performance gains '+\
                             'of range : '+str(perf_result)
         test_result += '. Refer to <perf_report.csv> for more details.\n'
 
@@ -232,8 +237,10 @@ def main():
     print(test_status,test_result)
 
     # Generate Graph
-    if args.graph in ('l', 'h') and args.mode not in ('v','l') :
+    if args.graph in ('l', 'h'):
+        global func
         global result
+        func = args.func
         result = result_dir
         #Check for req modules
         try:
