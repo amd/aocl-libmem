@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -29,54 +29,51 @@
 #include <immintrin.h>
 #include <stdint.h>
 
+__attribute__((target("lzcnt")))
 static inline void *mempcpy_le_2ymm(void *dst, const void *src, size_t size)
 {
     __m256i y0, y1;
     __m128i x0, x1;
-    void * src_end = (void *)src + size;
-    void * dst_end = dst + size;
+    void * src_end = (void*)src + size;
+    void * dst_end = (void*)dst + size;
 
-    if (size == 0)
-        return (dst_end);
-
-    if (size == 1)
+    switch (_lzcnt_u32(size))
     {
-        *((uint8_t *)dst) = *((uint8_t *)src);
-        return (dst_end);
+        case 32:
+            return dst_end;
+        case 31:
+            *((uint8_t *)dst) = *((uint8_t *)src);
+            return dst_end;
+        case 30:
+            *((uint16_t *)dst) = *((uint16_t *)src);
+            *((uint16_t *)(dst_end - WORD_SZ)) = \
+                    *((uint16_t *)(src_end - WORD_SZ));
+            return dst_end;
+        case 29:
+            *((uint32_t *)dst) = *((uint32_t *)src);
+            *((uint32_t *)(dst_end - DWORD_SZ)) = \
+                    *((uint32_t *)(src_end - DWORD_SZ));
+            return dst_end;
+        case 28:
+            *((uint64_t *)dst) = *((uint64_t *)src);
+            *((uint64_t *)(dst_end - QWORD_SZ)) = \
+                    *((uint64_t *)(src_end - QWORD_SZ));
+            return dst_end;
+        case 27:
+            x0 = _mm_loadu_si128(src);
+            x1 = _mm_loadu_si128(src_end - XMM_SZ);
+            _mm_storeu_si128(dst, x0);
+            _mm_storeu_si128(dst_end - XMM_SZ, x1);
+            return dst_end;
+        default:
+            y0 = _mm256_loadu_si256(src);
+            y1 = _mm256_loadu_si256(src_end - YMM_SZ);
+            _mm256_storeu_si256(dst, y0);
+            _mm256_storeu_si256(dst_end - YMM_SZ, y1);
     }
-    if (size <= 2 * WORD_SZ)
-    {
-        *((uint16_t *)dst) = *((uint16_t *)src);
-        *((uint16_t *)(dst_end - WORD_SZ)) = *((uint16_t *)(src_end - WORD_SZ));
-        return (dst_end);
-    }
-    if (size <= 2 * DWORD_SZ)
-    {
-        *((uint32_t *)dst) = *((uint32_t *)src);
-        *((uint32_t *)(dst_end - DWORD_SZ)) = *((uint32_t *)(src_end - DWORD_SZ));
-        return (dst_end);
-    }
-    if (size <= 2 * QWORD_SZ)
-    {
-        *((uint64_t *)dst) = *((uint64_t *)src);
-        *((uint64_t *)(dst_end - QWORD_SZ)) = *((uint64_t *)(src_end - QWORD_SZ));
-        return (dst_end);
-    }
-    if (size <= 2 * XMM_SZ)
-    {
-        x0 = _mm_loadu_si128(src);
-        x1 = _mm_loadu_si128(src_end - XMM_SZ);
-        _mm_storeu_si128(dst, x0);
-        _mm_storeu_si128(dst_end - XMM_SZ, x1);
-        return (dst_end);
-    }
-    y0 = _mm256_loadu_si256(src);
-    y1 = _mm256_loadu_si256(src_end - YMM_SZ);
-    _mm256_storeu_si256(dst, y0);
-    _mm256_storeu_si256(dst_end - YMM_SZ, y1);
-
-    return (dst_end);
+    return dst_end;
 }
+
 
 static inline void *unaligned_ld_st(void *dst, const void *src, size_t size)
 {

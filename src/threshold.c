@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -26,12 +26,12 @@
 #include "zen_cpu_info.h"
 #include "logger.h"
 
-uint64_t __repmov_start_threshold __attribute__ ((visibility ("default")));
-uint64_t __repmov_stop_threshold __attribute__ ((visibility ("default")));
-uint64_t __repstore_start_threshold __attribute__ ((visibility ("default")));
-uint64_t __repstore_stop_threshold __attribute__ ((visibility ("default")));
-uint64_t  __nt_start_threshold __attribute__ ((visibility ("default")));
-uint64_t __nt_stop_threshold __attribute__ ((visibility ("default")));
+uint64_t __repmov_start_threshold __attribute__((aligned(64))) =  0xffffffff;
+uint64_t __repmov_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
+uint64_t __repstore_start_threshold __attribute__((aligned(64))) =  0xffffffff;
+uint64_t __repstore_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
+uint64_t  __nt_start_threshold __attribute__((aligned(64))) =  0xffffffff;
+uint64_t __nt_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
 
 
 extern cpu_info zen_info;
