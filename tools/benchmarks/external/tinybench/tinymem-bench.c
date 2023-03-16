@@ -154,7 +154,15 @@ void memset_wrapper(int64_t *dst, int64_t *src, int size)
     memset(dst, src[0], size);
 }
 
+void memmove_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    memmove(dst, src, size);
+}
 
+void memcmp_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    memcmp(dst, src, size);
+}
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
                      bench_info *bi)
@@ -205,6 +213,20 @@ int main(int argc, char **argv)
     {
         static bench_info mem_set[]={{ "standard memset", 0, memset_wrapper },{ NULL, 0, NULL }};
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_set);
+
+    }
+
+    else if(!strcmp(argv[1],"memmove"))
+    {
+        static bench_info mem_move[]={{ "standard memmove", 0, memmove_wrapper },{ NULL, 0, NULL }};
+        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_move);
+
+    }
+
+    else if(!strcmp(argv[1],"memcmp"))
+    {
+        static bench_info mem_cmp[]={{ "standard memcmp", 0, memcmp_wrapper },{ NULL, 0, NULL }};
+        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_cmp);
 
     }
 

@@ -28,24 +28,35 @@ static void cached_memset(benchmark::State& state) {
   delete[] src;
 }
 
+static void cached_memmove(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  char* dst = new char[state.range(0)];
 
-
-static void uncached_memset(benchmark::State& state)
-{
   for (auto _ : state)
-{
-   state.PauseTiming();
-   char *src = new char[state.range(0)];
-   state.ResumeTiming();
-   benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
+  benchmark::DoNotOptimize(memmove(dst, src, state.range(0)));
 
-   state.PauseTiming();
-   delete[] src;
-   state.ResumeTiming();
-}
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+  delete[] dst;
+}
 
+static void cached_memcmp(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  char* dst = new char[state.range(0)];
+
+  for(unsigned long i=0;i<state.range(0);i++)
+  { *(src + i) = *(dst + i) ='a' +rand()%26;
+  }
+  *(src + state.range(0) -1) ='$';
+
+  for (auto _ : state)
+  benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));
+
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+  delete[] dst;
 }
 
 static void uncached_memcpy(benchmark::State& state)
@@ -68,6 +79,67 @@ static void uncached_memcpy(benchmark::State& state)
 
 }
 
+static void uncached_memset(benchmark::State& state)
+{
+  for (auto _ : state)
+{
+   state.PauseTiming();
+   char *src = new char[state.range(0)];
+   state.ResumeTiming();
+   benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
+
+   state.PauseTiming();
+   delete[] src;
+   state.ResumeTiming();
+}
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+
+}
+
+static void uncached_memmove(benchmark::State& state)
+{
+  for (auto _ : state)
+{
+   state.PauseTiming();
+   char *src = new char[state.range(0)];
+   char *dst = new char[state.range(0)];
+   state.ResumeTiming();
+   benchmark::DoNotOptimize(memmove(dst, src, state.range(0)));
+
+   state.PauseTiming();
+   delete[] src;
+   delete[] dst;
+   state.ResumeTiming();
+}
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+
+}
+
+static void uncached_memcmp(benchmark::State& state) {
+
+  for (auto _ : state)
+  { state.PauseTiming();
+    char* src = new char[state.range(0)];
+    char* dst = new char[state.range(0)];
+
+  for(unsigned long i=0;i<state.range(0);i++)
+  { *(src + i) = *(dst + i) ='a' +rand()%26;
+  }
+  *(src + state.range(0) -1) ='$';
+   state.ResumeTiming();
+   benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));
+
+   state.PauseTiming();
+   delete[] src;
+   delete[] dst;
+   state.ResumeTiming();
+ }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+}
+
 int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int end)
 {
 if(func=="memcpy")
@@ -82,6 +154,18 @@ if(func=="memset")
 	 BENCHMARK(cached_memset)->RangeMultiplier(2)->Range(start,end);
    else if(mode =='u')
         BENCHMARK(uncached_memset)->RangeMultiplier(2)->Range(start,end);
+ }
+if(func=="memmove")
+ { if(mode =='c')
+         BENCHMARK(cached_memmove)->RangeMultiplier(2)->Range(start,end);
+   else if(mode =='u')
+        BENCHMARK(uncached_memmove)->RangeMultiplier(2)->Range(start,end);
+ }
+if(func=="memcmp")
+ { if(mode =='c')
+         BENCHMARK(cached_memcmp)->RangeMultiplier(2)->Range(start,end);
+   else if(mode =='u')
+        BENCHMARK(uncached_memcmp)->RangeMultiplier(2)->Range(start,end);
  }
 return 0;
 
