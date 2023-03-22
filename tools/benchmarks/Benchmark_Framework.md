@@ -21,7 +21,7 @@
 ## Report Description
   - Performance reports will be stored in this PATH
 ```
-build_dir/test/out/<mem_function>
+build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 ```
   - Gives the Throughput gains in %age.
 
