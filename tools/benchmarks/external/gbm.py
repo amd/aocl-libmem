@@ -64,7 +64,7 @@ class GBM:
             subprocess.run(["mkdir","build"],cwd=self.path+"/benchmark")
             subprocess.run(["cmake","../"],cwd=self.path+"/benchmark/build")
             subprocess.run(["make"],cwd=self.path+"/benchmark/build")
-            os.system("cp ../tools/benchmarks/external/gbench/gbench.cpp ../tools/benchmarks/external/gbench/benchmark/gbench.cpp")
+            os.system("cp ../tools/benchmarks/external/gbench/gbench.cpp ../tools/benchmarks/external/gbench/benchmark/build/gbench.cpp")
 
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -77,7 +77,7 @@ class GBM:
 
 
         print(self.bench_name)
-        subprocess.run(["g++","gbench.cpp","-lbenchmark","-lpthread","-o","bench"],cwd=self.path)
+        subprocess.run(["g++","gbench.cpp","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path+"benchmark/build/")
 
         self.variant="glibc"
         self.gbm_run()
@@ -162,14 +162,13 @@ class GBM:
     def gbm_run(self):
         #print("RUNNING TBM")
         if self.variant =="amd":
-            env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
+            env['LD_PRELOAD'] = '../../../../../../lib/shared/libaocl-libmem.so'
             print("LIBMEM:",self.func)
-
         else:
             env['LD_PRELOAD'] = ''
             print("GLIBC:",self.func)
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./bench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1])],cwd=self.path,env=env,check=True,stdout =g)
+            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1])],cwd=self.path+"benchmark/build/",env=env,check=True,stdout =g)
         return
 

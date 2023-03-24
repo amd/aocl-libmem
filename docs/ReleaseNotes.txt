@@ -22,6 +22,12 @@ Highlights of AMD AOCL-LibMem version 4.0.1
     and vice-versa.
    Note: Running avx512 binary on non-avx512 machine will crash.
  * Added static library support.
+ * Added new modes for LibMemBench: Cached, Un-cached, Page, Walk & Mixed
+ * Added External benchmarking frameworks
+    - GoogleBench:Cahed & Un-cached
+    - TinyMemBench: Modified version of existing tbm.
+    - FleetBench: Probabilistic mode (based on the existing Googleworkload dataset)
+ * Added Enhanced LibMem Validator tool for functionality testing.
 
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------
