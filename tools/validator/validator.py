@@ -65,6 +65,11 @@ def data_validator(mem_func, size_range, alignment, iterator):
 
     validation_status = 'Success'
     with open("validation_report.csv", 'a+') as v_result:
+        if (size == 0) and (iterator == '<<1'):
+            print('   > Validation for size ['+str(size)+'] in progress...')
+            subprocess.run(["../tools/validator/libmem_validator", mem_func, str(size),\
+                    src_align, dst_align], stdout=v_result, env = env, check=True)
+            size += 1
         while size <= size_range[1]:
             print('   > Validation for size ['+str(size)+'] in progress...')
             subprocess.run(["../tools/validator/libmem_validator", mem_func, str(size),\
@@ -77,6 +82,16 @@ def data_validator(mem_func, size_range, alignment, iterator):
     return validation_status
 
 
+def whole_number(value):
+    try:
+        value = int(value)
+        if value < 0:
+            raise argparse.ArgumentTypeError("{} is not a whole " \
+                                                "number".format(value))
+    except ValueError:
+        raise Exception("{} is not whole number".format(value))
+    return value
+
 def main():
     libmem_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp']
 
@@ -88,11 +103,11 @@ def main():
                             type = str, choices = libmem_funcs)
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\
                                 lengths to be verified.",
-                            type = int, default = [8, 64 * 1024 * 1024])
+                            type = whole_number, default = [8, 64 * 1024 * 1024])
     parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
                                 and destination addresses. Default alignment\
                                 is 64B for both source and destination.",
-                            type = int, default = (64, 64))
+                            type = whole_number, default = (64, 64))
     parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default expression\
                             is set to 2x of starting size - '<<1'.",

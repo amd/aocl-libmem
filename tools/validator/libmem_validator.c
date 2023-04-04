@@ -54,7 +54,7 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                             2 * (size + 2 * CACHE_LINE_SZ));
             * head_buff = (uint8_t *)buff_addr;
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
-             2*CACHE_LINE_SZ + rand()%(size - 1)) & ~(CACHE_LINE_SZ - 1));
+             CACHE_LINE_SZ + rand()%(size)) & ~(CACHE_LINE_SZ - 1));
             break;
         case NON_OVERLAP_BUFFER:
             posix_memalign(&buff_addr, CACHE_LINE_SZ, \
@@ -151,14 +151,15 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     free(buff);
 }
-//TODO: write backward validation
+
+
 static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t src_alnmnt)
 {
-    uint8_t *buff, *buff_head, *buff_tail, *validation_buff, *temp;
+    uint8_t *buff = NULL, *buff_head, *buff_tail, *validation_buff, *temp;
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL, *validation_addr = NULL;
     size_t index;
     void *ret = NULL;
-
+    // Overlapping Memory Validation
     buff = alloc_buffer(&buff_head, &buff_tail, size, OVERLAP_BUFFER);
 
     if(buff == NULL)
@@ -176,8 +177,8 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
     }
 
     //Forward Validation
-    src_alnd_addr = buff_tail + dst_alnmnt;
-    dst_alnd_addr = buff_head + src_alnmnt;
+    src_alnd_addr = buff_tail + src_alnmnt;
+    dst_alnd_addr = buff_head + dst_alnmnt;
 
     //intialize src memory
     for (index = 0; index < size; index++)
@@ -225,10 +226,44 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
 
     free(buff);
     free(validation_buff);
+    buff = NULL;
+    // Non Over-lapping memory validation
+    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+
+    if(buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    dst_alnd_addr = buff_tail + dst_alnmnt;
+    src_alnd_addr = buff_head + src_alnmnt;
+
+    //intialize src memory
+    for (index = 0; index < size; index++)
+        *(src_alnd_addr +index) = 'a' + rand()%26;
+    ret = memmove(dst_alnd_addr, src_alnd_addr, size);
+
+    //validation of dst memory
+    for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
+                            *(src_alnd_addr + index)); index ++);
+
+    if (index != size)
+        printf("ERROR: Non-Overlapping Data Validation failed for size: %lu"\
+            " @index:%lu [src: %p(alignment = %u), dst:%p(alignment = %u)]\n",\
+            size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+    else
+        printf("Non-Overlapping Data Validation passed for size: %lu\n", size);
+    //validation of return value
+    if (ret != dst_alnd_addr)
+        printf("ERROR: Non-Overlapping Return value mismatch: expected - %p,"\
+                                        " actual - %p\n", dst_alnd_addr, ret);
+
+    free(buff);
+
 }
 
-//TODO: implement memset validation
-static inline void memset_validator(size_t size, uint32_t dst_alnmnt, uint32_t src_alnmnt)
+static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
+                                                    uint32_t src_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *dst_alnd_addr = NULL;
