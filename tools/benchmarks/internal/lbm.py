@@ -75,15 +75,14 @@ class LBM:
             else:
                 env['LD_PRELOAD'] = ''
             self.size = self.start_size
+            self.bench_mode = self.mode
+            if self.mode == 'm': # mixed benchmarking
+                self.bench_mode = 'c'
+
             while self.size <= self.end_size:
-                print('   > Latency measurement for size ['+str(self.size)+\
-                        '] in progress...')
                 data = []
-                self.bench_mode = self.mode
-                if self.mode == 'm': # mixed benchmarking
-                    self.bench_mode = 'c'
-                    if self.size >= self.mixed_bench_marker:
-                        self.bench_mode = 'u'
+                if self.mode == 'm' and self.size >= self.mixed_bench_marker:
+                    self.bench_mode = 'u'
 
                 with open(str(self.size)+".csv", 'a+') as latency_sz:
                     for i in range(0, self.iterations):
@@ -103,7 +102,11 @@ class LBM:
                     data.append(avg)
                     report_writer.writerow(data)
                     subprocess.run(['rm', str(self.size)+".csv"])
-                self.size = eval('self.size'+' '+ self.iterator)
+
+                if (self.size == 0) and (self.iterator == '<<1'):
+                    self.size = 1
+                else:
+                    self.size = eval('self.size'+' '+ self.iterator)
 
 
     def performance_analyser(self):

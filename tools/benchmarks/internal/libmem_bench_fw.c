@@ -35,8 +35,6 @@
 #define WALK_STEPS      100
 #define PAGE_WALK_STEPS 10
 
-
-
 typedef enum {
     UNCACHED=0,
     CACHED,
@@ -97,7 +95,7 @@ libmem_func supp_funcs[]=
     {"mempcpy", mempcpy_wrapper},
     {"memmove", memmove_wrapper},
     {"memset",  memset_wrapper},
-    {"memcmp",  memmove_wrapper},
+    {"memcmp",  memcmp_wrapper},
     {"none",    NULL}
 };
 
@@ -105,7 +103,7 @@ libmem_func supp_funcs[]=
         clk_start = rdtscp_start();             \
         func(dst, src, size);                   \
         clk_end = rdtscp_end();                 \
-        diff += clk_end - clk_start;            
+        diff += clk_end - clk_start;
 
 /*
  * RDTSCP instruction is more deterministic than RDTSC.
@@ -167,7 +165,7 @@ int main(int argc, char **argv)
     uint8_t *src = NULL, *src_alnd = NULL;
     uint8_t *dst = NULL, *dst_alnd = NULL;
     unsigned int offset, src_alignment = 0, dst_alignment = 0;
-    libmem_func *lm_func = &supp_funcs[0]; //default func is memcpy 
+    libmem_func *lm_func = &supp_funcs[0]; //default func is memcpy
     libmem_bench *lm_bench = &supp_modes[0];//default mode is uncached
 
     if (argc < 6)
@@ -207,7 +205,6 @@ int main(int argc, char **argv)
         if (*argv[5] == supp_modes[idx].mode)
         {
             lm_bench = &supp_modes[idx];
-            //printf("b_mode = %c\n", *argv[5]);
             break;
         }
     }
@@ -239,7 +236,6 @@ int main(int argc, char **argv)
         break;
     case CACHED:
         lm_func->func(dst_alnd, src_alnd, size);
-
         BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
         printf("%lu,%lu\n", size, diff);
         break;
@@ -259,8 +255,8 @@ int main(int argc, char **argv)
         diff = 0;
         for (int steps = 0; steps < PAGE_WALK_STEPS; steps++)
         {
-            src_alnd = src + steps * (size >> PAGE_SZ_BITS + 1) * PAGE_SZ;
-            dst_alnd = dst + steps * (size >> PAGE_SZ_BITS + 1) * PAGE_SZ;
+            src_alnd = src + steps * ((size >> PAGE_SZ_BITS) + 1) * PAGE_SZ;
+            dst_alnd = dst + steps * ((size >> PAGE_SZ_BITS) + 1) * PAGE_SZ;
 
             BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
         }

@@ -415,7 +415,7 @@ libmem_func supp_funcs[]=
     {"mempcpy", mempcpy_validator},
     {"memmove", memmove_validator},
     {"memset",  memset_validator},
-    {"memcmp",  memmove_validator},
+    {"memcmp",  memcmp_validator},
     {"strcpy",  strcpy_validator},
     {"none",    NULL}
 };
