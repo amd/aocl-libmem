@@ -30,6 +30,7 @@
 extern "C" {
 #endif
 
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -45,6 +46,365 @@ extern "C" {
 #define VEC_DECL_AVX2         __m256i
 #define VEC_SZ_AVX2           32
 
+
+static inline void *  __load_store_le_2ymm_vec(void* store_addr,
+            const void* load_addr, size_t size)
+{
+    __m256i y0, y1;
+    __m128i x0, x1;
+
+    switch (_lzcnt_u32(size))
+    {
+        case 32:
+            break;
+        case 31:
+            *((uint8_t *)store_addr) = *((uint8_t *)load_addr);
+            break;
+        case 30:
+            *((uint16_t *)store_addr) = *((uint16_t *)load_addr);
+            *((uint16_t *)(store_addr + size - WORD_SZ)) = \
+                    *((uint16_t *)(load_addr + size - WORD_SZ));
+            break;
+        case 29:
+            *((uint32_t *)store_addr) = *((uint32_t *)load_addr);
+            *((uint32_t *)(store_addr + size - DWORD_SZ)) = \
+                    *((uint32_t *)(load_addr + size - DWORD_SZ));
+            break;
+        case 28:
+            *((uint64_t *)store_addr) = *((uint64_t *)load_addr);
+            *((uint64_t *)(store_addr + size - QWORD_SZ)) = \
+                    *((uint64_t *)(load_addr + size - QWORD_SZ));
+            break;
+        case 27:
+            x0 = _mm_loadu_si128(load_addr);
+            x1 = _mm_loadu_si128(load_addr + size - XMM_SZ);
+            _mm_storeu_si128(store_addr, x0);
+            _mm_storeu_si128(store_addr + size - XMM_SZ, x1);
+            break;
+        default:
+            y0 = _mm256_loadu_si256(load_addr);
+            y1 = _mm256_loadu_si256(load_addr + size - YMM_SZ);
+            _mm256_storeu_si256(store_addr, y0);
+            _mm256_storeu_si256(store_addr + size - YMM_SZ, y1);
+    }
+    return store_addr;
+}
+
+static inline void * __load_store_le_2ymm_vec_overlap(void *store_addr,
+            const void* load_addr, size_t size)
+{
+    __m256i y0, y1;
+    __m128i x0, x1;
+    uint64_t temp = 0;
+
+    switch (_lzcnt_u32(size))
+    {
+        case 32:
+            return store_addr;
+        case 31:
+            *((uint8_t *)store_addr) = *((uint8_t *)load_addr);
+            return store_addr;
+        case 30:
+            temp = *((uint16_t *)load_addr);
+            *((uint16_t *)(store_addr + size - WORD_SZ)) = \
+                    *((uint16_t *)(load_addr + size - WORD_SZ));
+            *((uint16_t *)store_addr) = temp;
+            return store_addr;
+        case 29:
+            temp = *((uint32_t *)load_addr);
+            *((uint32_t *)(store_addr + size - DWORD_SZ)) = \
+                    *((uint32_t *)(load_addr + size - DWORD_SZ));
+            *((uint32_t *)store_addr) = temp;
+            return store_addr;
+        case 28:
+            temp = *((uint64_t *)load_addr);
+            *((uint64_t *)(store_addr + size - QWORD_SZ)) = \
+                    *((uint64_t *)(load_addr + size - QWORD_SZ));
+            *((uint64_t *)store_addr) = temp;
+            return store_addr;
+        case 27:
+            x0 = _mm_loadu_si128(load_addr);
+            x1 = _mm_loadu_si128(load_addr + size - XMM_SZ);
+            _mm_storeu_si128(store_addr, x0);
+            _mm_storeu_si128(store_addr + size - XMM_SZ, x1);
+            return store_addr;
+        default:
+            y0 = _mm256_loadu_si256(load_addr);
+            y1 = _mm256_loadu_si256(load_addr + size - YMM_SZ);
+            _mm256_storeu_si256(store_addr, y0);
+            _mm256_storeu_si256(store_addr + size - YMM_SZ, y1);
+    }
+    return store_addr;
+}
+
+/* ################## TEMPORAL HEAD_TAIL ####################
+ */
+
+static inline void __load_store_ymm_vec(void *store_addr,
+            const void *load_addr, size_t offset)
+{
+    VEC_1X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
+}
+
+static inline void __load_store_le_4ymm_vec(void *store_addr,
+            const void *load_addr, size_t size)
+{
+    VEC_4X_LOAD_STORE_HEAD_TAIL(AVX2, UNALIGNED, UNALIGNED)
+}
+
+static inline void  __load_store_le_8ymm_vec(void *store_addr,
+            const void *load_addr, size_t size)
+{
+    VEC_8X_LOAD_STORE_HEAD_TAIL(AVX2, UNALIGNED, UNALIGNED)
+}
+
+/* ##################### TEMPORAL - 2xVEC LOOP ###################
+ */
+static inline size_t __unaligned_load_and_store_2ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
+}
+
+static inline size_t __aligned_load_and_store_2ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
+}
+
+static inline size_t __unaligned_load_aligned_store_2ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL,UNALIGNED, ALIGNED)
+}
+
+static inline size_t __aligned_load_unaligned_store_2ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, UNALIGNED)
+}
+
+static inline size_t __aligned_load_unaligned_store_2ymm_vec_loop_bkwd\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, UNALIGNED)
+}
+
+static inline size_t __unaligned_load_nt_store_2ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, STREAM)
+}
+
+
+/* #####################TEMPORAL - 4xVEC LOOPS###################
+ */
+static inline size_t __unaligned_load_and_store_4ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
+}
+
+static inline size_t __unaligned_load_and_store_4ymm_vec_loop_bkwd\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX2, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
+}
+
+static inline size_t __aligned_load_and_store_4ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
+}
+
+static inline size_t __aligned_load_and_store_4ymm_vec_loop_bkwd\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX2, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
+}
+
+static inline size_t __unaligned_load_aligned_store_4ymm_vec_loop\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, ALIGNED)
+}
+
+static inline size_t __unaligned_load_aligned_store_4ymm_vec_loop_bkwd\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX2, PFTCH_ZERO_CL, UNALIGNED, ALIGNED)
+}
+
+static inline size_t __aligned_load_unaligned_store_4ymm_vec_loop\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, UNALIGNED)
+}
+
+static inline size_t __aligned_load_unaligned_store_4ymm_vec_loop_bkwd\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX2, PFTCH_ZERO_CL, ALIGNED, UNALIGNED)
+}
+
+/* #####################TEMPORAL 4xVEC LOOPS SW-PREFETCH###########
+ */
+static inline size_t __unaligned_load_and_store_4ymm_vec_loop_pftch\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, UNALIGNED, UNALIGNED)
+}
+
+static inline size_t __aligned_load_and_store_4ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, ALIGNED, ALIGNED)
+}
+
+
+static inline size_t __unaligned_load_aligned_store_4ymm_vec_loop_pftch\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, UNALIGNED, ALIGNED)
+}
+
+
+/* #####################TEMPORAL - 8xVEC LOOPS###################
+ */
+static inline size_t __unaligned_load_and_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
+}
+
+
+static inline size_t __aligned_load_and_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
+}
+
+
+static inline size_t __unaligned_load_aligned_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, ALIGNED)
+}
+
+
+static inline size_t __aligned_load_unaligned_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, UNALIGNED)
+}
+
+/* ##################### TEMPORAL - 8xVEC LOOPS SW-PREFETCH ###########
+ */
+static inline size_t __unaligned_load_aligned_store_8ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_TWO_STEP, UNALIGNED, ALIGNED)
+}
+
+static inline size_t __aligned_load_and_store_8ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_TWO_STEP, ALIGNED, ALIGNED)
+}
+
+static inline size_t __unaligned_load_and_store_8ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_TWO_STEP, UNALIGNED, UNALIGNED)
+}
+
+/* #####################NON-TEMPORAL 2xVEC LOOPS###################
+ */
+static inline size_t __nt_load_and_store_2ymm_vec_loop(void *store_addr,\
+             const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, STREAM, STREAM)
+}
+
+static inline size_t __nt_load_unaligned_store_2ymm_vec_loop(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_2X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, STREAM, UNALIGNED)
+}
+
+
+/* #####################NON-TEMPORAL 4xVEC LOOPS###################
+ */
+static inline size_t __nt_load_and_store_4ymm_vec_loop(void *store_addr,\
+             const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, STREAM, STREAM)
+}
+
+static inline size_t __nt_load_unaligned_store_4ymm_vec_loop(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, STREAM, UNALIGNED)
+}
+
+static inline size_t __aligned_load_nt_store_4ymm_vec_loop(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, STREAM)
+}
+
+static inline size_t __unaligned_load_nt_store_4ymm_vec_loop(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, STREAM)
+}
+
+/* ##################### NON-TEMPORAL 4xVEC LOOPS SW PREFETCH ###################
+ */
+static inline size_t __aligned_load_nt_store_4ymm_vec_loop_pftch(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, ALIGNED, STREAM)
+}
+
+static inline size_t __unaligned_load_nt_store_4ymm_vec_loop_pftch(void *store_addr, \
+                      const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, ALIGNED, STREAM)
+}
+
+/* ##################### NON-TEMPORAL 8xVEC LOOPS ###################
+ */
+
+static inline size_t __aligned_load_nt_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, ALIGNED, STREAM)
+}
+
+static inline size_t __unaligned_load_nt_store_8ymm_vec_loop(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_ZERO_CL, UNALIGNED, STREAM)
+}
+
+
+/* ##################### NON-TEMPORAL 8xVEC LOOPS SW PREFETCH ###################
+ */
+static inline size_t __aligned_load_nt_store_8ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_TWO_STEP, ALIGNED, STREAM)
+}
+
+static inline size_t __unaligned_load_nt_store_8ymm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_8X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_TWO_STEP, UNALIGNED, STREAM)
+}
+
+/* ##########################  END of AVX2 IMPL'S ##################################
+ */
 #ifdef __cplusplus
 }
 #endif
