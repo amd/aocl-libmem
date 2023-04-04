@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,28 +22,149 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
-#include "amd_memmove.h"
 #include "logger.h"
 #include "threshold.h"
+#include "../base_impls/load_store_impls.h"
 
-extern cpu_info zen_info;
+static inline void *load_store_avx2(void *dst, const void *src, size_t size)
+{
+    __m256i y4, y5, y6, y7;
 
-void * __memmove_system(void *dst, const void *src, size_t size)
+    if (size <= 4 * YMM_SZ)
+    {
+        __load_store_le_4ymm_vec(dst, src, size);
+        return dst;
+    }
+    if (size <= 8 * YMM_SZ)
+    {
+        __load_store_le_8ymm_vec(dst, src, size);
+        return dst;
+    }
+
+    if ((dst < (src + size)) && (src < dst))
+    {
+        y7 = _mm256_loadu_si256(src + 3 * YMM_SZ);
+        y6 = _mm256_loadu_si256(src + 2 * YMM_SZ);
+        y5 = _mm256_loadu_si256(src + 1 * YMM_SZ);
+        y4 = _mm256_loadu_si256(src + 0 * YMM_SZ);
+        __unaligned_load_and_store_4ymm_vec_loop_bkwd(dst, src, size, 4 * YMM_SZ);
+        //copy first 4VECs to avoid override
+        _mm256_storeu_si256(dst +  3 * YMM_SZ, y7);
+        _mm256_storeu_si256(dst +  2 * YMM_SZ, y6);
+        _mm256_storeu_si256(dst +  1 * YMM_SZ, y5);
+        _mm256_storeu_si256(dst +  0 * YMM_SZ, y4);
+    }
+    else
+    {
+        y4 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
+        y5 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
+        y6 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
+        y7 = _mm256_loadu_si256(src + size - 1 * YMM_SZ);
+        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, 0);
+        //copy last 4VECs to avoid override
+        _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y4);
+        _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y5);
+        _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y6);
+        _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y7);
+    }
+    return dst;
+}
+
+static inline void *nt_store(void *dst, const void *src, size_t size)
+{
+    size_t offset = 0;
+
+    __load_store_ymm_vec(dst, src, offset);
+    //compute the offset to align the dst to YMM_SZB boundary
+    offset = YMM_SZ - ((size_t)dst & (YMM_SZ-1));
+
+    size -= offset;
+
+    offset = __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size, offset);
+
+    if (size - offset >= 2 * YMM_SZ)
+        offset = __unaligned_load_nt_store_2ymm_vec_loop(dst, src, size, offset);
+
+    if (size - offset > YMM_SZ)
+        __load_store_ymm_vec(dst, src, offset);
+    //copy last YMM_SZ Bytes
+    __load_store_ymm_vec(dst, src, size - YMM_SZ);
+
+    return dst;
+}
+
+#ifdef AVX512_FEATURE_ENABLED
+static inline void * load_store_avx512(void *dst, const void *src, size_t size)
+{
+    __m512i z4, z5, z6, z7, z8;
+
+    if (size <= 4 * ZMM_SZ)
+    {
+        __load_store_le_4zmm_vec(dst, src, size);
+        return dst;
+    }
+    if (size <= 8 * ZMM_SZ)
+    {
+        __load_store_le_8zmm_vec(dst, src, size);
+        return dst;
+    }
+    if ((dst < (src + size)) && (src < dst))
+    {
+         z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ);
+         z5 = _mm512_loadu_si512(src + 2 * ZMM_SZ);
+         z6 = _mm512_loadu_si512(src + 1 * ZMM_SZ);
+         z7 = _mm512_loadu_si512(src + 0 * ZMM_SZ);
+        if ((((size_t)dst & (ZMM_SZ-1)) == 0) && (((size_t)src & (ZMM_SZ-1)) == 0))
+        {
+            //load the last VEC to handle size not multiple of the vec.
+            z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
+            __aligned_load_and_store_4zmm_vec_loop_bkwd\
+                        (dst, src, size & ~(ZMM_SZ-1), 3 * ZMM_SZ);
+            //store the last VEC to handle size not multiple of the vec.
+            _mm512_storeu_si512(dst + size - ZMM_SZ, z8);
+        }
+        else
+            __unaligned_load_and_store_4zmm_vec_loop_bkwd(dst, src, size, 4 * ZMM_SZ);
+         _mm512_storeu_si512(dst +  3 * ZMM_SZ, z4);
+         _mm512_storeu_si512(dst +  2 * ZMM_SZ, z5);
+         _mm512_storeu_si512(dst +  1 * ZMM_SZ, z6);
+         _mm512_storeu_si512(dst +  0 * ZMM_SZ, z7);
+    }
+    else
+    {
+         z4 = _mm512_loadu_si512(src + size - 4 * ZMM_SZ);
+         z5 = _mm512_loadu_si512(src + size - 3 * ZMM_SZ);
+         z6 = _mm512_loadu_si512(src + size - 2 * ZMM_SZ);
+         z7 = _mm512_loadu_si512(src + size - 1 * ZMM_SZ);
+        if ((((size_t)dst & (ZMM_SZ-1)) == 0) && (((size_t)src & (ZMM_SZ-1)) == 0))
+            __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
+        else
+            __unaligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
+         _mm512_storeu_si512(dst + size - 4 * ZMM_SZ, z4);
+         _mm512_storeu_si512(dst + size - 3 * ZMM_SZ, z5);
+         _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z6);
+         _mm512_storeu_si512(dst + size - 1 * ZMM_SZ, z7);
+    }
+    return dst;
+}
+#endif
+
+void *__memmove_system(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
-    return __memmove_avx512_unaligned(dst, src, size);
-#else
-    if (zen_info.zen_cpu_features.erms && size > __repmov_start_threshold\
-                                     && size < __repmov_stop_threshold)
-    {
-        return __memmove_erms_b_aligned(dst, src, size);
-    }
-    if (size < __nt_start_threshold)
-        return __memmove_avx2_unaligned(dst, src, size);
-    else
-        return __memmove_avx2_nt_store(dst, src, size);
+    if (size <= 2 * ZMM_SZ)
+        return __load_store_ble_2zmm_vec_overlap(dst, src, size);
+
+    return load_store_avx512(dst, src, size);
 #endif
+    if (size <= 2 * YMM_SZ)
+        return __load_store_le_2ymm_vec_overlap(dst, src, size);
+    if (size > __nt_start_threshold)
+    {
+        if (((src + size) < dst) || ((dst + size) < src))
+            return nt_store(dst, src, size);
+    }
+    return load_store_avx2(dst, src, size);
 }
 
