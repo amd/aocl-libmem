@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,7 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stddef.h>
-#include "amd_intrin.h"
+#include "../base_impls/load_store_erms_impls.h"
 #include "logger.h"
 #include <stdint.h>
 
