@@ -30,6 +30,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
   - Compilers: AOCC and GCC
 
 ## Benchmark Framework Setup
+- Python 3.10 and above
 - Python dependency packages
     - numpy  (version 1.24.2 or greater)
     - pandas (verion 1.5.3 or greater)
@@ -43,13 +44,30 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
     STEPS for installing Bazel:
 
+    On Ubuntu :
+
         $ sudo apt install curl gnupg
         $ curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
         $ sudo mv bazel.gpg /etc/apt/trusted.gpg.d/
         $ echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
         $ sudo apt update && sudo apt install bazel
 
-## Arguments for the framework
+    On CentOS and REHL :
+
+  1.    Install dependency packages:
+
+       $ sudo yum install epel-release
+       $ sudo yum install gcc gcc-c++ java-1.8.0-openjdk-devel
+  2.    Download the Bazel 6 binary installer from the Bazel releases page:
+
+	   $ wget https://github.com/bazelbuild/bazel/releases/download/6.0.0/bazel-6.0.0-installer-linux-x86_64.sh
+  3.    Install commands
+
+       $ chmod +x bazel-6.0.0-installer-linux-x86_64.sh
+       $ sudo ./bazel-6.0.0-installer-linux-x86_64.sh
+
+
+## Running Bench framework
 
     $ ./bench.py <name_of_the_benchmark> <memory_function> -x<core_id> -r [start] [end] -i<iterations>
         <name_of_the_benchmark> = gbm,tbm,lbm,fbm.
@@ -57,3 +75,10 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
         -x <core_id>      =  Enter the CPU core on which you want to run the benchmark.
         -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)
         -i <iterations>   = specify the no.of iterations.
+
+    Example:
+    Running LibMem bench framework
+    $ ./bench.py lbm memcpy -r 8 4096 -i 1000 -x 16
+
+    Benchmark Help option
+    $ ./bench.py -h
