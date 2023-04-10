@@ -61,10 +61,9 @@ class GBM:
             print("Downloading and Configuring GoogleBench")
             subprocess.run(["git","clone", "https://github.com/google/benchmark.git"],cwd=self.path)
             subprocess.run(["git","clone", "https://github.com/google/googletest.git","benchmark/googletest"],cwd=self.path)
-            subprocess.run(["mkdir","build"],cwd=self.path+"/benchmark")
-            subprocess.run(["cmake","../"],cwd=self.path+"/benchmark/build")
-            subprocess.run(["make"],cwd=self.path+"/benchmark/build")
-            os.system("cp ../tools/benchmarks/external/gbench/gbench.cpp ../tools/benchmarks/external/gbench/benchmark/build/gbench.cpp")
+            subprocess.run(['cmake','-E','make_directory','build'],cwd=self.path+"/benchmark")
+            subprocess.run(['cmake','-E','chdir','build','cmake','-DBENCHMARK_DOWNLOAD_DEPENDENCIES=on','-DCMAKE_BUILD_TYPE=Release','../'],cwd=self.path+"/benchmark")
+            subprocess.run(['cmake','--build','build','--config','Release'],cwd=self.path+"/benchmark")
 
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -77,8 +76,7 @@ class GBM:
 
 
         print(self.bench_name)
-        subprocess.run(["g++","gbench.cpp","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path+"benchmark/build/")
-
+        subprocess.run(["g++","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
         self.variant="glibc"
         self.gbm_run()
         self.variant="amd"
@@ -93,9 +91,9 @@ class GBM:
         elif self.func =='memcmp':
             self.size_values = subprocess.run(["sed", "-n", r"s/.*cached_memcmp\/\([0-9]\+\).*/\1/p", "gbamd.txt"],cwd =self.result_dir, capture_output=True, text=True).stdout.splitlines()
 
+        self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
 
-        self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+\.[0-9]+[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+\.[0-9]+[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         #Converting the G/s values to M/s
         for i in range(len(self.amd_throughput_values)):
             if "G/s" in self.amd_throughput_values[i]:
@@ -162,13 +160,13 @@ class GBM:
     def gbm_run(self):
         #print("RUNNING TBM")
         if self.variant =="amd":
-            env['LD_PRELOAD'] = '../../../../../../lib/shared/libaocl-libmem.so'
+            env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
             print("LIBMEM:",self.func)
         else:
             env['LD_PRELOAD'] = ''
             print("GLIBC:",self.func)
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1])],cwd=self.path+"benchmark/build/",env=env,check=True,stdout =g)
+            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1])],cwd=self.path,env=env,check=True,stdout =g)
         return
 
