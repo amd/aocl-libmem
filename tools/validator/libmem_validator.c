@@ -365,6 +365,49 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
 
 }
 
+static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
+                                                 uint32_t src_alnmnt)
+{
+    uint8_t *buff, *buff_head, *buff_tail;
+    uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
+    size_t index;
+    void *ret = NULL;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+
+    if(buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    dst_alnd_addr = buff_tail + dst_alnmnt;
+    src_alnd_addr = buff_head + src_alnmnt;
+
+    //intialize src memory
+    for (index = 0; index < size; index++)
+        *(src_alnd_addr +index) = 'a' + rand()%26;
+
+    //Appending Null Charachter at the end of src string
+    *(src_alnd_addr + size -1) = '\0';
+    ret = strcpy((char *)dst_alnd_addr, (char *)src_alnd_addr);
+
+    //validation of dst memory
+    for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
+                            *(src_alnd_addr + index)); index ++);
+
+    if (index != size)
+        printf("ERROR: Data Validation failed for size: %lu @index:%lu" \
+                    "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
+                 size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+    else
+        printf("Data Validation passed for size: %lu\n", size);
+    //validation of return value
+    if (ret != dst_alnd_addr)
+        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
+
+    free(buff);
+}
+
 
 libmem_func supp_funcs[]=
 {
@@ -373,6 +416,7 @@ libmem_func supp_funcs[]=
     {"memmove", memmove_validator},
     {"memset",  memset_validator},
     {"memcmp",  memmove_validator},
+    {"strcpy",  strcpy_validator},
     {"none",    NULL}
 };
 
