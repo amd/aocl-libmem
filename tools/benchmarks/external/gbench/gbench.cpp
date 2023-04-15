@@ -8,8 +8,7 @@ static void cached_memcpy(benchmark::State& state) {
   //memset(src, 'x', state.range(0));
 
   for (auto _ : state) {
-    memcpy(dst, src, state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memcpy(dst, src, state.range(0)));
   }
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
@@ -22,8 +21,7 @@ static void cached_memset(benchmark::State& state) {
   //memset(src, 'x', state.range(0));
 
   for (auto _ : state) {
-    memset(src,'x', state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
   }
 
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
@@ -36,8 +34,7 @@ static void cached_memmove(benchmark::State& state) {
   char* dst = new char[state.range(0)];
 
   for (auto _ : state) {
-    memmove(dst, src, state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memmove(dst, src, state.range(0)));
   }
 
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
@@ -56,8 +53,7 @@ static void cached_memcmp(benchmark::State& state) {
   *(src + state.range(0) -1) ='$';
 
   for (auto _ : state) {
-    memcmp(dst, src, state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));
   }
 
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
@@ -72,8 +68,7 @@ static void uncached_memcpy(benchmark::State& state) {
     char *src = new char[state.range(0)];
     char *dst = new char[state.range(0)];
     state.ResumeTiming();
-    memcpy(dst, src, state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memcpy(dst, src, state.range(0)));
 
     state.PauseTiming();
     delete[] src;
@@ -90,8 +85,7 @@ static void uncached_memset(benchmark::State& state) {
     state.PauseTiming();
     char *src = new char[state.range(0)];
     state.ResumeTiming();
-    memset(src,'x', state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
 
     state.PauseTiming();
     delete[] src;
@@ -108,8 +102,7 @@ static void uncached_memmove(benchmark::State& state) {
     char *src = new char[state.range(0)];
     char *dst = new char[state.range(0)];
     state.ResumeTiming();
-    memmove(dst, src, state.range(0));
-    benchmark::ClobberMemory();
+    benchmark::DoNotOptimize(memmove(dst, src, state.range(0)));
 
     state.PauseTiming();
     delete[] src;
@@ -133,8 +126,7 @@ static void uncached_memcmp(benchmark::State& state) {
   }
   *(src + state.range(0) -1) ='$';
    state.ResumeTiming();
-   memcmp(dst, src, state.range(0));
-   benchmark::ClobberMemory();
+   benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));
 
    state.PauseTiming();
    delete[] src;

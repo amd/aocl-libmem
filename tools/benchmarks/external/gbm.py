@@ -76,7 +76,7 @@ class GBM:
 
 
         print(self.bench_name)
-        subprocess.run(["g++","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
+        subprocess.run(["g++","-Wno-deprecated-declarations","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
         self.variant="glibc"
         self.gbm_run()
         self.variant="amd"
