@@ -103,11 +103,6 @@ static inline void * load_store_avx512(void *dst, const void *src, size_t size)
         __load_store_le_4zmm_vec(dst, src, size);
         return dst;
     }
-    if (size <= 8 * ZMM_SZ)
-    {
-        __load_store_le_8zmm_vec(dst, src, size);
-        return dst;
-    }
     if ((dst < (src + size)) && (src < dst))
     {
          z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ);
@@ -150,18 +145,8 @@ static inline void * load_store_avx512(void *dst, const void *src, size_t size)
 #endif
 
 
-void *__memmove_zen1(void *dst, const void *src, size_t size)
-{
-    LOG_INFO("\n");
-    if (size <= 2 * YMM_SZ)
-        return __load_store_le_2ymm_vec_overlap(dst, src, size);
-    if (size < __nt_start_threshold)
-        return load_store_avx2(dst, src, size);
-    if (((src + size) < dst) || ((dst + size) < src))
-        return nt_store(dst, src, size);
-    return load_store_avx2(dst, src, size);
-}
-void *__memmove_zen2(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) __memmove_zen1(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
@@ -173,7 +158,21 @@ void *__memmove_zen2(void *dst, const void *src, size_t size)
     return load_store_avx2(dst, src, size);
 }
 
-void *__memmove_zen3(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) __memmove_zen2(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
+{
+    LOG_INFO("\n");
+    if (size <= 2 * YMM_SZ)
+        return __load_store_le_2ymm_vec_overlap(dst, src, size);
+    if (size < __nt_start_threshold)
+        return load_store_avx2(dst, src, size);
+    if (((src + size) < dst) || ((dst + size) < src))
+        return nt_store(dst, src, size);
+    return load_store_avx2(dst, src, size);
+}
+
+void * __attribute__((flatten)) __memmove_zen3(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
@@ -185,13 +184,18 @@ void *__memmove_zen3(void *dst, const void *src, size_t size)
     return load_store_avx2(dst, src, size);
 }
 
-void *__memmove_zen4(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
     if (size <= 2 * ZMM_SZ)
         return __load_store_ble_2zmm_vec_overlap(dst, src, size);
-
+    if (size > __nt_start_threshold)
+    {
+        if (((src + size) < dst) || ((dst + size) < src))
+            return nt_store(dst, src, size);
+    }
     return load_store_avx512(dst, src, size);
 #endif
     if (size <= 2 * YMM_SZ)

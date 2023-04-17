@@ -32,7 +32,7 @@ extern "C" {
 
 #include <stdint.h>
 
-inline void * __erms_movsb(void *dst, const void * src, size_t len)
+static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "cld\n\t"
@@ -44,7 +44,7 @@ inline void * __erms_movsb(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsw(void *dst, const void * src, size_t len)
+static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $1, %%rcx\n\t"
@@ -57,7 +57,7 @@ inline void * __erms_movsw(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsd(void *dst, const void * src, size_t len)
+static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $2, %%rcx\n\t"
@@ -70,7 +70,7 @@ inline void * __erms_movsd(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsq(void *dst, const void * src, size_t len)
+static inline void * __erms_movsq(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $3, %%rcx\n\t"
@@ -83,7 +83,7 @@ inline void * __erms_movsq(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsb_last_byte(void *dst, const void * src, size_t len)
+static inline void * __erms_movsb_last_byte(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "cld\n\t"
@@ -95,7 +95,7 @@ inline void * __erms_movsb_last_byte(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsw_last_byte(void *dst, const void * src, size_t len)
+static inline void * __erms_movsw_last_byte(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $1, %%rcx\n\t"
@@ -108,7 +108,7 @@ inline void * __erms_movsw_last_byte(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsd_last_byte(void *dst, const void * src, size_t len)
+static inline void * __erms_movsd_last_byte(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $2, %%rcx\n\t"
@@ -121,7 +121,7 @@ inline void * __erms_movsd_last_byte(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t len)
+static inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $3, %%rcx\n\t"
@@ -134,7 +134,7 @@ inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
+static inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "std\n\t"
@@ -146,7 +146,7 @@ inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
+static inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $1, %%rcx\n\t"
@@ -159,7 +159,7 @@ inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
+static inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $2, %%rcx\n\t"
@@ -172,7 +172,7 @@ inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
+static inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
 {
     asm volatile (
     "sar $3, %%rcx\n\t"
@@ -185,7 +185,7 @@ inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
     return dst;
 }
 
-inline void * __erms_stosb(void *mem, int val, size_t size)
+static inline void * __erms_stosb(void *mem, int val, size_t size)
 {
     asm volatile (
     "cld\n\t"
@@ -197,7 +197,7 @@ inline void * __erms_stosb(void *mem, int val, size_t size)
     return mem;
 }
 
-inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
+static inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
 {
     val = val | val << 8;
     size = size >> 1;
@@ -212,7 +212,7 @@ inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
     return mem;
 }
 
-inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
+static inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
 {
     val = val | val << 8;
     size = size >> 1;
@@ -227,7 +227,7 @@ inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
     return mem;
 }
 
-inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
+static inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
 {
     val = val | val << 8;
     val = val | val << 16;

@@ -22,11 +22,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
 #include "logger.h"
 #include "threshold.h"
-#include <stdint.h>
 #include "../base_impls/load_store_impls.h"
+#include "zen_cpu_info.h"
+
+extern cpu_info zen_info;
 
 
 static inline void *ld_st_avx2(void *dst, const void *src, size_t size)
@@ -49,7 +50,7 @@ static inline void *ld_st_avx2(void *dst, const void *src, size_t size)
 
     dst_align = ((size_t)dst & (YMM_SZ - 1));
 
-    if ((((size_t)src & (YMM_SZ - 1)) == 0) && (dst_align == 0))
+    if ((((size_t)src & (YMM_SZ - 1)) | dst_align) == 0)
     {
         __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
     }
@@ -106,20 +107,21 @@ static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
     offset += 4 * ZMM_SZ;
     dst_align = ((size_t)dst & (ZMM_SZ - 1));
 
+
     //Aligned SRC & DST addresses
-    if ((((size_t)src & (ZMM_SZ - 1)) == dst_align) && dst_align == 0)
+    if ((((size_t)src & (ZMM_SZ - 1)) | dst_align) == 0)
     {
         // 4-ZMM registers
-        if (size < 1*1024*1024) //L2 Cache Size
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
         {
             __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
-        // 4-YMM registers with 2 - prefetch
-        else if (size <= 64*1024*1024) //L3 Cache Size
+        // 4-YMM registers with SW - prefetch
+        else if (size < zen_info.zen_cache_info.l3_per_ccx)//L3 Cache Size
         {
             __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
-        // Non-temporal 8-ZMM registers with prefetch
+        // Non-temporal 8-ZMM registers with SW - prefetch
         else
         {
             __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
@@ -128,8 +130,8 @@ static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
     // Unalgined SRC/DST addresses: force-align store
     else
     {
-        offset -= (dst_align & (ZMM_SZ-1));
-        if (size < 32*1024*1024) // L3-Cache size
+        offset -= dst_align;
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
         {
             __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
@@ -142,7 +144,8 @@ static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
 }
 #endif
 
-void *amd_mempcpy(void * __restrict dst, const void * __restrict src, size_t size)
+void * __attribute__((flatten)) amd_mempcpy(void * __restrict dst,
+                             const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
 
@@ -160,4 +163,5 @@ void *amd_mempcpy(void * __restrict dst, const void * __restrict src, size_t siz
 #endif
 }
 
-void *mempcpy(void *, const void *, size_t) __attribute__((weak, alias("amd_mempcpy"), visibility("default")));
+void *mempcpy(void *, const void *, size_t) __attribute__((weak,
+                    alias("amd_mempcpy"), visibility("default")));

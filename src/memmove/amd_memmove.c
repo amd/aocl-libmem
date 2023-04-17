@@ -22,10 +22,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
 #include "logger.h"
 #include "threshold.h"
-#include <stdint.h>
 #include "../base_impls/load_store_impls.h"
 
 
@@ -83,18 +81,19 @@ static inline void *nt_store(void *dst, const void *src, size_t size)
 
     size -= offset;
 
-    offset = __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size, offset);
+    offset = __unaligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size, offset);
 
-    if (size - offset >= 2 * YMM_SZ)
+    if ((size - offset) >= 2 * YMM_SZ)
         offset = __unaligned_load_nt_store_2ymm_vec_loop(dst, src, size, offset);
      
-    if (size - offset > YMM_SZ)
+    if ((size - offset) > YMM_SZ)
         __load_store_ymm_vec(dst, src, offset);
     //copy last YMM_SZ Bytes
     __load_store_ymm_vec(dst, src, size - YMM_SZ);
 
     return dst;
 }
+
 
 #ifdef AVX512_FEATURE_ENABLED
 static inline void *memmove_ld_st_avx512(void *dst, const void *src, size_t size)
@@ -108,11 +107,6 @@ static inline void *memmove_ld_st_avx512(void *dst, const void *src, size_t size
     if (size <= 4 * ZMM_SZ)
     {
         __load_store_le_4zmm_vec(dst, src, size);    
-        return dst;
-    }
-    if (size <= 8 * ZMM_SZ)
-    {
-        __load_store_le_8zmm_vec(dst, src, size);    
         return dst;
     }
     if ((dst < (src + size)) && (src < dst))
@@ -146,6 +140,7 @@ static inline void *memmove_ld_st_avx512(void *dst, const void *src, size_t size
             __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
         else
             __unaligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
+
          _mm512_storeu_si512(dst + size - 4 * ZMM_SZ, z4);
          _mm512_storeu_si512(dst + size - 3 * ZMM_SZ, z5);
          _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z6);
@@ -155,20 +150,24 @@ static inline void *memmove_ld_st_avx512(void *dst, const void *src, size_t size
 }
 #endif
 
-void *amd_memmove(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
         return __load_store_le_2ymm_vec_overlap(dst, src, size);
+    if (size >= __nt_start_threshold)
+    {
+        if (((src + size) < dst) || ((dst + size) < src))
+        {
+            return nt_store(dst, src, size);
+        }
+    }
 #ifdef AVX512_FEATURE_ENABLED
     return memmove_ld_st_avx512(dst, src, size);
 #endif
-    if (size > __nt_start_threshold)
-    {
-        if (((src + size) < dst) || ((dst + size) < src))
-            return nt_store(dst, src, size);
-    }
     return memmove_ld_st_avx2(dst, src, size);
 }
 
-void *memmove(void *, const void *, size_t) __attribute__((weak, alias("amd_memmove"), visibility("default")));
+void *memmove(void *, const void *, size_t) __attribute__((weak,
+                    alias("amd_memmove"), visibility("default")));

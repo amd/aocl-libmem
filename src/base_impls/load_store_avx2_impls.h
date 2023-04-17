@@ -370,7 +370,7 @@ static inline size_t __aligned_load_nt_store_4ymm_vec_loop_pftch(void *store_add
 static inline size_t __unaligned_load_nt_store_4ymm_vec_loop_pftch(void *store_addr, \
                       const void *load_addr, size_t size, size_t offset)
 {
-    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, ALIGNED, STREAM)
+    VEC_4X_LOAD_STORE_LOOP(AVX2, PFTCH_TWO_CL_ONE_STEP, UNALIGNED, STREAM)
 }
 
 /* ##################### NON-TEMPORAL 8xVEC LOOPS ###################

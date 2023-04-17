@@ -54,7 +54,7 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                             2 * (size + 2 * CACHE_LINE_SZ));
             * head_buff = (uint8_t *)buff_addr;
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
-             CACHE_LINE_SZ + rand()%(size)) & ~(CACHE_LINE_SZ - 1));
+             CACHE_LINE_SZ + rand()%(size + 1)) & ~(CACHE_LINE_SZ - 1));
             break;
         case NON_OVERLAP_BUFFER:
             posix_memalign(&buff_addr, CACHE_LINE_SZ, \

@@ -22,12 +22,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
 #include "logger.h"
 #include "threshold.h"
-#include <stdint.h>
 #include "../base_impls/load_store_impls.h"
+#include "zen_cpu_info.h"
 
+extern cpu_info zen_info;
 
 static inline void *ld_st_avx2(void *dst, const void *src, size_t size)
 {
@@ -45,18 +45,17 @@ static inline void *ld_st_avx2(void *dst, const void *src, size_t size)
     }
 
     offset = 4 * YMM_SZ;
-    size -= 4 * YMM_SZ;
 
     dst_align = ((size_t)dst & (YMM_SZ - 1));
 
     if ((((size_t)src & (YMM_SZ - 1)) == 0) && (dst_align == 0))
     {
-        __aligned_load_and_store_4ymm_vec_loop(dst, src, size, offset);
+        __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
     }
     else
     {
         offset -= dst_align;
-        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size, offset);
+        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
     }
     return dst + size;
 }
@@ -109,41 +108,35 @@ static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
     dst_align = ((size_t)dst & (ZMM_SZ - 1));
 
     //Aligned SRC & DST addresses
-    if ((((size_t)src & (ZMM_SZ - 1)) == dst_align) && dst_align == 0)
+    if ((((size_t)src & (ZMM_SZ - 1)) | dst_align) == 0)
     {
-        offset -= dst_align;
-
         // 4-ZMM registers
-        if (size < 1*1024*1024) //L2 Cache Size
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size    
         {
-            size -= 4 * ZMM_SZ;
-            __aligned_load_and_store_4zmm_vec_loop(dst, src, size, offset);
+            __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
-        // 4-YMM registers with 2 - prefetch
-        else if (size < 32*1024*1024) //L3 Cache Size
+        // 4-YMM registers with SW- prefetch
+        else if (size < zen_info.zen_cache_info.l3_per_ccx)//L3 Cache Size
         {
-            size -= 4 * ZMM_SZ;
-            __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size, offset);
+            __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
         // Non-temporal 8-ZMM registers with prefetch
         else
         {
-            size -= 4 * ZMM_SZ;
-            __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size, offset);
+            __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
     }
     // Unalgined SRC/DST addresses: force-align store
     else
     {
-        offset -= (dst_align & (ZMM_SZ-1));
-        size -= 4 * ZMM_SZ;
-        if (size < 32*1024*1024) // L3-Cache size
+        offset -= dst_align;
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
         {
-            __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size, offset);
+            __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
         else
         {
-            __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size, offset);
+            __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
     }
     return dst + size;
@@ -151,7 +144,8 @@ static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
 #endif
 
 
-void *__mempcpy_zen1(void *dst, const void *src, size_t size)
+void *  __attribute__((flatten)) __mempcpy_zen1(void * __restrict dst,
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
@@ -162,7 +156,8 @@ void *__mempcpy_zen1(void *dst, const void *src, size_t size)
         return nt_store_avx2(dst, src, size);
 }
 
-void *__mempcpy_zen2(void *dst, const void *src, size_t size)
+void *  __attribute__((flatten)) __mempcpy_zen2(void * __restrict dst,
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
@@ -173,7 +168,8 @@ void *__mempcpy_zen2(void *dst, const void *src, size_t size)
         return nt_store_avx2(dst, src, size);
 }
 
-void *__mempcpy_zen3(void *dst, const void *src, size_t size)
+void *  __attribute__((flatten)) __mempcpy_zen3(void * __restrict dst,
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
@@ -184,7 +180,8 @@ void *__mempcpy_zen3(void *dst, const void *src, size_t size)
         return nt_store_avx2(dst, src, size);
 }
 
-void *__mempcpy_zen4(void *dst, const void *src, size_t size)
+void *  __attribute__((flatten)) __mempcpy_zen4(void * __restrict dst,
+                        const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
