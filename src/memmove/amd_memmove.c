@@ -154,8 +154,21 @@ void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
                         const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
+#ifdef AVX512_FEATURE_ENABLED
+    if (size == 0)
+        return dst;
+    if (size <= ZMM_SZ)
+    {
+       __m512i z0;
+        z0 = _mm512_loadu_si512(src);
+       __mmask64 mask = ((uint64_t)-1) >> (64 - size);
+        _mm512_mask_storeu_epi8(dst, mask, z0);
+        return dst;
+    }
+#else
     if (size <= 2 * YMM_SZ)
         return __load_store_le_2ymm_vec_overlap(dst, src, size);
+#endif
     if (size >= __nt_start_threshold)
     {
         if (((src + size) < dst) || ((dst + size) < src))
@@ -165,8 +178,9 @@ void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
     }
 #ifdef AVX512_FEATURE_ENABLED
     return memmove_ld_st_avx512(dst, src, size);
-#endif
+#else
     return memmove_ld_st_avx2(dst, src, size);
+#endif
 }
 
 void *memmove(void *, const void *, size_t) __attribute__((weak,
