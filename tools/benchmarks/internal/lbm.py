@@ -50,6 +50,7 @@ class LBM:
         self.core_id = str(self.MYPARSER['ARGS']['core_id'])
         self.mixed_bench_marker = 1024 * 1024
         self.bench_mode=[]
+        self.bench_name='LibMem Bench'
 
     def measure_latency(self, lib_variant):
         """
@@ -71,9 +72,14 @@ class LBM:
             #set the early binding option for the loader
             os.environ['LD_BIND_NOW'] = '1'
             if lib_variant == 'amd':
+                LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
                 env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
+                print("LBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
             else:
+                GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
                 env['LD_PRELOAD'] = ''
+                print("LBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
             self.size = self.start_size
             self.bench_mode = self.mode
             if self.mode == 'm': # mixed benchmarking
@@ -164,6 +170,7 @@ class LBM:
 
         subprocess.call(['rm *.csv'], shell = True)
         # Analyse performance
+        print("Benchmarking of "+str(self.libmem_func)+" for size range["+str(self.start_size)+"-"+str(self.end_size)+"] on "+str(self.bench_name))
         perf_result = self.performance_analyser()
         if perf_result[0] < -5:
             status = False

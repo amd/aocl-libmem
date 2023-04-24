@@ -52,7 +52,7 @@ class GBM:
         self.ranges=self.MYPARSER['ARGS']['range']
         self.core=self.MYPARSER['ARGS']['core_id']
         self.bench_name='GooglBench_Cached'
-
+        self.iterator = self.MYPARSER['ARGS']['iterator']
         self.func=self.MYPARSER['ARGS']['func']
 
     def __call__(self):
@@ -68,14 +68,12 @@ class GBM:
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
-        print(self.result_dir)
 
-        print("Running GoogleBench")
         if self.memory_operation == 'u':
             self.bench_name='GooglBench_UnCached'
 
+        print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
 
-        print(self.bench_name)
         subprocess.run(["g++","-Wno-deprecated-declarations","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
         self.variant="glibc"
         self.gbm_run()
@@ -158,15 +156,27 @@ class GBM:
         return True
 
     def gbm_run(self):
-        #print("RUNNING TBM")
+
         if self.variant =="amd":
+            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
-            print("LIBMEM:",self.func)
+            print("GBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
+            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
+
             env['LD_PRELOAD'] = ''
-            print("GLIBC:",self.func)
+            print("GBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
+
+        i= self.ranges[0]
+        if (self.ranges[0] == 0):
+            i = 1
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1])],cwd=self.path,env=env,check=True,stdout =g)
-        return
 
+            while i <= self.ranges[1]:
+                subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(i),str(i)],cwd=self.path,env=env,check=True,stdout =g, stderr=subprocess.PIPE)
+                i = eval('i'+' '+ str(self.iterator))
+
+
+        return

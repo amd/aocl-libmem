@@ -71,6 +71,7 @@ class FBM:
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
+        print("Benchmarking of "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
         self.variant="glibc"
         self.fbm_run()
         self.variant="amd"
@@ -139,17 +140,19 @@ class FBM:
         return
 
     def fbm_run(self):
-        print("RUNNING FBM")
         if self.variant =="amd":
+            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
-            print("LIBMEM:",self.func)
+            print("FBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
+            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''
-            print("GLIBC:",self.func)
+            print("FBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
 
         for i in range(0,self.last):
             with open(self.result_dir+'/fb_'+str(i)+str(self.variant)+'.txt','w') as g:
-                subprocess.run(["taskset","-c", str(self.core),"numactl","-C"+str(self.core),"bazel-bin/fleetbench/libc/mem_benchmark","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions=300"],cwd=self.path+"/fleetbench",env=env,check=True,stdout =g)
+                subprocess.run(["taskset","-c", str(self.core),"numactl","-C"+str(self.core),"bazel-bin/fleetbench/libc/mem_benchmark","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions=300"],cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return
 

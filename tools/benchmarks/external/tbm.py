@@ -50,6 +50,7 @@ class TBM:
         self.core=self.MYPARSER['ARGS']['core_id']
         self.bench_name='TinyMemBench'
         self.func=self.MYPARSER['ARGS']['func']
+        self.iterator = self.MYPARSER['ARGS']['iterator']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/tinymembench')
@@ -60,12 +61,12 @@ class TBM:
             os.system("cp ../tools/benchmarks/external/tinybench/tinymem-bench.c ../tools/benchmarks/external/tinybench/tinymembench/")
             subprocess.run(["gcc","-O2","-o","tinymembench","tinymem-bench.c",\
                     "util.o","asm-opt.o","x86-sse2.o","-lm"],cwd=self.path+"/tinymembench")
-            print("prepared TINY BENCH")
+            print("prepared TINYMEMBENCH")
 
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
-        print("RUNNING TBM")
+        print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
         self.variant="glibc"
         self.tiny_run()
         self.variant="amd"
@@ -125,16 +126,26 @@ class TBM:
 
     def tiny_run(self):
         if self.variant =="amd":
+            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
+
             env['LD_PRELOAD'] = '../../../../../lib/shared/libaocl-libmem.so'
-            print("LIBMEM:",self.func)
+            print("TBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
+            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''
-            print("GLIBC:",self.func)
+            print("TBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
+
+        i= self.ranges[0]
+        if (self.ranges[0] == 0):
+            i = 1
 
         with open(self.result_dir+'/'+str(self.variant)+'.txt', 'w') as f:
-            subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
-                str(self.ranges[0]),str(self.ranges[1])],cwd=self.path+"/tinymembench",\
-                env=env, stdout=f)
+            while i <= self.ranges[1]:
+                subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
+                str(i),str(i)],cwd=self.path+"/tinymembench",env=env, stdout=f)
+                i = eval('i'+' '+ str(self.iterator))
+
 
         return
 

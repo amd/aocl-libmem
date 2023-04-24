@@ -186,11 +186,11 @@ int main(int argc, char** argv) {
  if (argv[5] != NULL)
         size_end = atoi(argv[5]);
 
- std::cout<<"SIZE"<<size_start<<" "<<size_end;
+std::cout<<"SIZE"<<size_start<<" "<<size_end<<std::endl;
 	AddBenchmarks(func, mode, size_start, size_end);
 	::benchmark::Initialize(&argc, argv);
         ::benchmark::RunSpecifiedBenchmarks();
-
+std::cout<<std::endl;
 return 0;
 
 }
