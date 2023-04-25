@@ -130,7 +130,7 @@ class TBM:
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
 
             env['LD_PRELOAD'] = '../../../../../lib/shared/libaocl-libmem.so'
-            print("TBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("TBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
             GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''

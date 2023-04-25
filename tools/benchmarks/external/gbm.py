@@ -80,15 +80,8 @@ class GBM:
         self.variant="amd"
         self.gbm_run()
 
-        if self.func== 'memcpy':
-                self.size_values = subprocess.run(["sed", "-n", r"s/.*cached_memcpy\/\([0-9]\+\).*/\1/p", "gbamd.txt"],cwd =self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        elif self.func =='memset':
-            self.size_values = subprocess.run(["sed", "-n", r"s/.*cached_memset\/\([0-9]\+\).*/\1/p", "gbamd.txt"],cwd =self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        elif self.func =='memmove':
-            self.size_values = subprocess.run(["sed", "-n", r"s/.*cached_memmove\/\([0-9]\+\).*/\1/p", "gbamd.txt"],cwd =self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        elif self.func =='memcmp':
-            self.size_values = subprocess.run(["sed", "-n", r"s/.*cached_memcmp\/\([0-9]\+\).*/\1/p", "gbamd.txt"],cwd =self.result_dir, capture_output=True, text=True).stdout.splitlines()
-
+        values= subprocess.run(["awk", "/^.*cached_"+str(self.func)+"/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        self.size_values= [val.split('/')[1] for val in values]
         self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
 
@@ -111,8 +104,8 @@ class GBM:
                 self.value = float(self.glibc_throughput_values[i].strip("M/s"))
                 self.glibc_throughput_values[i] = self.value
 
-        print(self.amd_throughput_values)
         print(self.glibc_throughput_values)
+        print(self.amd_throughput_values)
         self.gains=[]
         for value in range(len(self.size_values)):
                 self.gains.append(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
@@ -161,7 +154,7 @@ class GBM:
             LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
-            print("GBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("GBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
             GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
 

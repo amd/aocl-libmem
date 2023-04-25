@@ -163,6 +163,13 @@ void memcmp_wrapper(int64_t *dst, int64_t *src, int size)
 {
     memcmp(dst, src, size);
 }
+
+void strcpy_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    *(src+size-1)='\0';
+    strcpy((char *)dst,(char *) src);
+}
+
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
                      bench_info *bi)
@@ -177,62 +184,47 @@ void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
     }
 }
 
+bench_info supp_funcs[]=
+{
+    {"memcpy", 0, memcpy_wrapper},
+    {"memmove", 0, memmove_wrapper},
+    {"memset", 0, memset_wrapper},
+    {"memcmp", 0, memcmp_wrapper},
+    {"strcpy", 0, strcpy_wrapper},
+    {"none", 0,  NULL}
+};
 
 int main(int argc, char **argv)
 {
-    int64_t *srcbuf, *dstbuf, *tmpbuf;
-    void *poolbuf;
-    size_t start, end;
-
+   int64_t *srcbuf, *dstbuf, *tmpbuf;
+   void *poolbuf;
+   size_t start, end;
    start = atoi(argv[2]);
    end = atoi(argv[3]);
-
-    size_t fbsize = 0;
-    int64_t *fbbuf = mmap_framebuffer(&fbsize);
-    fbsize = (fbsize / BLOCKSIZE) * BLOCKSIZE;
+   int idx;
+   size_t fbsize = 0;
+   int64_t *fbbuf = mmap_framebuffer(&fbsize);
+   fbsize = (fbsize / BLOCKSIZE) * BLOCKSIZE;
 
 
    for(size_t bufsize = start; bufsize<= end; bufsize<<=1)
-{
+   {
+        poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
+                                                (void **)&dstbuf, bufsize,
+                                                (void **)&tmpbuf, BLOCKSIZE,
+                                                NULL, 0);
 
-    poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
-                                            (void **)&dstbuf, bufsize,
-                                            (void **)&tmpbuf, BLOCKSIZE,
-                                            NULL, 0);
+        printf("SIZE: %zu B \n",bufsize);
 
-    printf("SIZE: %zu B \n",bufsize);
-
-    if(!strcmp(argv[1],"memcpy"))
-    {
-        static bench_info mem_copy[]={{ "standard memcpy", 0, memcpy_wrapper },{ NULL, 0, NULL }};
-        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ",mem_copy);
-
-    }
-
-    else if(!strcmp(argv[1],"memset"))
-    {
-        static bench_info mem_set[]={{ "standard memset", 0, memset_wrapper },{ NULL, 0, NULL }};
-        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_set);
-
-    }
-
-    else if(!strcmp(argv[1],"memmove"))
-    {
-        static bench_info mem_move[]={{ "standard memmove", 0, memmove_wrapper },{ NULL, 0, NULL }};
-        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_move);
-
-    }
-
-    else if(!strcmp(argv[1],"memcmp"))
-    {
-        static bench_info mem_cmp[]={{ "standard memcmp", 0, memcmp_wrapper },{ NULL, 0, NULL }};
-        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", mem_cmp);
-
-    }
-
-
-
-}
-    return 0;
+        for ( idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
+        {
+            if (!strcmp(supp_funcs[idx].description, argv[1]))
+            {
+                break;
+            }
+        }
+        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", &supp_funcs[idx]);
+   }
+   return 0;
 }
 

@@ -148,7 +148,7 @@ class FBM:
             mycwd=os.getcwd()
             dirname = os.path.dirname(mycwd)
             env['LD_PRELOAD']= dirname+str('/lib/shared/libaocl-libmem.so')
-            print("FBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("FBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
             GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''

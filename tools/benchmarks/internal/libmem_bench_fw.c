@@ -81,6 +81,13 @@ static inline void memcmp_wrapper(uint8_t * dst, uint8_t * src, size_t size)
     memcmp(dst, src, size);
 }
 
+static inline void strcpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
+{
+    *(src + size -1) = '\0';
+    strcpy(dst, src);
+}
+
+
 libmem_bench supp_modes[]=
 {
     {'u',   "uncached",   UNCACHED},
@@ -96,6 +103,7 @@ libmem_func supp_funcs[]=
     {"memmove", memmove_wrapper},
     {"memset",  memset_wrapper},
     {"memcmp",  memcmp_wrapper},
+    {"strcpy",  strcpy_wrapper},
     {"none",    NULL}
 };
 

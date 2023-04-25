@@ -75,7 +75,7 @@ class LBM:
                 LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
                 env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
-                print("LBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
+                print("LBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
             else:
                 GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
                 env['LD_PRELOAD'] = ''
