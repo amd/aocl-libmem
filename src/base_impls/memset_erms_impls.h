@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,36 +22,77 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
+#ifndef _LIBMEM_MEMSET_ERMS_IMPLS_H_
+#define _LIBMEM_MEMSET_ERMS_IMPLS_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
-#include "../base_impls/memset_erms_impls.h"
-#include "logger.h"
 
-// memset with byte ; no rep move api for intrinsic
-void * __memset_erms_b_aligned(void *mem, int val, size_t size)
+static inline void * __erms_stosb(void *mem, int val, size_t size)
 {
-    LOG_INFO("\n");
-    return __erms_stosb(mem, val, size);
+    asm volatile (
+    "cld\n\t"
+    "rep stosb"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return (mem - size);
 }
 
-// memset with word ; no rep move api for intrinsic
-void * __memset_erms_w_aligned(void *mem, int val, size_t size)
+static inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
 {
-    LOG_INFO("\n");
-    return __erms_stosw(mem, val, size);
+    val = val | val << 8;
+    size = size >> 1;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosw"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return (mem - size);
 }
 
-// memset with double ; no rep move api for intrinsic
-void * __memset_erms_d_aligned(void *mem, int val, size_t size)
+static inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
 {
-    LOG_INFO("\n");
-    return __erms_stosd(mem, val, size);
+    val = val | val << 8;
+    size = size >> 1;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosw"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return (mem - size);
 }
 
-// memset with quad word ; no rep move api for intrinsic
-void * __memset_erms_q_aligned(void *mem, int val, size_t size)
+static inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
 {
-    LOG_INFO("\n");
-    return __erms_stosq(mem, val, size);
+    val = val | val << 8;
+    val = val | val << 16;
+    val = val | val << 32;
+
+    size = size >> 3;
+
+    asm volatile (
+    "cld\n\t"
+    "rep stosq"
+    :
+    : "D"(mem), "a"(val), "c"(size)
+    : "memory"
+    );
+    return (mem - size);
 }
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif //HEADER

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -27,6 +27,10 @@
 #include "threshold.h"
 #include <immintrin.h>
 #include <stdint.h>
+#include "../base_impls/memset_erms_impls.h"
+#include "zen_cpu_info.h"
+
+extern cpu_info zen_info;
 
 static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 {
@@ -35,14 +39,14 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 
     if (size >= XMM_SZ)
     {
-        x0 = _mm_set1_epi8(val);
         if (size >= YMM_SZ)
         {
-            y0 = _mm256_broadcastb_epi8(x0);
+            y0 = _mm256_set1_epi8(val);
             _mm256_storeu_si256(mem, y0);
             _mm256_storeu_si256(mem + size - YMM_SZ, y0);
             return mem;
-        } 
+        }
+        x0 = _mm_set1_epi8(val);
         _mm_storeu_si128(mem, x0);
         _mm_storeu_si128(mem + size - XMM_SZ, x0);
         return mem;
@@ -52,7 +56,7 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
         uint64_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
         shft_val = shft_val | (shft_val << 16);
         shft_val = shft_val | (shft_val << 32);
-        
+
         *((uint64_t*)mem) = shft_val;
         *((uint64_t*)(mem + size - QWORD_SZ)) = shft_val;
         return mem;
@@ -76,7 +80,7 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
     return mem;
 }
 
-static inline void *unaligned_st(void *mem, int val, size_t size)
+static inline void *_memset_avx2(void *mem, int val, size_t size)
 {
     __m256i y0;
     __m128i x0 = _mm_set1_epi8(val);
@@ -85,29 +89,30 @@ static inline void *unaligned_st(void *mem, int val, size_t size)
     y0 = _mm256_broadcastb_epi8(x0);
     if (size < 4 * YMM_SZ)
     {
-        _mm256_storeu_si256 (mem , y0);
-        _mm256_storeu_si256 (mem + YMM_SZ, y0);
-        _mm256_storeu_si256 (mem + size - 2 * YMM_SZ, y0);
-        _mm256_storeu_si256 (mem + size - YMM_SZ, y0);
+        _mm256_storeu_si256(mem , y0);
+        _mm256_storeu_si256(mem + YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - YMM_SZ, y0);
         return mem;
     }
-    _mm256_storeu_si256 (mem + 0 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + 1 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + 2 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + 3 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + size - 4 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + size - 3 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + size - 2 * YMM_SZ, y0);
-    _mm256_storeu_si256 (mem + size - 1 * YMM_SZ, y0);
-    
+    _mm256_storeu_si256(mem + 0 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 1 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 4 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 1 * YMM_SZ, y0);
+
     offset += 4 * YMM_SZ;
     size -= 4 * YMM_SZ;
+    offset -= ((size_t)mem & (YMM_SZ - 1));
     while( offset < size )
     {
-        _mm256_storeu_si256 (mem + offset + 0 * YMM_SZ, y0);
-        _mm256_storeu_si256 (mem + offset + 1 * YMM_SZ, y0);
-        _mm256_storeu_si256 (mem + offset + 2 * YMM_SZ, y0);
-        _mm256_storeu_si256 (mem + offset + 3 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 3 * YMM_SZ, y0);
         offset += 4 * YMM_SZ;
     }
     return mem;
@@ -122,23 +127,23 @@ static inline void *nt_store(void *mem, int val, size_t size)
     x0 = _mm_set1_epi8(val);
     y0 = _mm256_broadcastb_epi8(x0);
     offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
-    _mm256_storeu_si256 (mem, y0);
+    _mm256_storeu_si256(mem, y0);
     size -= offset;
 
     while ((size) >= 4 * YMM_SZ)
     {
-        _mm256_stream_si256 (mem + offset + 0 * YMM_SZ, y0);
-        _mm256_stream_si256 (mem + offset + 1 * YMM_SZ, y0);
-        _mm256_stream_si256 (mem + offset + 2 * YMM_SZ, y0);
-        _mm256_stream_si256 (mem + offset + 3 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 3 * YMM_SZ, y0);
 
         size -= 4 * YMM_SZ;
         offset += 4 * YMM_SZ;
     }
     if ((size) >= 2 * YMM_SZ)
     {
-        _mm256_stream_si256 (mem + offset + 0 * YMM_SZ, y0);
-        _mm256_stream_si256 (mem + offset + 1 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_stream_si256(mem + offset + 1 * YMM_SZ, y0);
 
         size -= 2 * YMM_SZ;
         offset += 2 * YMM_SZ;
@@ -146,32 +151,25 @@ static inline void *nt_store(void *mem, int val, size_t size)
 
     if ((size > YMM_SZ))
     {
-        _mm256_stream_si256 (mem + offset, y0);
+        _mm256_stream_si256(mem + offset, y0);
     }
     //copy last YMM_SZ Bytes
-    _mm256_storeu_si256 (mem + size - YMM_SZ + offset , y0);
+    _mm256_storeu_si256(mem + size - YMM_SZ + offset , y0);
 
     return mem;
 }
 
 #ifdef AVX512_FEATURE_ENABLED
-static inline void *unaligned_st_avx512(void *mem, int val, size_t size)
+static inline void *_memset_avx512(void *mem, int val, size_t size)
 {
     __m512i z0;
-    __m128i x0 = _mm_set1_epi8(val);
+    __m256i y0;
     size_t offset = 0;
-
-    if (size <= 2 * YMM_SZ)
-        return memset_le_2ymm(mem, val, size);
- 
-    z0 = _mm512_broadcastb_epi8(x0);
-
-    if (size <= 2 * ZMM_SZ)
+    if (size < 2 * ZMM_SZ)
     {
-        _mm512_storeu_si512(mem , z0);
-        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
-        return mem;
+        return __erms_stosb(mem, val, size);
     }
+    z0 = _mm512_set1_epi8(val);
 
     if (size <= 4 * ZMM_SZ)
     {
@@ -190,31 +188,53 @@ static inline void *unaligned_st_avx512(void *mem, int val, size_t size)
     _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
     _mm512_storeu_si512(mem + size - 1 * ZMM_SZ, z0);
 
+
+    if (size <= 8 * ZMM_SZ)
+        return mem;
+
     offset += 4 * ZMM_SZ;
     size -= 4 * ZMM_SZ;
+    offset -= ((uint64_t)mem & (ZMM_SZ-1));
+
+    if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+    {
+        y0 = _mm256_set1_epi8(val);
+        while( offset < size )
+        {
+        _mm256_store_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 3 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 4 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 5 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 6 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 7 * YMM_SZ, y0);
+        offset += 4 * ZMM_SZ;
+        }
+        return mem;
+    }
     while( offset < size )
     {
-        _mm512_storeu_si512(mem + offset + 0 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + offset + 1 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + offset + 2 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + offset + 3 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 2 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
         offset += 4 * ZMM_SZ;
     }
+
     return mem;
 }
 #endif
 
-void *amd_memset(void *mem, int val, size_t size)
+void * __attribute__((flatten)) amd_memset(void * __restrict__ mem, int val, size_t size)
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
-    return unaligned_st_avx512(mem, val, size);
+    return _memset_avx512(mem, val, size);
 #else
     if (size <= 2 * YMM_SZ)
         return memset_le_2ymm(mem, val, size);
-    if (size > __nt_start_threshold)
-        return nt_store(mem, val, size);
-    return unaligned_st(mem, val, size);
+    return _memset_avx2(mem, val, size);
 #endif
 }
 
