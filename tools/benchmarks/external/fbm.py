@@ -50,6 +50,7 @@ class FBM:
         self.core=self.MYPARSER['ARGS']['core_id']
         self.bench_name='FleeteBench'
         self.last=9
+        self.allocator=self.MYPARSER['ARGS']['mem_alloc']
         self.amd_throughput_value=[]
         self.glibc_throughput_value=[]
         self.amd_raw=[]
@@ -143,16 +144,22 @@ class FBM:
         if self.variant =="amd":
             LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
-            env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
+            #Setting up the Absolute path for LD_PRELOAD
+            mycwd=os.getcwd()
+            dirname = os.path.dirname(mycwd)
+            env['LD_PRELOAD']= dirname+str('/lib/shared/libaocl-libmem.so')
             print("FBM : Running Benchmark on Amd-LibMem "+str(LibMemVersion,'utf-8').strip())
         else:
             GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''
             print("FBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
 
+        #Adding Tcmalloc Allocator
+        if(self.allocator == 'tcmalloc'):
+            env['GLIBC_TUNABLES']='glibc.pthread.rseq=0'
+
         for i in range(0,self.last):
             with open(self.result_dir+'/fb_'+str(i)+str(self.variant)+'.txt','w') as g:
-                subprocess.run(["taskset","-c", str(self.core),"numactl","-C"+str(self.core),"bazel-bin/fleetbench/libc/mem_benchmark","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions=300"],cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
-
+                subprocess.run(["taskset","-c", str(self.core),"numactl","-C"+str(self.core),"bazel","run","--config=opt","fleetbench/libc/mem_benchmark","--","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions=300"], cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
         return
 

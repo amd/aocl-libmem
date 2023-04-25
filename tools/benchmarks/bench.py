@@ -101,6 +101,9 @@ def main():
                                 and destination addresses. Default alignment\
                                 is 64B for both source and destination.(ONLY LBM)",
                             type = int, default = (64, 64))
+    parser.add_argument("-mem_alloc", help = "specify the memory allocator\
+                                for FleetBench",type = str,choices=['tcmalloc','glibc'], \
+                                default= ['glibc'])
 
     parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default expression\
