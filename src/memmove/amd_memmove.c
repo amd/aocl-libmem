@@ -27,7 +27,7 @@
 #include "../base_impls/load_store_impls.h"
 
 
-static inline void *memmove_ld_st_avx2(void *dst, const void *src, size_t size)
+static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
 {
     __m256i y4, y5, y6, y7;
 
@@ -96,7 +96,7 @@ static inline void *nt_store(void *dst, const void *src, size_t size)
 
 
 #ifdef AVX512_FEATURE_ENABLED
-static inline void *memmove_ld_st_avx512(void *dst, const void *src, size_t size)
+static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
 {
     __m512i z4, z5, z6, z7, z8;
     if (size <= 2 * ZMM_SZ)
@@ -177,9 +177,9 @@ void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
         }
     }
 #ifdef AVX512_FEATURE_ENABLED
-    return memmove_ld_st_avx512(dst, src, size);
+    return _memmove_avx512(dst, src, size);
 #else
-    return memmove_ld_st_avx2(dst, src, size);
+    return _memmove_avx2(dst, src, size);
 #endif
 }
 

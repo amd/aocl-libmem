@@ -29,7 +29,7 @@
 
 extern cpu_info zen_info;
 
-static inline void *ld_st_avx2(void *dst, const void *src, size_t size)
+static inline void *_mempcpy_avx2(void *dst, const void *src, size_t size)
 {
     size_t offset = 0, dst_align = 0;
 
@@ -83,7 +83,7 @@ static inline void *nt_store_avx2(void *dst, const void *src, size_t size)
 
 
 #ifdef AVX512_FEATURE_ENABLED
-static inline void *ld_st_avx512(void *dst, const void *src, size_t size)
+static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
 {
     size_t offset = 0, dst_align = 0;
 
@@ -151,7 +151,7 @@ void *  __attribute__((flatten)) __mempcpy_zen1(void * __restrict dst,
     if (size <= 2 * YMM_SZ)
         return size + __load_store_le_2ymm_vec(dst, src, size);
     if (size < __nt_start_threshold)
-        return ld_st_avx2(dst, src, size);
+        return _mempcpy_avx2(dst, src, size);
     else
         return nt_store_avx2(dst, src, size);
 }
@@ -163,7 +163,7 @@ void *  __attribute__((flatten)) __mempcpy_zen2(void * __restrict dst,
     if (size <= 2 * YMM_SZ)
         return size + __load_store_le_2ymm_vec(dst, src, size);
     if (size < __nt_start_threshold)
-        return ld_st_avx2(dst, src, size);
+        return _mempcpy_avx2(dst, src, size);
     else
         return nt_store_avx2(dst, src, size);
 }
@@ -175,7 +175,7 @@ void *  __attribute__((flatten)) __mempcpy_zen3(void * __restrict dst,
     if (size <= 2 * YMM_SZ)
         return size + __load_store_le_2ymm_vec(dst, src, size);
     if (size < __nt_start_threshold)
-        return ld_st_avx2(dst, src, size);
+        return _mempcpy_avx2(dst, src, size);
     else
         return nt_store_avx2(dst, src, size);
 }
@@ -185,14 +185,22 @@ void *  __attribute__((flatten)) __mempcpy_zen4(void * __restrict dst,
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
-    if (size <= 2 * ZMM_SZ)
-        return size + __load_store_ble_2zmm_vec(dst, src, size);
-    return ld_st_avx512(dst, src, size);
+    if (size == 0)
+        return dst;
+    if (size <= ZMM_SZ)
+    {
+       __m512i z0;
+        z0 = _mm512_loadu_si512(src);
+       __mmask64 mask = ((uint64_t)-1) >> (64 - size);
+        _mm512_mask_storeu_epi8(dst, mask, z0);
+        return dst + size;
+    }
+    return _mempcpy_avx512(dst, src, size);
 #else
     if (size <= 2 * YMM_SZ)
         return size + __load_store_le_2ymm_vec(dst, src, size);
     if (size < __nt_start_threshold)
-        return ld_st_avx2(dst, src, size);
+        return _mempcpy_avx2(dst, src, size);
     else
         return nt_store_avx2(dst, src, size);
 #endif
