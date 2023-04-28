@@ -104,8 +104,8 @@ class GBM:
                 self.value = float(self.glibc_throughput_values[i].strip("M/s"))
                 self.glibc_throughput_values[i] = self.value
 
-        print(self.glibc_throughput_values)
-        print(self.amd_throughput_values)
+        #print(self.glibc_throughput_values)
+        #print(self.amd_throughput_values)
         self.gains=[]
         for value in range(len(self.size_values)):
                 self.gains.append(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
@@ -160,16 +160,11 @@ class GBM:
 
             env['LD_PRELOAD'] = ''
             print("GBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
-
-        i= self.ranges[0]
+        # size zero will result in 0 throughput.
         if (self.ranges[0] == 0):
-            i = 1
+            self.ranges[0] = 1;
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-
-            while i <= self.ranges[1]:
-                subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(i),str(i)],cwd=self.path,env=env,check=True,stdout =g, stderr=subprocess.PIPE)
-                i = eval('i'+' '+ str(self.iterator))
-
+            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return

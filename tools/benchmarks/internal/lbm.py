@@ -32,7 +32,7 @@ from os import environ as env
 import csv
 import argparse
 import datetime
-
+import pandas as pd
 class LBM:
     def __init__(self,**kwargs):
         self.ARGS = kwargs
@@ -85,35 +85,41 @@ class LBM:
             if self.mode == 'm': # mixed benchmarking
                 self.bench_mode = 'c'
 
-            while self.size <= self.end_size:
-                data = []
-                if self.mode == 'm' and self.size >= self.mixed_bench_marker:
-                    self.bench_mode = 'u'
+            data = []
+            if self.mode == 'm' and self.size >= self.mixed_bench_marker:
+                self.bench_mode = 'u'
 
-                with open(str(self.size)+".csv", 'a+') as latency_sz:
-                    for i in range(0, self.iterations):
-                        subprocess.run(['taskset', '-c', self.core_id, \
-                        '../tools/benchmarks/internal/libmem_bench_fw', \
-                        self.libmem_func, str(self.size), self.src_align, \
-                        self.dst_align,self.bench_mode],\
-                        stdout=latency_sz, env = env)
-                    latency_sz.seek(0)
-                    csv_rdr = csv.reader(latency_sz)
+            total = None
+            file_name = lib_variant+"_raw.csv"
+            with open(file_name, 'a+') as latency_sz:
+                for i in range(0, self.iterations):
+                    subprocess.run(['taskset', '-c', self.core_id,"numactl","-C"+str(self.core_id), \
+                    '../tools/benchmarks/internal/libmem_bench_fw', \
+                    self.libmem_func, str(self.start_size), str(self.end_size),self.src_align, \
+                    self.dst_align,self.bench_mode, self.iterator],\
+                    stdout=latency_sz, env = env)
 
-                    sort = sorted(csv_rdr, key=lambda x: int(x[1]))
-                    best = int(len(sort)*0.6)
-                    sort_best = sort[0:best]
-                    avg = round(sum(int(x[1]) for x in sort_best)/best,2)
-                    data = list(map(int, (sort_best[0])[0:1]))
-                    data.append(avg)
-                    report_writer.writerow(data)
-                    subprocess.run(['rm', str(self.size)+".csv"])
+            average_of_top_60_percent=[]
+            df= pd.read_csv(file_name)
 
-                if (self.size == 0) and (self.iterator == '<<1'):
-                    self.size = 1
-                else:
-                    self.size = eval('self.size'+' '+ self.iterator)
+            #Removin the last NULL column
+            df = df.iloc[:,:-1]
+            #TOP 60% value
+            for indx in df.columns:
+                sorted_column = df[indx].sort_values(ascending = True)
+                top_60_percent_index = int(len(sorted_column) * 0.6)
+                average_of_top_60_percent.append( round(sorted_column[:top_60_percent_index].mean()))
 
+            pos=0
+            iterator = "<< 1"
+            if  int(self.iterator):
+                iterator = "+"+(self.iterator)
+            size = int(self.start_size)
+            while size <= int(self.end_size):
+                data = [size, average_of_top_60_percent[pos]]
+                pos=pos+1
+                report_writer.writerow(data)
+                size = eval('size'+' '+ iterator)
 
     def performance_analyser(self):
         """

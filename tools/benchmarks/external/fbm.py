@@ -67,7 +67,7 @@ class FBM:
         if (not self.isExist):
             print("Preparing Fleetbench benchmark")
             subprocess.run(["git","clone", "https://github.com/google/fleetbench.git"],cwd=self.path)
-            subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark"],cwd=self.path+"/fleetbench")
+            subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable"],cwd=self.path+"/fleetbench")
 
         self.result_dir = 'out/' + self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -82,12 +82,13 @@ class FBM:
             self.glibc_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"glibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
             self.amd_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
 
-        print(self.glibc_raw)
-        print(self.amd_raw)
+        #print(self.glibc_raw)
+        #print(self.amd_raw)
 
         for i in range(len(self.glibc_raw)):
             if 'M/s' in self.glibc_raw[i][0]:
                 value = self.glibc_raw[i][0].split('M/s')[0]
+                value = float(value)
                 value /=1024
                 self.glibc_throughput_value.append(float(value))
             else:
@@ -96,14 +97,15 @@ class FBM:
 
             if 'M/s' in self.amd_raw[i][0]:
                 value =self.amd_raw[i][0].split('M/s')[0]
+                value = float(value)
                 value /=1024
                 self.amd_throughput_value.append(float(value))
             else:
                 value =self.amd_raw[i][0].split('G/s')[0]
                 self.amd_throughput_value.append(float(value))
 
-        print(self.amd_throughput_value)
-        print(self.glibc_throughput_value)
+        #print(self.glibc_throughput_value)
+        #print(self.amd_throughput_value)
 
         self.gains=[]
         for value in range(len(self.amd_throughput_value)):

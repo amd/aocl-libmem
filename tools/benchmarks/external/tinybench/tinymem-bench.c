@@ -196,19 +196,36 @@ bench_info supp_funcs[]=
 
 int main(int argc, char **argv)
 {
-   int64_t *srcbuf, *dstbuf, *tmpbuf;
-   void *poolbuf;
-   size_t start, end;
-   start = atoi(argv[2]);
-   end = atoi(argv[3]);
-   int idx;
-   size_t fbsize = 0;
-   int64_t *fbbuf = mmap_framebuffer(&fbsize);
-   fbsize = (fbsize / BLOCKSIZE) * BLOCKSIZE;
+    int64_t *srcbuf, *dstbuf, *tmpbuf;
+    void *poolbuf;
+    size_t start, end, bufsize = 0;
+    unsigned int iter = 0;
+    int idx;
+    size_t fbsize = 0;
+    int64_t *fbbuf = mmap_framebuffer(&fbsize);
+    fbsize = (fbsize / BLOCKSIZE) * BLOCKSIZE;
+    static bench_info bench_func[] = {{NULL, 0,  NULL}, {NULL, 0,  NULL}};
 
+    start = atoi(argv[2]);
+    end = atoi(argv[3]);
 
-   for(size_t bufsize = start; bufsize<= end; bufsize<<=1)
-   {
+    //iterator choice - 0 stands for shift left by 1
+    iter = atoi(argv[4]);
+
+    for (idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
+    {
+        if (!strcmp(supp_funcs[idx].description, argv[1]))
+        {
+           break;
+        }
+    }
+
+    bench_func[0].description = supp_funcs[idx].description;
+    bench_func[0].use_tmpbuf = supp_funcs[idx].use_tmpbuf;
+    bench_func[0].f = supp_funcs[idx].f;
+
+    for(bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
+    {
         poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
                                                 (void **)&dstbuf, bufsize,
                                                 (void **)&tmpbuf, BLOCKSIZE,
@@ -216,15 +233,9 @@ int main(int argc, char **argv)
 
         printf("SIZE: %zu B \n",bufsize);
 
-        for ( idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
-        {
-            if (!strcmp(supp_funcs[idx].description, argv[1]))
-            {
-                break;
-            }
-        }
-        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", &supp_funcs[idx]);
-   }
-   return 0;
-}
+        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
 
+        free(poolbuf);
+    }
+    return 0;
+}

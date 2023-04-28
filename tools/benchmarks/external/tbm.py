@@ -136,16 +136,13 @@ class TBM:
             env['LD_PRELOAD'] = ''
             print("TBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
 
-        i= self.ranges[0]
+        # size zero will result in 0 throughput.
         if (self.ranges[0] == 0):
-            i = 1
+            self.ranges[0] = 1
 
         with open(self.result_dir+'/'+str(self.variant)+'.txt', 'w') as f:
-            while i <= self.ranges[1]:
-                subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
-                str(i),str(i)],cwd=self.path+"/tinymembench",env=env, stdout=f)
-                i = eval('i'+' '+ str(self.iterator))
-
+            subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
+            str(self.ranges[0]),str(self.ranges[1]), str(self.iterator)],cwd=self.path+"/tinymembench",\
+                env=env, stdout=f)
 
         return
-

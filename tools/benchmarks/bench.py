@@ -72,6 +72,7 @@ class Bench:
             LBM_execute() #Status:Success/Failure
 
 libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp','strcpy']
+
 def main():
     """
     Arguments are captured and stored to variable.
@@ -106,9 +107,9 @@ def main():
                                 default= ['glibc'])
 
     parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
-                            given range of data sizes. Default expression\
-                            is set to 2x of starting size - '<<1'.(ONLY LBM)",
-                            type = str, default = '<<1')
+                            given range of data sizes. Default is shift left\
+                            by 1 of starting size - '<<1'.",
+                            type = int, default = 0)
     parser.add_argument("-i", "--iterations", help = "Number of iterations for\
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
@@ -130,6 +131,14 @@ def main():
     return args
 
 if __name__ == "__main__":
+    try:
+    # Check if numactl is installed
+        subprocess.check_output(['which', 'numactl'])
+
+    except subprocess.CalledProcessError:
+    # numactl is not installed, exiting the program
+        print("numactl utility NOT found. Please install it.")
+        exit(1)
     myparser = main()
     obj = Bench( ARGS=myparser)
     obj()
