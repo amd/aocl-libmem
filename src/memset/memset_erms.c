@@ -41,11 +41,12 @@ void * __memset_erms_w_aligned(void *mem, int val, size_t size)
     return __erms_stosw(mem, val, size);
 }
 
+// No STOSD instruction. Handiling this variant with STOSW.
 // memset with double ; no rep move api for intrinsic
 void * __memset_erms_d_aligned(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
-    return __erms_stosd(mem, val, size);
+    return __erms_stosw(mem, val, size);
 }
 
 // memset with quad word ; no rep move api for intrinsic

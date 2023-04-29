@@ -23,10 +23,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stddef.h>
-#include "amd_intrin.h"
 #include "logger.h"
 #include <stdint.h>
-
+#include "../base_impls/load_compare_erms_impls.h"
 // memcmp with byte rep move instruciton:REP CMPSB
 int __memcmp_erms_b_aligned(const void * mem1, const void *mem2, size_t size)
 {

@@ -31,9 +31,10 @@ void * __memmove_erms_b_aligned(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
     if (src > dst)
-        return __erms_movsb(dst, src, size);
+        __erms_movsb(dst, src, size);
     else
-        return __erms_movsb_back(dst, src, size);
+        __erms_movsb_back(dst, src, size);
+    return dst;
 }
 
 // memmove with word rep move instruciton:REP MOVSW
@@ -41,9 +42,10 @@ void * __memmove_erms_w_aligned(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
     if (src > dst)
-        return __erms_movsw(dst, src, size);
+        __erms_movsw(dst, src, size);
     else
-        return __erms_movsw_back(dst, src, size);
+        __erms_movsw_back(dst, src, size);
+    return dst;
 }
 
 // memmove with double word rep move instruciton:REP MOVSD
@@ -51,9 +53,10 @@ void * __memmove_erms_d_aligned(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
     if (src > dst)
-        return __erms_movsd(dst, src, size);
+        __erms_movsd(dst, src, size);
     else
-        return __erms_movsd_back(dst, src, size);
+        __erms_movsd_back(dst, src, size);
+    return dst;
 }
 
 // memmove with quad word rep move instruciton:REP MOVSQ
@@ -61,8 +64,9 @@ void * __memmove_erms_q_aligned(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
     if (src > dst)
-        return __erms_movsq(dst, src, size);
+        __erms_movsq(dst, src, size);
     else
-        return __erms_movsq_back(dst, src, size);
+        __erms_movsq_back(dst, src, size);
+    return dst;
 }
 

@@ -22,8 +22,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _LIBMEM_MEMSET_ERMS_IMPLS_H_
-#define _LIBMEM_MEMSET_ERMS_IMPLS_H_
+#ifndef _LIBMEM_LOAD_COMPARE_ERMS_IMPLS_H_
+#define _LIBMEM_LOAD_COMPARE_ERMS_IMPLS_H_
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,51 +32,80 @@ extern "C" {
 
 #include <stdint.h>
 
-static inline void * __erms_stosb(void *mem, int val, size_t size)
+static inline int __erms_cmpsb(const void * mem1, const void * mem2, int size)
 {
+    int ret;
+
     asm volatile (
-    "movq %%rdi, %%rdx\n\t"
+    "xorq %%rax, %%rax\n\t"
     "cld\n\t"
-    "rep stosb"
-    : "=d"(mem)
-    : "D"(mem), "a"(val), "c"(size)
+    "repz cmpsb\n\t"
+    "movzx -1(%%rsi), %%rax\n\t"
+    "movzx -1(%%rdi), %%rdx\n\t"
+    "sub  %%rdx, %%rax"
+    : "=rax"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
     : "memory"
     );
-    return mem;
+    return ret;
 }
 
-static inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
+static inline int __erms_cmpsw(const void * mem1, const void * mem2, int size)
 {
-    val = val | val << 8;
+    int ret;
 
     asm volatile (
-    "movq %%rdi, %%rdx\n\t"
+    "xorq %%rax, %%rax\n\t"
     "sar $1, %%rcx\n\t"
     "cld\n\t"
-    "rep stosw"
-    : "=d"(mem)
-    : "D"(mem), "a"(val), "c"(size)
+    "repz cmpsw\n\t"
+    "movzx -2(%%rsi), %%rax\n\t"
+    "movzx -2(%%rdi), %%rdx\n\t"
+    "sub  %%rdx, %%rax"
+    : "=rax"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
     : "memory"
     );
-    return mem;
+    return ret;
 }
 
-static inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
+
+static inline int __erms_cmpsd(const void * mem1, const void * mem2, int size)
 {
-    val = val | val << 8;
-    val = val | val << 16;
-    val = val | val << 32;
+    int ret;
 
     asm volatile (
-    "movq %%rdi, %%rdx\n\t"
-    "sar $3, %%rcx\n\t"
+    "xorq %%rax, %%rax\n\t"
+    "sar $2, %%rcx\n\t"
     "cld\n\t"
-    "rep stosq"
-    : "=d"(mem)
-    : "D"(mem), "a"(val), "c"(size)
+    "repz cmpsd\n\t"
+    "movzx -4(%%rsi), %%rax\n\t"
+    "movzx -4(%%rdi), %%rdx\n\t"
+    "sub  %%rdx, %%rax"
+    : "=rax"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
     : "memory"
     );
-    return mem;
+    return ret;
+}
+
+static inline int __erms_cmpsq(const void * mem1, const void * mem2, int size)
+{
+    int ret;
+
+    asm volatile (
+    "xorq %%rax, %%rax\n\t"
+    "sar $3, %%rcx\n\t"
+    "cld\n\t"
+    "repz cmpsd\n\t"
+    "movzx -8(%%rsi), %%rax\n\t"
+    "movzx -8(%%rdi), %%rdx\n\t"
+    "sub  %%rdx, %%rax"
+    : "=rax"(ret)
+    : "S"(mem1), "D"(mem2), "c"(size)
+    : "memory"
+    );
+    return ret;
 }
 
 #ifdef __cplusplus

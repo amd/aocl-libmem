@@ -35,9 +35,10 @@ extern "C" {
 static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 {
     asm volatile (
+    "movq %%rdi, %%rax\n\t"
     "cld\n\t"
     "rep movsb"
-    :
+    : "=a"(dst)
     : "D"(dst), "S"(src), "c"(len)
     : "memory"
     );
@@ -47,10 +48,11 @@ static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 {
     asm volatile (
+    "movq %%rdi, %%rax\n\t"
     "sar $1, %%rcx\n\t"
     "cld\n\t"
     "rep movsw"
-    :
+    : "=a"(dst)
     : "D"(dst), "S"(src), "c"(len)
     : "memory"
     );
@@ -60,10 +62,11 @@ static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 {
     asm volatile (
+    "movq %%rdi, %%rax\n\t"
     "sar $2, %%rcx\n\t"
     "cld\n\t"
     "rep movsd"
-    :
+    : "=a"(dst)
     : "D"(dst), "S"(src), "c"(len)
     : "memory"
     );
@@ -73,10 +76,11 @@ static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 static inline void * __erms_movsq(void *dst, const void * src, size_t len)
 {
     asm volatile (
+    "movq %%rdi, %%rax\n\t"
     "sar $3, %%rcx\n\t"
     "cld\n\t"
     "rep movsq"
-    :
+    : "=a"(dst)
     : "D"(dst), "S"(src), "c"(len)
     : "memory"
     );
@@ -143,7 +147,7 @@ static inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
     : "D"(dst + len - 1), "S"(src + len - 1), "c"(len)
     : "memory"
     );
-    return dst;
+    return dst + 1;
 }
 
 static inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
@@ -156,7 +160,7 @@ static inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
     : "D"(dst + len - 2), "S"(src + len - 2), "c"(len)
     : "memory"
     );
-    return dst;
+    return dst + 1;
 }
 
 static inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
@@ -169,7 +173,7 @@ static inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
     : "D"(dst + len - 4), "S"(src + len - 4), "c"(len)
     : "memory"
     );
-    return dst;
+    return dst + 1;
 }
 
 static inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
@@ -182,69 +186,8 @@ static inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
     : "D"(dst + len - 8), "S"(src + len - 8), "c"(len)
     : "memory"
     );
-    return dst;
+    return dst + 1;
 }
-
-static inline void * __erms_stosb(void *mem, int val, size_t size)
-{
-    asm volatile (
-    "cld\n\t"
-    "rep stosb"
-    :
-    : "D"(mem), "a"(val), "c"(size)
-    : "memory"
-    );
-    return mem;
-}
-
-static inline void * __erms_stosw(void *mem, uint16_t val, size_t size)
-{
-    val = val | val << 8;
-    size = size >> 1;
-
-    asm volatile (
-    "cld\n\t"
-    "rep stosw"
-    :
-    : "D"(mem), "a"(val), "c"(size)
-    : "memory"
-    );
-    return mem;
-}
-
-static inline void * __erms_stosd(void *mem, uint32_t val, size_t size)
-{
-    val = val | val << 8;
-    size = size >> 1;
-
-    asm volatile (
-    "cld\n\t"
-    "rep stosw"
-    :
-    : "D"(mem), "a"(val), "c"(size)
-    : "memory"
-    );
-    return mem;
-}
-
-static inline void * __erms_stosq(void *mem, uint64_t val, size_t size)
-{
-    val = val | val << 8;
-    val = val | val << 16;
-    val = val | val << 32;
-
-    size = size >> 3;
-
-    asm volatile (
-    "cld\n\t"
-    "rep stosq"
-    :
-    : "D"(mem), "a"(val), "c"(size)
-    : "memory"
-    );
-    return mem;
-}
-
 
 #ifdef __cplusplus
 }
