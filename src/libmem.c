@@ -72,33 +72,23 @@ static void get_cpu_capabilities()
 static variant_index amd_libmem_resolver(void)
 {
     variant_index var_idx = SYSTEM;
-    if (active_operation_cfg == SYS_CFG && active_threshold_cfg == SYS_CFG)
+    //GCC 12.2 doesnt support znver4 flags at the time of release
+    if (__builtin_cpu_supports("avx512f"))//"znver4"
+        var_idx = ARC_ZEN4;
+    else if (__builtin_cpu_is("znver3"))
+        var_idx = ARC_ZEN3;
+    else if (__builtin_cpu_is("znver2"))
+        var_idx = ARC_ZEN2;
+    else if (__builtin_cpu_is("znver1"))
+        var_idx = ARC_ZEN1;
+    else
     {
-        active_operation_cfg = SYS_CFG;
+        //System operation Config
         LOG_INFO("System Operation CFG\n");
-        switch(zen_info.zen_cache_info.l3_per_ccx)
-        {
-            case ZEN1_L3:
-                var_idx = ARC_ZEN1;
-                break;
-            case ZEN2_L3:
-                var_idx = ARC_ZEN2;
-                break;
-            case ZEN3_L3:
-                if(zen_info.zen_cache_info.l2_per_core == ZEN3_L2)
-                    var_idx = ARC_ZEN3;
-#ifdef AVX512_FEATURE_ENABLED
-                else
-                    var_idx = ARC_ZEN4;
-#endif
-                break;
-            default:
-                //System operation/feature & computed threshold Config
-                LOG_DEBUG("Operation & Threshold CFG\n");
-                var_idx = SYSTEM;
-        }
+        var_idx = SYSTEM;
     }
-    else if (active_operation_cfg == USR_CFG) //User Operation Config
+
+    if (active_operation_cfg == USR_CFG) //User Operation Config
     {
         LOG_INFO("User Operation Config\n");
         if (user_config.user_operation.avx2) //AVX2 operations
@@ -193,18 +183,14 @@ static __attribute__((constructor)) void libmem_init()
 #endif
     if (active_operation_cfg == SYS_CFG && active_threshold_cfg == SYS_CFG)
     {
-        //set variant index (uArch) based on L3 cache (_zen1, _zen2, _zen3, _zen4, _zen5)
-        //if failed to get uArch, then call system capabilities based(CPU flags)
         compute_sys_thresholds(&zen_info);
         configure_thresholds();
-        get_cpu_capabilities(); // call this on failure to configure SYS or USER cfg.
-        //set variant index to system capability variant (_syscap)
+        get_cpu_capabilities();
     }
 #ifdef ENABLE_TUNABLES
-    //Call resolver to intialize the entry_fn_ptr;
     variant_index impl_idx;
     impl_idx  = amd_libmem_resolver();
-    
+
     _memcpy_variant = libmem_impls_1[MEMCPY][impl_idx];
     _mempcpy_variant = libmem_impls_1[MEMPCPY][impl_idx];
     _memmove_variant = libmem_impls_1[MEMMOVE][impl_idx];
