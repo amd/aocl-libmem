@@ -66,6 +66,9 @@ add_subdirectory(memmove)
 add_subdirectory(memset)
 add_subdirectory(memcmp)
 
+#String Functions
+add_subdirectory(strcpy)
+
 if (${BUILD_SHARED_LIBS})
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib/shared)
 else ()
