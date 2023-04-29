@@ -87,7 +87,6 @@ static inline void memcmp_wrapper(uint8_t * dst, uint8_t * src, size_t size)
 
 static inline void strcpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
 {
-    *(src + size -1) = '\0';
     strcpy(dst, src);
 }
 
@@ -257,12 +256,22 @@ int main(int argc, char **argv)
             printf("%lu,", diff);
             break;
         case CACHED:
+            if (!strcmp(lm_func->func_name, "memcmp"))
+            {
+                for (size_t i =0; i< size;i++)
+                *(src_alnd + i) = *(dst_alnd + i) = 'a'+ rand()%26;
+            }
+            else if (!strcmp(lm_func->func_name, "strcpy"))
+            {
+                memset(src_alnd, 'c', size);
+               *(src_alnd + size -1) = '\0';
+            }
             if (size < 1*1024*1024)
-         max_iters = SMALL_SIZED_ITERATIONS;
+                max_iters = SMALL_SIZED_ITERATIONS;
             else if (size < 32*1024*1024)
-             max_iters = MID_SIZED_ITERATIONS;
+                max_iters = MID_SIZED_ITERATIONS;
             else
-             max_iters = LARGE_SIZED_ITERATIONS;
+                max_iters = LARGE_SIZED_ITERATIONS;
             for (size_t iter = 0; iter < max_iters; iter++)
                BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
             printf("%lu,", diff/max_iters);

@@ -18,7 +18,6 @@ static void cached_memcpy(benchmark::State& state) {
 
 static void cached_memset(benchmark::State& state) {
   char* src = new char[state.range(0)];
-  //memset(src, 'x', state.range(0));
 
   for (auto _ : state) {
     benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
@@ -47,10 +46,10 @@ static void cached_memcmp(benchmark::State& state) {
   char* src = new char[state.range(0)];
   char* dst = new char[state.range(0)];
 
-  for(unsigned long i=0;i<state.range(0);i++) { 
-    *(src + i) = *(dst + i) ='a' +rand()%26;
-  }
-  *(src + state.range(0) -1) ='$';
+  memset(src, 'x', state.range(0));
+  memset(dst, 'x', state.range(0));
+
+  *(src + state.range(0) - 1) ='$';
 
   for (auto _ : state) {
     benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));

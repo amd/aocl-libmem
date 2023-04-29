@@ -166,8 +166,7 @@ void memcmp_wrapper(int64_t *dst, int64_t *src, int size)
 
 void strcpy_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    *(src+size-1)='\0';
-    strcpy((char *)dst,(char *) src);
+    strcpy((char *)dst, (char *) src);
 }
 
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
@@ -232,6 +231,11 @@ int main(int argc, char **argv)
                                                 NULL, 0);
 
         printf("SIZE: %zu B \n",bufsize);
+        if (!strcmp(bench_func[0].description, "strcpy"))
+        {
+            memset(srcbuf, 'c', bufsize);
+           *((char *)srcbuf + bufsize -1) = '\0';
+        }
 
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
 
