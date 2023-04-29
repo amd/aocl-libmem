@@ -28,6 +28,8 @@ Highlights of AMD AOCL-LibMem version 4.0.1
     - TinyMemBench: Modified version of existing tbm.
     - FleetBench: Probabilistic mode (based on the existing Googleworkload dataset)
  * Added Enhanced LibMem Validator tool for functionality testing.
+ * Added Support for strcpy function
+ * Added AOCL-LibMem Profiler Tool
 
 Highlights of AMD AOCL-LibMem version 4.0
 --------------------------------------------

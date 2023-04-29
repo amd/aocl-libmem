@@ -4,7 +4,9 @@ tunable parameter to choose specific implementation of a string/memory function
 as per the use case requirements. This document describe how to tune the parameters
  along with the valid configuration settings for each of the supported function.
 
-## 1.
+## 1. Running an Application with Tunables
+Following two states are possible with this library based on the tunable settings:
+
 ### 1.1. Default State
 By default, LibMem will choose the best fit implementation based on the underlying microarchitecture.
 

@@ -2,9 +2,9 @@
 
 ## Requirements
  * **cmake 3.11**
- * **python 3.6**
- * **gcc 11.1**
- * **aocc 3.2**
+ * **python 3.10**
+ * **gcc 12.2.0**
+ * **aocc 4.0**
 
 ## Build Procedure:
 ### Shared Library:

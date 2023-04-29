@@ -17,10 +17,10 @@ Passed / Failed.
 ## Arguments for the framework
 
     $ ./validator.py -r [start] [end] -a[src] [dst] -t[iterator count] <mem_function>
-        -r Range = [Start] and [End] range in Bytes.
-        -a alignment = [src] and [dst] alignments. Default alignment is 64B for both source and destination.
-        -t <iterator>   = specify the iteration pattern. Default is "2x" of starting size - '<<1'
-        <mem_function> = memcpy,memset,memcmp,memmove,mempcpy.
+        -r Range       = [Start] and [End] range in Bytes.
+        -a alignment   = [src] and [dst] alignments. Default alignment is 64B for both source and destination.
+        -t <iterator>  = specify the iteration pattern. Default is "2x" of starting size - '<<1'
+        <mem_function> = memcpy,memset,memcmp,memmove,mempcpy,strcpy.
 
 ## Example
         Sample Run: $./validator.py -r 8 64 -a 5 8 -t"+1" memcpy

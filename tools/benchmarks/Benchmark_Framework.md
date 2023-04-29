@@ -69,16 +69,23 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
 ## Running Bench framework
 
-    $ ./bench.py <name_of_the_benchmark> <memory_function> -x<core_id> -r [start] [end] -i<iterations>
-        <name_of_the_benchmark> = gbm,tbm,lbm,fbm.
+    $ ./bench.py <benchmark_name> <memory_function> -m <mode> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
+        <benchmark_name>  = gbm,tbm,lbm,fbm.
         <memory_function> = memcpy,memset,memmove,memcmp.
+        -m <Mode>         = c,u,p,w (LBM) and c,u(GBM)
         -x <core_id>      =  Enter the CPU core on which you want to run the benchmark.
         -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)
+        -t "iter_value"   = increments the start size by "value".(0 stands for size<<1; other +ve integers stands for incremental iterations.)
         -i <iterations>   = specify the no.of iterations.
 
     Example:
     Running LibMem bench framework
-    $ ./bench.py lbm memcpy -r 8 4096 -i 1000 -x 16
+    $ ./bench.py lbm memcpy -r 8 4096  -i 1000 -x 16
+    Runs the LBM benchmark for size[8,16,32,64...] with 1000 iterations on core -16
+    Here default iter_value 0 does size<<1
+    $ ./bench.py gbm memcpy -r 8 16 -m c -t "1" -x 16
+    Runs the Google Benchmark for Cached Mode Memcpy for sizes[8,9,..16] on core -16
+
 
     Benchmark Help option
     $ ./bench.py -h
