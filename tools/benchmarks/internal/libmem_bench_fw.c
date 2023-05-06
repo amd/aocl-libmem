@@ -82,12 +82,12 @@ static inline void memset_wrapper(uint8_t * dst, uint8_t * src, size_t size)
 
 static inline void memcmp_wrapper(uint8_t * dst, uint8_t * src, size_t size)
 {
-    memcmp(dst, src, size);
+    (void)memcmp(dst, src, size);
 }
 
 static inline void strcpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
 {
-    strcpy(dst, src);
+    strcpy((char *)dst, (char *)src);
 }
 
 

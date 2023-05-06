@@ -38,10 +38,11 @@ static inline int __erms_cmpsb(const void * mem1, const void * mem2, int size)
 
     asm volatile (
     "xorq %%rax, %%rax\n\t"
+    "xorq %%rdx, %%rdx\n\t"
     "cld\n\t"
     "repz cmpsb\n\t"
-    "movzx -1(%%rsi), %%rax\n\t"
-    "movzx -1(%%rdi), %%rdx\n\t"
+    "movzx -1(%%rsi), %%ax\n\t"
+    "movzx -1(%%rdi), %%dx\n\t"
     "sub  %%rdx, %%rax"
     : "=rax"(ret)
     : "S"(mem1), "D"(mem2), "c"(size)
@@ -56,11 +57,12 @@ static inline int __erms_cmpsw(const void * mem1, const void * mem2, int size)
 
     asm volatile (
     "xorq %%rax, %%rax\n\t"
+    "xorq %%rdx, %%rdx\n\t"
     "sar $1, %%rcx\n\t"
     "cld\n\t"
     "repz cmpsw\n\t"
-    "movzx -2(%%rsi), %%rax\n\t"
-    "movzx -2(%%rdi), %%rdx\n\t"
+    "movzx -2(%%rsi), %%ax\n\t"
+    "movzx -2(%%rdi), %%dx\n\t"
     "sub  %%rdx, %%rax"
     : "=rax"(ret)
     : "S"(mem1), "D"(mem2), "c"(size)
@@ -69,18 +71,20 @@ static inline int __erms_cmpsw(const void * mem1, const void * mem2, int size)
     return ret;
 }
 
-
+//rep cmpsd not supported in Clang
+#ifndef ALMEM_CMPSD_CLANG_WORKAROUND
 static inline int __erms_cmpsd(const void * mem1, const void * mem2, int size)
 {
     int ret;
 
     asm volatile (
     "xorq %%rax, %%rax\n\t"
+    "xorq %%rdx, %%rdx\n\t"
     "sar $2, %%rcx\n\t"
     "cld\n\t"
     "repz cmpsd\n\t"
-    "movzx -4(%%rsi), %%rax\n\t"
-    "movzx -4(%%rdi), %%rdx\n\t"
+    "movzx -4(%%rsi), %%ax\n\t"
+    "movzx -4(%%rdi), %%dx\n\t"
     "sub  %%rdx, %%rax"
     : "=rax"(ret)
     : "S"(mem1), "D"(mem2), "c"(size)
@@ -88,6 +92,7 @@ static inline int __erms_cmpsd(const void * mem1, const void * mem2, int size)
     );
     return ret;
 }
+#endif
 
 static inline int __erms_cmpsq(const void * mem1, const void * mem2, int size)
 {
@@ -95,11 +100,12 @@ static inline int __erms_cmpsq(const void * mem1, const void * mem2, int size)
 
     asm volatile (
     "xorq %%rax, %%rax\n\t"
+    "xorq %%rdx, %%rdx\n\t"
     "sar $3, %%rcx\n\t"
     "cld\n\t"
-    "repz cmpsd\n\t"
-    "movzx -8(%%rsi), %%rax\n\t"
-    "movzx -8(%%rdi), %%rdx\n\t"
+    "repz cmpsq\n\t"
+    "movzx -8(%%rsi), %%ax\n\t"
+    "movzx -8(%%rdi), %%dx\n\t"
     "sub  %%rdx, %%rax"
     : "=rax"(ret)
     : "S"(mem1), "D"(mem2), "c"(size)
