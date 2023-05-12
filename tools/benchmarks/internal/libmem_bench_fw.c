@@ -36,7 +36,7 @@
 #define PAGE_WALK_STEPS 10
 
 #define SMALL_SIZED_ITERATIONS 100000000
-#define MID_SIZED_ITERATIONS 10000
+#define MID_SIZED_ITERATIONS 100000
 #define LARGE_SIZED_ITERATIONS 1000
 
 typedef enum {
@@ -110,7 +110,7 @@ libmem_func supp_funcs[]=
     {"none",    NULL}
 };
 
-#define BENCHMARK_FUNC(func, dst, src, size)    \
+#define BENCHMARK_FUNC(func, src, dst, size)    \
         clk_start = rdtscp_start();             \
         func(dst, src, size);                   \
         clk_end = rdtscp_end();                 \
@@ -248,33 +248,35 @@ int main(int argc, char **argv)
         dst_alnd = dst + dst_alignment;
         //dummy call to avoid resolver latency on first call
         lm_func->func(dst_alnd, src_alnd, 0);
-
+        diff = 0;
         switch(lm_bench->b_mode)
         {
         case UNCACHED:
             BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
-            printf("%lu,", diff);
+            printf("%llu,", diff);
             break;
         case CACHED:
+            memset(src_alnd, 'c', size);
             if (!strcmp(lm_func->func_name, "memcmp"))
             {
-                for (size_t i =0; i< size;i++)
-                *(src_alnd + i) = *(dst_alnd + i) = 'a'+ rand()%26;
+                memset(dst_alnd, 'c', size);
             }
             else if (!strcmp(lm_func->func_name, "strcpy"))
             {
-                memset(src_alnd, 'c', size);
-               *(src_alnd + size -1) = '\0';
+                *(src_alnd + size -1) = '\0';
             }
+
             if (size < 1*1024*1024)
-                max_iters = SMALL_SIZED_ITERATIONS;
+                max_iters = SMALL_SIZED_ITERATIONS/(size/8);
             else if (size < 32*1024*1024)
                 max_iters = MID_SIZED_ITERATIONS;
             else
                 max_iters = LARGE_SIZED_ITERATIONS;
-            for (size_t iter = 0; iter < max_iters; iter++)
+
+            for (size_t iter = 0; iter < max_iters; iter++){
                BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
-            printf("%lu,", diff/max_iters);
+	        }
+            printf("%llu,", diff/max_iters);
             break;
         case WALK:
             for (int steps = 0; steps < WALK_STEPS; steps++)
@@ -286,7 +288,7 @@ int main(int argc, char **argv)
 
                 BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
             }
-            printf("%lu,", diff/WALK_STEPS);
+            printf("%llu,", diff/WALK_STEPS);
             break;
         case PAGE_WALK:
             diff = 0;
@@ -297,7 +299,7 @@ int main(int argc, char **argv)
 
                 BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
             }
-            printf("%lu,", diff/PAGE_WALK_STEPS);
+            printf("%llu,", diff/PAGE_WALK_STEPS);
             break;
         }
         free(src);

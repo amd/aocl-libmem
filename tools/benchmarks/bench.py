@@ -97,7 +97,7 @@ def main():
                             c - cached, u - un-cached, w - walk, p - page_walk\
                             GBM supports [c,u] & LBM supports [c,u,w,p]",\
                             type = str, choices = ['c', 'u', 'w', 'p'], \
-                            default = ['m'])
+                            default = 'm')
     parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
                                 and destination addresses. Default alignment\
                                 is 64B for both source and destination.(ONLY LBM)",

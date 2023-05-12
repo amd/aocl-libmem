@@ -86,29 +86,38 @@ class LBM:
                 self.bench_mode = 'c'
 
             data = []
+            iterations = 1
+            top_percent = 1
             if self.mode == 'm' and self.size >= self.mixed_bench_marker:
                 self.bench_mode = 'u'
+
+            if self.bench_mode == 'c':
+                iterations = 2
+                top_percent = 1
+            else:
+                iterations = self.iterations
+                top_percent = 0.5
 
             total = None
             file_name = lib_variant+"_raw.csv"
             with open(file_name, 'a+') as latency_sz:
-                for i in range(0, self.iterations):
+                for i in range(0, iterations):
                     subprocess.run(['taskset', '-c', self.core_id,"numactl","-C"+str(self.core_id), \
                     '../tools/benchmarks/internal/libmem_bench_fw', \
                     self.libmem_func, str(self.start_size), str(self.end_size),self.src_align, \
                     self.dst_align,self.bench_mode, self.iterator],\
                     stdout=latency_sz, env = env)
 
-            average_of_top_60_percent=[]
+            average_of_top_x_percent=[]
             df= pd.read_csv(file_name)
 
-            #Removin the last NULL column
+            #Removing the last NULL column
             df = df.iloc[:,:-1]
             #TOP 60% value
             for indx in df.columns:
                 sorted_column = df[indx].sort_values(ascending = True)
-                top_60_percent_index = int(len(sorted_column) * 0.6)
-                average_of_top_60_percent.append( round(sorted_column[:top_60_percent_index].mean()))
+                top_x_percent_index = int(len(sorted_column) * top_percent)
+                average_of_top_x_percent.append( round(sorted_column[:top_x_percent_index].mean()))
 
             pos=0
             iterator = "<< 1"
@@ -116,7 +125,7 @@ class LBM:
                 iterator = "+"+(self.iterator)
             size = int(self.start_size)
             while size <= int(self.end_size):
-                data = [size, average_of_top_60_percent[pos]]
+                data = [size, average_of_top_x_percent[pos]]
                 pos=pos+1
                 report_writer.writerow(data)
                 size = eval('size'+' '+ iterator)
