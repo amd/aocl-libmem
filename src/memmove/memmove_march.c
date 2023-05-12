@@ -197,15 +197,9 @@ void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
 {
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
-    if (size == 0)
-        return dst;
     if (size <= ZMM_SZ)
     {
-       __m512i z0;
-        z0 = _mm512_loadu_si512(src);
-       __mmask64 mask = ((uint64_t)-1) >> (64 - size);
-        _mm512_mask_storeu_epi8(dst, mask, z0);
-        return dst;
+        return __load_store_ble_zmm_vec(dst, src, size);
     }
 #else
     if (size <= 2 * YMM_SZ)

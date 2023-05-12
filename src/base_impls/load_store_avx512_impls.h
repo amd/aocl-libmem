@@ -48,6 +48,21 @@ extern "C" {
 #define VEC_SZ_AVX512           64
 
 
+static inline void *__load_store_ble_zmm_vec(void *store_addr, const void *load_addr, size_t size)
+{
+    __m512i z0, z1;
+    __mmask64 mask;
+
+    if (size == 0)
+        return store_addr;
+
+    mask = ((uint64_t)-1) >> (64 - size);
+    z1 = _mm512_setzero_epi32();
+    z0 =  _mm512_mask_loadu_epi8(z1 ,mask, load_addr);
+    _mm512_mask_storeu_epi8(store_addr, mask, z0);
+    return store_addr;
+}
+
 static inline void *__load_store_ble_2zmm_vec(void *store_addr, const void *load_addr, size_t size)
 {
     __m512i z0, z1;
