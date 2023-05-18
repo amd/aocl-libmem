@@ -373,7 +373,7 @@ static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
     size_t index;
     void *ret = NULL;
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + 1, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -385,25 +385,29 @@ static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     //intialize src memory
     for (index = 0; index < size; index++)
-        *(src_alnd_addr +index) = 'a' + rand()%26;
-
+    {
+        *(src_alnd_addr + index) = (char)(rand()%128);
+        if (*(src_alnd_addr + index) == '\0')
+            *(src_alnd_addr + index) = 'a';
+    }
     //Appending Null Charachter at the end of src string
-    *(src_alnd_addr + size -1) = '\0';
+    *(src_alnd_addr + size) = '\0';
     ret = strcpy((char *)dst_alnd_addr, (char *)src_alnd_addr);
 
     //validation of dst memory
-    for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
+    for (index = 0; (index <= size) && (*(dst_alnd_addr + index) == \
                             *(src_alnd_addr + index)); index ++);
 
-    if (index != size)
+    if (index != (size + 1))
         printf("ERROR: Data Validation failed for size: %lu @index:%lu" \
                     "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-                 size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
         printf("Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
+        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", \
+                                                             dst_alnd_addr, ret);
 
     free(buff);
 }
