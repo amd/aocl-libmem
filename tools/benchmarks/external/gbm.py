@@ -54,23 +54,26 @@ class GBM:
         self.bench_name='GooglBench_Cached'
         self.iterator = self.MYPARSER['ARGS']['iterator']
         self.func=self.MYPARSER['ARGS']['func']
+        self.LibMemVersion=''
+        self.GlibcVersion=''
+        self.size_unit=[]
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
         if (not self.isExist):
             print("Downloading and Configuring GoogleBench")
-            subprocess.run(["git","clone", "https://github.com/google/benchmark.git"],cwd=self.path)
-            subprocess.run(["git","clone", "https://github.com/google/googletest.git","benchmark/googletest"],cwd=self.path)
+            subprocess.run(["git","clone","-c","advice.detachedHead=false","-b","v1.8.0","https://github.com/google/benchmark.git"],cwd=self.path)
+            subprocess.run(["git","clone","-b","v1.13.x","https://github.com/google/googletest.git","benchmark/googletest"],cwd=self.path)
             subprocess.run(['cmake','-E','make_directory','build'],cwd=self.path+"/benchmark")
             subprocess.run(['cmake','-E','chdir','build','cmake','-DBENCHMARK_DOWNLOAD_DEPENDENCIES=on','-DCMAKE_BUILD_TYPE=Release','../'],cwd=self.path+"/benchmark")
             subprocess.run(['cmake','--build','build','--config','Release'],cwd=self.path+"/benchmark")
 
-        self.result_dir = 'out/' + self.func + '/' + \
-        datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-        os.makedirs(self.result_dir, exist_ok=False)
-
         if self.memory_operation == 'u':
             self.bench_name='GooglBench_UnCached'
+
+        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
+        datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        os.makedirs(self.result_dir, exist_ok=False)
 
         print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
 
@@ -85,46 +88,54 @@ class GBM:
         self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
 
-        #Converting the G/s values to M/s
-        for i in range(len(self.amd_throughput_values)):
-            if "G/s" in self.amd_throughput_values[i]:
-                self.value = float(self.amd_throughput_values[i].strip("G/s"))
-                self.value *= 1024
-                self.amd_throughput_values[i] = self.value
-            else:
-                self.value = float(self.amd_throughput_values[i].strip("M/s"))
-                self.amd_throughput_values[i] = self.value
+        #Converting the M/s values to G/s
+        self.throughput_converter(self.amd_throughput_values)
+        self.throughput_converter(self.glibc_throughput_values)
 
-        for i in range(len(self.glibc_throughput_values)):
-            if "G/s" in self.glibc_throughput_values[i]:
-                self.value = float(self.glibc_throughput_values[i].strip("G/s"))
-                self.value *= 1024
-                self.glibc_throughput_values[i] = self.value
-            else:
-                self.value = float(self.glibc_throughput_values[i].strip("M/s"))
-                self.glibc_throughput_values[i] = self.value
-
-        #print(self.glibc_throughput_values)
-        #print(self.amd_throughput_values)
         self.gains=[]
         for value in range(len(self.size_values)):
-                self.gains.append(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
-                        self.glibc_throughput_values[value] )*100))
+                self.gains.append(str(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
+                        self.glibc_throughput_values[value] )*100))+str('%'))
+
+        #Converting sizes to B,KB,MB for reports
+        self.data_unit()
 
         # Open the output file
         with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
                 newline="") as output_file:
             writer = csv.writer(output_file)
             # Write the values to the CSV file
-            writer.writerow(["Size", "amd_Throughput","glibc_Throughput",\
+            writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
                     "GAINS"])
-            for size, athroughput , gthroughput, g  in zip(self.size_values, \
-                    self.amd_throughput_values,self.glibc_throughput_values,self.gains):
-                    writer.writerow([size, athroughput,gthroughput,g])
+            for size, gthroughput , athroughput, g  in zip(self.size_unit, \
+                    self.glibc_throughput_values,self.amd_throughput_values,self.gains):
+                    writer.writerow([size, gthroughput,athroughput,g])
 
         self.print_result()
         return
 
+    def throughput_converter(self,value):
+        for i in range(len(value)):
+
+            if "G/s" in value[i]:
+                self.value = float(value[i].strip("G/s"))
+                value[i] = self.value
+            else:
+                self.value = float(value[i].strip("M/s"))
+                self.value /= 1000
+                value[i] = self.value
+        return
+
+    def data_unit(self):
+        for x in range(len(self.size_values)):
+            if int(self.size_values[x]) >= 1024*1024:
+                self.size_unit.append(str(int(self.size_values[x])/(1024*1024))+ " MB")
+            elif int(self.size_values[x]) >= 1024:
+                self.size_unit.append(str(int(self.size_values[x])/(1024))+ " KB")
+            else:
+                self.size_unit.append(str(int(self.size_values[x]))+ " B")
+
+        return
 
     def print_result(self):
         input_file = read_csv(self.result_dir+"/"+str(self.bench_name)+\
@@ -135,15 +146,9 @@ class GBM:
         print("    SIZE".ljust(8)+"     : GAINS")
         print("    ----------------")
         for x in range(len(self.size)):
-            if int(self.size[x]) >= 1024*1024:
-                print("   ",((str(int(self.size[x])/(1024*1024)))+" MB").ljust(8)+" :"+\
-                    (str(self.gains[x])+"%").rjust(6))
-            elif int(self.size[x]) >= 1024:
-                print("   ",((str(int(self.size[x])/(1024)))+" KB").ljust(8)+" :"+(str\
-                    (self.gains[x])+"%").rjust(6))
-            else:
-                print("   ",(str(int(self.size[x])) + " B").ljust(8)+" :"+(str\
-                    (self.gains[x])+"%").rjust(6))
+                print("   ",(self.size[x]).ljust(8)+" :"+\
+                    (str(self.gains[x])).rjust(6))
+
 
         print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
         return True
@@ -151,15 +156,15 @@ class GBM:
     def gbm_run(self):
 
         if self.variant =="amd":
-            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+            self.LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = '../../../../lib/shared/libaocl-libmem.so'
-            print("GBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("GBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
         else:
-            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
+            self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
 
             env['LD_PRELOAD'] = ''
-            print("GBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
+            print("GBM : Running Benchmark on GLIBC "+str(self.GlibcVersion,'utf-8').strip())
         # size zero will result in 0 throughput.
         if (self.ranges[0] == 0):
             self.ranges[0] = 1;

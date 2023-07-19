@@ -61,18 +61,22 @@ class FBM:
                    "Google S","Google U","Google W"]
 
         self.func=self.MYPARSER['ARGS']['func']
+        self.LibMemVersion=''
+        self.GlibcVersion=''
+
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/fleetbench')
         if (not self.isExist):
             print("Preparing Fleetbench benchmark")
-            subprocess.run(["git","clone", "https://github.com/google/fleetbench.git"],cwd=self.path)
+            subprocess.run(["git","clone","-c","advice.detachedHead=false","-b","v0.2","https://github.com/google/fleetbench.git"],cwd=self.path)
             subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable"],cwd=self.path+"/fleetbench")
 
-        self.result_dir = 'out/' + self.func + '/' + \
+        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
         print("Benchmarking of "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
+
         self.variant="glibc"
         self.fbm_run()
         self.variant="amd"
@@ -82,50 +86,44 @@ class FBM:
             self.glibc_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"glibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
             self.amd_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
 
-        #print(self.glibc_raw)
-        #print(self.amd_raw)
+        self.amd_raw=[item[0] for item in self.amd_raw]
+        self.glibc_raw=[item[0] for item in self.glibc_raw]
 
-        for i in range(len(self.glibc_raw)):
-            if 'M/s' in self.glibc_raw[i][0]:
-                value = self.glibc_raw[i][0].split('M/s')[0]
-                value = float(value)
-                value /=1024
-                self.glibc_throughput_value.append(float(value))
-            else:
-                value =self.glibc_raw[i][0].split('G/s')[0]
-                self.glibc_throughput_value.append(float(value))
-
-            if 'M/s' in self.amd_raw[i][0]:
-                value =self.amd_raw[i][0].split('M/s')[0]
-                value = float(value)
-                value /=1024
-                self.amd_throughput_value.append(float(value))
-            else:
-                value =self.amd_raw[i][0].split('G/s')[0]
-                self.amd_throughput_value.append(float(value))
-
-        #print(self.glibc_throughput_value)
-        #print(self.amd_throughput_value)
+        #Converting the M/s values to G/s
+        self.amd_throughput_value=self.throughput_converter(self.amd_raw)
+        self.glibc_throughput_value=self.throughput_converter(self.glibc_raw)
 
         self.gains=[]
         for value in range(len(self.amd_throughput_value)):
-                self.gains.append(round (((self.amd_throughput_value[value] - self.glibc_throughput_value[value] )/ \
-                        self.glibc_throughput_value[value] )*100))
+                self.gains.append(str(round (((self.amd_throughput_value[value] - self.glibc_throughput_value[value] )/ \
+                        self.glibc_throughput_value[value] )*100))+str('%'))
 
         # Open the output file
         with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
                 newline="") as output_file:
             writer = csv.writer(output_file)
             # Write the values to the CSV file
-            writer.writerow(["Size", "amd_Throughput","glibc_Throughput",\
-                        "GAINS"])
-            for size, athroughput , gthroughput, g  in zip(self.data, \
-                    self.amd_throughput_value,self.glibc_throughput_value,self.gains):
-                    writer.writerow([size, athroughput,gthroughput,g])
+            writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
+                    "GAINS"])
+            for size, gthroughput , athroughput, g  in zip(self.data, \
+                    self.glibc_throughput_value,self.amd_throughput_value,self.gains):
+                    writer.writerow([size, gthroughput,athroughput,g])
 
         self.print_result()
         return True
 
+    def throughput_converter(self,value):
+        print(type(value))
+        print("......",value)
+        for i in range(len(value)):
+            if 'G/s' in value[i]:
+                self.value = value[i].strip("G/s")
+                value[i]=float(self.value)
+            else:
+                self.value = float(value[i].strip("M/s"))
+                self.value /= 1000
+                value[i]=float(self.value)
+        return value
 
     def print_result(self):
         input_file = read_csv(self.result_dir+"/"+str(self.bench_name)+\
@@ -137,24 +135,24 @@ class FBM:
         print("    ----------------")
         for x in range(len(self.size)):
                 print("   ",(str(self.size[x])).ljust(8)+" :"+\
-                    (str(self.gains[x])+"%").rjust(6))
+                    (str(self.gains[x])).rjust(6))
 
         print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
         return
 
     def fbm_run(self):
         if self.variant =="amd":
-            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+            self.LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             #Setting up the Absolute path for LD_PRELOAD
             mycwd=os.getcwd()
             dirname = os.path.dirname(mycwd)
             env['LD_PRELOAD']= dirname+str('/lib/shared/libaocl-libmem.so')
-            print("FBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("FBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
         else:
-            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
+            self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''
-            print("FBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
+            print("FBM : Running Benchmark on GLIBC "+str(self.GlibcVersion,'utf-8').strip())
 
         #Adding Tcmalloc Allocator
         if(self.allocator == 'tcmalloc'):

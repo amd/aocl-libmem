@@ -78,55 +78,46 @@ static void cached_strcpy(benchmark::State& state) {
 }
 
 static void uncached_memcpy(benchmark::State& state) {
+const size_t bufferSize = state.range(0) * 4096 ;
+char *src = new char[bufferSize];
+char *dst = new char[bufferSize];
+srand(time(0));
   for (auto _ : state) {
-    state.PauseTiming();
-    char *src = new char[state.range(0)];
-    char *dst = new char[state.range(0)];
-    state.ResumeTiming();
-    benchmark::DoNotOptimize(memcpy(dst, src, state.range(0)));
+    benchmark::DoNotOptimize(memcpy(src + (rand()%1024)  , dst + (rand()%1024) ,state.range(0)));
+   }
 
-    state.PauseTiming();
-    delete[] src;
-    delete[] dst;
-    state.ResumeTiming();
-  }
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
-
+  delete[] src;
+  delete[] dst;
 }
 
 static void uncached_memset(benchmark::State& state) {
+const size_t bufferSize = state.range(0) * 4096 ;
+char *src = new char[bufferSize];
+srand(time(0));
   for (auto _ : state) {
-    state.PauseTiming();
-    char *src = new char[state.range(0)];
-    state.ResumeTiming();
-    benchmark::DoNotOptimize(memset(src,'x', state.range(0)));
-
-    state.PauseTiming();
+    benchmark::DoNotOptimize(memset(src + (rand()%1024),'x', state.range(0)));
+    }
     delete[] src;
-    state.ResumeTiming();
-  }
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
 
 }
 
 static void uncached_memmove(benchmark::State& state) {
+  const size_t bufferSize = state.range(0) * 4096 ;
+char *src = new char[bufferSize];
+char *dst = new char[bufferSize];
+srand(time(0));
   for (auto _ : state) {
-    state.PauseTiming();
-    char *src = new char[state.range(0)];
-    char *dst = new char[state.range(0)];
-    state.ResumeTiming();
-    benchmark::DoNotOptimize(memmove(dst, src, state.range(0)));
+    benchmark::DoNotOptimize(memmove(src + (rand()%1024)  , dst + (rand()%1024) ,state.range(0)));
+   }
 
-    state.PauseTiming();
-    delete[] src;
-    delete[] dst;
-    state.ResumeTiming();
-  }
   state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
-
+  delete[] src;
+  delete[] dst;
 }
 
 static void uncached_memcmp(benchmark::State& state) {

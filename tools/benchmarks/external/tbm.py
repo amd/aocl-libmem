@@ -51,6 +51,9 @@ class TBM:
         self.bench_name='TinyMemBench'
         self.func=self.MYPARSER['ARGS']['func']
         self.iterator = self.MYPARSER['ARGS']['iterator']
+        self.LibMemVersion=''
+        self.GlibcVersion=''
+        self.size_unit=[]
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/tinymembench')
@@ -63,7 +66,7 @@ class TBM:
                     "util.o","asm-opt.o","x86-sse2.o","-lm"],cwd=self.path+"/tinymembench")
             print("prepared TINYMEMBENCH")
 
-        self.result_dir = 'out/' + self.func + '/' + \
+        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
         print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
@@ -81,26 +84,40 @@ class TBM:
         self.glibc_throughput_values = subprocess.run(["sed", "-n", r"s/.*:\s*\([0-9.]*\) MB\/s.*/\1/p", "glibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.gains = []
 
-        self.amd = [eval(i) for i in self.amd_throughput_values]
-        self.glibc = [eval(i) for i in self.glibc_throughput_values]
+        self.amd = [eval(i)/1000 for i in self.amd_throughput_values]
+        self.glibc = [eval(i)/1000 for i in self.glibc_throughput_values]
 
         for value in range(len(self.size_values)):
-            self.gains.append(round (((self.amd[value] - self.glibc[value] )/ self.glibc[value] )*100))
+            self.gains.append(str(round (((self.amd[value] - self.glibc[value] )/ self.glibc[value] )*100))+str('%'))
+
+        #Converting sizes to B,KB,MB for reports
+        self.data_unit()
 
         # Open the output file
         with open(self.result_dir+'/'+str(self.bench_name)+"throughput_values.csv",\
                 "w", newline="") as output_file:
             writer = csv.writer(output_file)
             # Write the values to the CSV file
-            writer.writerow(["Size", "amd_Throughput","glibc_Throughput",\
+            writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
                     "GAINS"])
-            for size, athroughput , gthroughput, g  in zip(self.size_values, \
-                    self.amd_throughput_values,self.glibc_throughput_values,self.gains):
-                    writer.writerow([size, athroughput,gthroughput,g])
+
+            for size, gthroughput , athroughput, g  in zip(self.size_unit, \
+                    self.glibc,self.amd,self.gains):
+                    writer.writerow([size, gthroughput,athroughput,g])
 
         self.print_result()
         return
 
+    def data_unit(self):
+        for x in range(len(self.size_values)):
+            if int(self.size_values[x]) >= 1024*1024:
+                self.size_unit.append(str(int(self.size_values[x])/(1024*1024))+ " MB")
+            elif int(self.size_values[x]) >= 1024:
+                self.size_unit.append(str(int(self.size_values[x])/(1024))+ " KB")
+            else:
+                self.size_unit.append(str(int(self.size_values[x]))+ " B")
+
+        return
 
     def print_result(self):
         input_file = read_csv(self.result_dir+"/"+str(self.bench_name)+\
@@ -111,30 +128,23 @@ class TBM:
         print("    SIZE".ljust(8)+"     : GAINS")
         print("    ----------------")
         for x in range(len(self.size)):
-            if int(self.size[x]) >= 1024*1024:
-                print("   ",((str(int(self.size[x])/(1024*1024)))+" MB").ljust(8)+" :"+\
-                    (str(self.gains[x])+"%").rjust(6))
-            elif int(self.size[x]) >= 1024:
-                print("   ",((str(int(self.size[x])/(1024)))+" KB").ljust(8)+" :"+(str\
-                    (self.gains[x])+"%").rjust(6))
-            else:
-                print("   ",(str(int(self.size[x])) + " B").ljust(8)+" :"+(str\
-                    (self.gains[x])+"%").rjust(6))
+                print("   ",(self.size[x]).ljust(8)+" :"+\
+                    (str(self.gains[x])).rjust(6))
 
         print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
         return
 
     def tiny_run(self):
         if self.variant =="amd":
-            LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
+            self.LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
                 | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
 
             env['LD_PRELOAD'] = '../../../../../lib/shared/libaocl-libmem.so'
-            print("TBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
+            print("TBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
         else:
-            GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
+            self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
             env['LD_PRELOAD'] = ''
-            print("TBM : Running Benchmark on GLIBC "+str(GlibcVersion,'utf-8').strip())
+            print("TBM : Running Benchmark on GLIBC "+str(self.GlibcVersion,'utf-8').strip())
 
         # size zero will result in 0 throughput.
         if (self.ranges[0] == 0):
