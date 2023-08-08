@@ -31,7 +31,7 @@ endif()
 
 
 # set the project name and version
-set(LIBMEM_VERSION_STRING 4.0.1)
+set(LIBMEM_VERSION_STRING 4.1.1)
 
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
                         "Library of AMD optimized string/memory functions")
