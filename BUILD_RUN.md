@@ -1,7 +1,7 @@
 # Build & Run Guide for **_AOCL-LibMem_**
 
 ## Requirements
- * **cmake 3.11**
+ * **cmake 3.17**
  * **python 3.10**
  * **gcc 12.2.0**
  * **aocc 4.0**

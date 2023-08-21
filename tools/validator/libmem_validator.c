@@ -435,6 +435,8 @@ int main(int argc, char **argv)
     unsigned int offset, src_alignment = 0, dst_alignment = 0;
     libmem_func *lm_func_validator = &supp_funcs[0]; //default func is memcpy
 
+    int al_check = 0;
+
     if (argc < 6)
     {
         if(argv[1] == NULL)
@@ -468,5 +470,23 @@ int main(int argc, char **argv)
 
     srand(time(0));
 
-    lm_func_validator->func(size, dst_alignment, src_alignment);
+    if (argv[5] != NULL)
+        al_check = atoi(argv[5]); //Check for alignment validation test.
+
+    if(al_check == 0)
+    {
+        lm_func_validator->func(size, dst_alignment, src_alignment);
+    }
+    
+    else
+    {   
+        for(unsigned int aln_src  = 0; aln_src < CACHE_LINE_SZ; aln_src++)
+        {
+            for(unsigned int aln_dst = 0; aln_dst < CACHE_LINE_SZ; aln_dst++)
+            {
+                lm_func_validator->func(size, aln_dst, aln_src);
+            }
+        }
+            
+    }
 }
