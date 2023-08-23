@@ -1,6 +1,6 @@
 (C) 2022-23 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 4.0.1
+AMD Memory/String Library - AOCL-LibMem Release Notes 4.1.1
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
@@ -16,23 +16,8 @@ cache, and threads per CCX.
 b) This library also provides tunables for the user to choose specific
 implementation of the function as per the application requirements.
 
-Highlights of AMD AOCL-LibMem version 4.0.1
---------------------------------------------
- * Added support for cross-compiling AVX2 binaries and AVX512 machine
-    and vice-versa.
-   Note: Running avx512 binary on non-avx512 machine will crash.
- * Added static library support.
- * Added new modes for LibMemBench: Cached, Un-cached, Page, Walk & Mixed
- * Added External benchmarking frameworks
-    - GoogleBench:Cahed & Un-cached
-    - TinyMemBench: Modified version of existing tbm.
-    - FleetBench: Probabilistic mode (based on the existing Googleworkload dataset)
- * Added Enhanced LibMem Validator tool for functionality testing.
- * Added Support for strcpy function
- * Added AOCL-LibMem Profiler Tool
 
-Highlights of AMD AOCL-LibMem version 4.0
+Highlights of AMD AOCL-LibMem version 4.1.1
 --------------------------------------------
- * Added support for Zen4 architecture.
- * Added support for AVX512 and to choose the instruction and alignment
-     with help of tunables.
+ * Optimized memcmp for AVX512.
+ * Benchmarking improvements.
