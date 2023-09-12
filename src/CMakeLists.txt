@@ -37,6 +37,10 @@ if (${BUILD_SHARED_LIBS})
 # build a shared library
 add_compile_options(-fPIC -flto)
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+if(ENABLE_GCOV AND ENABLE_LOGGING)
+  target_compile_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
+  target_link_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
+endif()
 else ()
 # build a static library
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})

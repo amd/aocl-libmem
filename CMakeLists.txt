@@ -51,6 +51,8 @@ option(ENABLE_LOGGING "Enable Logger" OFF)
 
 option(ENABLE_TUNABLES "Enable user input" OFF)
 
+option(ENABLE_GCOV "Enable Code Coverage" OFF)
+
 if (ENABLE_LOGGING)
 add_definitions(-DENABLE_LOGGER)
 # uncomment the below for debug logs, LOG_LEVEL=DEBUG.
