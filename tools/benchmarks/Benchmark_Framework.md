@@ -71,7 +71,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
     $ ./bench.py <benchmark_name> <memory_function> -m <mode> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
         <benchmark_name>  = gbm,tbm,lbm,fbm.
-        <memory_function> = memcpy,memset,memmove,memcmp.
+        <memory_function> = memcpy,memset,memmove,memcmp,strcpy,strncpy.
         -m <Mode>         = c,u,p,w (LBM) and c,u(GBM)
         -x <core_id>      =  Enter the CPU core on which you want to run the benchmark.
         -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)

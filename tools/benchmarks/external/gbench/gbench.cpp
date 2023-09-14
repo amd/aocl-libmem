@@ -77,6 +77,22 @@ static void cached_strcpy(benchmark::State& state) {
   delete[] dst;
 }
 
+static void cached_strncpy(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  char* dst = new char[state.range(0)];
+  for(unsigned long i=0;i<state.range(0);i++) {
+    *(src + i) = 'a' +rand()%26;
+  }
+  *(src + state.range(0) -1) ='\0';
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(strncpy(dst, src, state.range(0)));
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+  delete[] dst;
+}
+
 static void uncached_memcpy(benchmark::State& state) {
 const size_t bufferSize = state.range(0) * 4096 ;
 char *src = new char[bufferSize];
@@ -167,6 +183,30 @@ static void uncached_strcpy(benchmark::State& state) {
 
 }
 
+static void uncached_strncpy(benchmark::State& state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    char *src = new char[state.range(0)];
+    char *dst = new char[state.range(0)];
+
+    for(unsigned long i=0;i<state.range(0);i++) {
+    *(src + i) = 'a' +rand()%26;
+    }
+    *(src + state.range(0) -1) ='\0';
+
+    state.ResumeTiming();
+    benchmark::DoNotOptimize(strncpy(dst, src, state.range(0)));
+
+    state.PauseTiming();
+    delete[] src;
+    delete[] dst;
+    state.ResumeTiming();
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+
+}
+
 int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int end, unsigned int iter) {
   if (iter)
   {
@@ -205,6 +245,13 @@ int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int 
       else if(mode =='u')
         BENCHMARK(uncached_strcpy)->DenseRange(start,end,iter);
     }
+    else if(func=="strncpy")
+    {
+      if(mode =='c')
+        BENCHMARK(cached_strncpy)->DenseRange(start,end,iter);
+      else if(mode =='u')
+        BENCHMARK(uncached_strncpy)->DenseRange(start,end,iter);
+    }
   }
   else
   {
@@ -242,6 +289,13 @@ int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int 
         BENCHMARK(cached_strcpy)->RangeMultiplier(2)->Range(start,end);
       else if(mode =='u')
         BENCHMARK(uncached_strcpy)->RangeMultiplier(2)->Range(start,end);
+    }
+    else if(func=="strncpy")
+    {
+      if(mode =='c')
+        BENCHMARK(cached_strncpy)->RangeMultiplier(2)->Range(start,end);
+      else if(mode =='u')
+        BENCHMARK(uncached_strncpy)->RangeMultiplier(2)->Range(start,end);
     }
   }
   return 0;

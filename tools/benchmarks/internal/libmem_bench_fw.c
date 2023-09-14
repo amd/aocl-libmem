@@ -90,6 +90,11 @@ static inline void strcpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
     strcpy((char *)dst, (char *)src);
 }
 
+static inline void strncpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
+{
+    strncpy((char *)dst, (char *)src, size);
+}
+
 
 libmem_bench supp_modes[]=
 {
@@ -107,6 +112,7 @@ libmem_func supp_funcs[]=
     {"memset",  memset_wrapper},
     {"memcmp",  memcmp_wrapper},
     {"strcpy",  strcpy_wrapper},
+    {"strncpy", strncpy_wrapper},
     {"none",    NULL}
 };
 
@@ -261,7 +267,7 @@ int main(int argc, char **argv)
             {
                 memset(dst_alnd, 'c', size);
             }
-            else if (!strcmp(lm_func->func_name, "strcpy"))
+            else if (!strcmp(lm_func->func_name, "strcpy") || !strcmp(lm_func->func_name, "strncpy"))
             {
                 *(src_alnd + size -1) = '\0';
             }

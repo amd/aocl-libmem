@@ -13,6 +13,7 @@ This release of AOCL-LibMem library supports the following functions:
 + memset
 + memcmp
 + strcpy
++ strncpy
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:

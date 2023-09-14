@@ -28,7 +28,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/<validation_report.csv
         -r Range       = [Start] and [End] range in Bytes.
         -a alignment   = [src] and [dst] alignments. Default alignment is 64B for both source and destination.
         -t <iterator>  = specify the iteration pattern. Default is "2x" of starting size - '<<1'
-        <mem_function> = memcpy,memset,memcmp,memmove,mempcpy,strcpy.
+        <mem_function> = memcpy,memset,memcmp,memmove,mempcpy,strcpy,strncpy
 
 ## Example
         Sample Run: $./validator.py -r 8 64 -a 5 8 -t"+1" memcpy
@@ -70,7 +70,7 @@ The following three test categories are supported:
 
     $ ctest -R <Matching test regex> -E <Exclude regex> -j [<jobs>]
     <regrex>:     function_[MODE]
-                  "memcpy","memset","memmove","memcmp","strcpy"   (Runs all the test cases iter,shift and alignment)
+                  "memcpy","memset","memmove","memcmp","strcpy","strncpy"   (Runs all the test cases iter,shift and alignment)
                   "iter"                                 (Runs Iterator test cases on all the functions)
                   "shift"                                (Runs Shift test cases on all the functions)
                   "align"                                (Runs Alignment test cases on all the functions)
