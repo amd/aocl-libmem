@@ -29,7 +29,7 @@
 #include <time.h>
 
 #define CACHE_LINE_SZ   64
-
+#define BOUNDARY_BYTES  8
 typedef struct
 {
     const char *func_name;
@@ -425,11 +425,11 @@ static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
 
 static inline void boundary_check(uint8_t *dst, size_t size)
 {
-    for(size_t index = (size+1); index <= (size+4); index++)
+    for(size_t index = size; index <= size + BOUNDARY_BYTES; index++)
     {
         if(*(dst + index) != '#')
         {
-            printf("ERROR: Dst corrupted beyond strlen @index:%d\n", index);
+            printf("ERROR: Dst corrupted beyond strlen @index:%ld for size: %ld\n", index, size);
             break;
         }
     }
@@ -443,7 +443,7 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
     size_t index, src_len;
     void *ret = NULL;
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size + 4, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -459,8 +459,8 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
         if (*(src_alnd_addr + index) == '\0')
             *(src_alnd_addr + index) = 'a';
     }
-    for(index = size+1 ; index <= size+4 ; index++)
-    *(dst_alnd_addr + index) = '#';
+    for(index = size; index <= size + BOUNDARY_BYTES; index++)
+        *(dst_alnd_addr + index) = '#';
 
     //CASE 1:validation when NULL terminating char is beyond strlen
     ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
@@ -476,7 +476,7 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
         printf("[strlen > n] Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR:[strlen > n] Return value mismatch: expected - %p, actual - %p\n", \
+        printf("ERROR:[strlen > n] Return value mismatch: expected - %p, actual - %p\n",
                                                              dst_alnd_addr, ret);
 
 
@@ -492,10 +492,10 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     //CASE 2:validation when index of NULL char is equal to strlen
     //Appending Null Charachter at the end of src string
-    *(src_alnd_addr + size) = '\0';
+    *(src_alnd_addr + size - 1) = '\0';
 
     //Passing the size including the NULL char(size+1)
-    ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size + 1);
+    ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
 
     //validation of dst memory
     for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
@@ -512,12 +512,6 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
         printf("ERROR:[strlen = n] Return value mismatch: expected - %p, actual - %p\n", \
                                                              dst_alnd_addr, ret);
 
-    //NULL check for dest
-    if(*(dst_alnd_addr + index) != '\0')
-    {
-        printf("ERROR: NULL terminating char check failed for dst @index:%lu\n", index);
-    }
-
     //Check if the dst buffer was modified after 'n bytes' copy
     boundary_check(dst_alnd_addr, size);
 
@@ -526,6 +520,9 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     srand(time(0));
     src_len = (rand() %(size));  //Min = 0, Max = size
+    if (src_len > 0)
+        src_len--;
+
     *(src_alnd_addr + src_len) = '\0';
 
     ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
@@ -536,28 +533,25 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
     if (index != (src_len + 1))
         printf("ERROR:[strlen < n] Data Validation failed for size: %lu @index:%lu" \
                     "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-              src_len, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
-    else
-        printf("[strlen < n] Data Validation passed for size: %lu\n", src_len);
+              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+    //Checking for NULL after src_len in dst buffer
+    for (;index < size; index++)
+    {
+        if(dst_alnd_addr[index] != '\0')
+        {
+            printf("ERROR:[strlen < n] NULL Validation failed at index:%lu" \
+                        " for size: %ld(strlen = %ld)\n", index, size, src_len);
+            break;
+        }
+    }
+    if (index == size)
+        printf("[strlen < n] Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
         printf("ERROR:[strlen < n] Return value mismatch: expected - %p, actual - %p\n", \
                                                              dst_alnd_addr, ret);
 
 
-    //Checking for NULL after src_len in dst buffer
-    if(size > src_len)
-    {
-        size_t i;
-        for(i = src_len; i <= size; i++)
-        {
-            if(dst_alnd_addr[i] != '\0')
-            {   printf("ERROR: NULL Validation failed for destination at index:%lu\n", i);
-                break;
-            }
-
-        }
-    }
     //Check if the dst buffer was modified after 'n bytes' copy
     boundary_check(dst_alnd_addr, size);
 
