@@ -207,97 +207,53 @@ static void uncached_strncpy(benchmark::State& state) {
 
 }
 
+
+typedef struct
+{
+    const char *func_name;
+    void  (*func)(benchmark::State&);
+} libmem_func;
+
+libmem_func supp_funcs[]=
+{
+    {"cmemcpy",  cached_memcpy},
+    {"cmemset",  cached_memset},
+    {"cmemmove", cached_memmove},
+    {"cmemcmp",  cached_memcmp},
+    {"cstrcpy",  cached_strcpy},
+    {"cstrncpy", cached_strncpy},
+    {"umemcpy",  uncached_memcpy},
+    {"umemset",  uncached_memset},
+    {"umemmove", uncached_memmove},
+    {"umemcmp",  uncached_memcmp},
+    {"ustrcpy",  uncached_strcpy},
+    {"ustrncpy", uncached_strncpy},
+    {"none",    NULL}
+};
+
 int AddBenchmarks(std::string func, char mode,unsigned  int start, unsigned int end, unsigned int iter) {
-  if (iter)
-  {
-    if(func=="memcpy")
+
+libmem_func *lm_func = &supp_funcs[0]; //default func is cached-memcpy
+
+// {c,u} + Mem_function
+std::string bench_function = mode + func;
+const char* mode_function = bench_function.c_str();
+
+for (int idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
+{
+    if (!strcmp(supp_funcs[idx].func_name, mode_function))
     {
-      if(mode == 'c')
-        BENCHMARK(cached_memcpy)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_memcpy)->DenseRange(start,end,iter);
+        lm_func = &supp_funcs[idx];
+        break;
     }
-    else if(func=="memset")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memset)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_memset)->DenseRange(start,end,iter);
-    }
-    else if(func=="memmove")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memmove)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_memmove)->DenseRange(start,end,iter);
-    }
-    else if(func=="memcmp")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memcmp)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_memcmp)->DenseRange(start,end,iter);
-    }
-    else if(func=="strcpy")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_strcpy)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_strcpy)->DenseRange(start,end,iter);
-    }
-    else if(func=="strncpy")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_strncpy)->DenseRange(start,end,iter);
-      else if(mode =='u')
-        BENCHMARK(uncached_strncpy)->DenseRange(start,end,iter);
-    }
-  }
-  else
-  {
-    if(func=="memcpy")
-    {
-      if(mode == 'c')
-        BENCHMARK(cached_memcpy)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_memcpy)->RangeMultiplier(2)->Range(start,end);
-    }
-    else if(func=="memset")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memset)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_memset)->RangeMultiplier(2)->Range(start,end);
-    }
-    else if(func=="memmove")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memmove)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_memmove)->RangeMultiplier(2)->Range(start,end);
-    }
-    else if(func=="memcmp")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_memcmp)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_memcmp)->RangeMultiplier(2)->Range(start,end);
-    }
-    else if(func=="strcpy")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_strcpy)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_strcpy)->RangeMultiplier(2)->Range(start,end);
-    }
-    else if(func=="strncpy")
-    {
-      if(mode =='c')
-        BENCHMARK(cached_strncpy)->RangeMultiplier(2)->Range(start,end);
-      else if(mode =='u')
-        BENCHMARK(uncached_strncpy)->RangeMultiplier(2)->Range(start,end);
-    }
-  }
+}
+
+    if(iter)
+    BENCHMARK(lm_func->func)->DenseRange(start,end,iter);
+
+    else
+    BENCHMARK(lm_func->func)->RangeMultiplier(2)->Range(start,end);
+
   return 0;
 }
 
@@ -307,8 +263,6 @@ int main(int argc, char** argv) {
   std::string func;
 
   func = argv[2];
-
-  std::cout<<func<<"FUNCTION";
 
   if(argv[3]!=NULL)
     mode= *argv[3];
@@ -321,7 +275,8 @@ int main(int argc, char** argv) {
   if (argv[6] != NULL)
     iter = atoi(argv[6]);
 
-  std::cout<<"SIZE"<<size_start<<" "<<size_end<<std::endl;
+  std::cout<<"FUNCTION: "<<func<<" MODE: "<<mode<<std::endl;
+  std::cout<<"SIZE: "<<size_start<<" "<<size_end<<std::endl;
   AddBenchmarks(func, mode, size_start, size_end, iter);
   ::benchmark::Initialize(&argc, argv);
   ::benchmark::RunSpecifiedBenchmarks();
