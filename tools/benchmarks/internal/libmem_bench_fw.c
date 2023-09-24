@@ -39,6 +39,13 @@
 #define MID_SIZED_ITERATIONS 100000
 #define LARGE_SIZED_ITERATIONS 1000
 
+#define implicit_func_decl_push_ignore \
+    _Pragma("GCC diagnostic push") \
+    _Pragma("GCC diagnostic ignored \"-Wimplicit-function-declaration\"") \
+
+#define implicit_func_decl_pop \
+    _Pragma("GCC diagnostic pop") \
+
 typedef enum {
     UNCACHED=0,
     CACHED,
@@ -67,7 +74,9 @@ static inline void memcpy_wrapper(uint8_t *dst, uint8_t *src, size_t size)
 
 static inline void mempcpy_wrapper(uint8_t * dst, uint8_t * src, size_t size)
 {
+    implicit_func_decl_push_ignore
     mempcpy(dst, src, size);
+    implicit_func_decl_pop
 }
 
 static inline void memmove_wrapper(uint8_t * dst, uint8_t * src, size_t size)

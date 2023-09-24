@@ -40,6 +40,13 @@ typedef struct
 #define NON_OVERLAP_BUFFER    1
 #define DEFAULT               2
 
+#define implicit_func_decl_push_ignore \
+    _Pragma("GCC diagnostic push") \
+    _Pragma("GCC diagnostic ignored \"-Wimplicit-function-declaration\"") \
+
+#define implicit_func_decl_pop \
+    _Pragma("GCC diagnostic pop") \
+
 typedef uint8_t alloc_mode;
 
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
@@ -133,7 +140,11 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
     //intialize src memory
     for (index = 0; index < size; index++)
         *(src_alnd_addr +index) = 'a' + rand()%26;
+
+    implicit_func_decl_push_ignore
     ret = mempcpy(dst_alnd_addr, src_alnd_addr, size);
+    implicit_func_decl_pop
+
     //validation of dst memory
     for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
                             *(src_alnd_addr + index)); index ++);
