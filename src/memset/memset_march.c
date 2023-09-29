@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -40,14 +40,14 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 
     if (size >= XMM_SZ)
     {
-        x0 = _mm_set1_epi8(val);
         if (size >= YMM_SZ)
         {
-            y0 = _mm256_broadcastb_epi8(x0);
+            y0 = _mm256_set1_epi8(val);
             _mm256_storeu_si256(mem, y0);
             _mm256_storeu_si256(mem + size - YMM_SZ, y0);
             return mem;
         }
+        x0 = _mm_set1_epi8(val);
         _mm_storeu_si128(mem, x0);
         _mm_storeu_si128(mem + size - XMM_SZ, x0);
         return mem;
@@ -77,17 +77,19 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
         *((uint16_t*)(mem + size - WORD_SZ)) = shft_val;
         return mem;
     }
-    *((uint8_t*)mem) = (uint8_t)val;
+    if (size == 1)
+    {
+        *((uint8_t*)mem) = (uint8_t)val;
+    }
     return mem;
 }
 
 static inline void *_memset_avx2(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0 = _mm_set1_epi8(val);
     size_t offset = 0;
 
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     if (size < 4 * YMM_SZ)
     {
         _mm256_storeu_si256(mem , y0);
@@ -122,11 +124,9 @@ static inline void *_memset_avx2(void *mem, int val, size_t size)
 static inline void *nt_store(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0;
     size_t offset = 0;
 
-    x0 = _mm_set1_epi8(val);
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
     _mm256_storeu_si256(mem, y0);
     size -= offset;

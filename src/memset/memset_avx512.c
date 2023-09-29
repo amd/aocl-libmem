@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -36,21 +36,21 @@ static inline void *memset_le_2zmm(void *mem, int val, size_t size)
 
     if (size >= XMM_SZ)
     {
-        x0 = _mm_set1_epi8(val);
         if (size >= YMM_SZ)
         {
             if (size >= ZMM_SZ)
             {
-                z0 = _mm512_broadcastb_epi8(x0);
+                z0 = _mm512_set1_epi8(val);
                 _mm512_storeu_si512(mem, z0);
                 _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
                 return mem;
             }
-            y0 = _mm256_broadcastb_epi8(x0);
+            y0 = _mm256_set1_epi8(val);
             _mm256_storeu_si256(mem, y0);
             _mm256_storeu_si256(mem + size - YMM_SZ, y0);
             return mem;
         }
+        x0 = _mm_set1_epi8(val);
         _mm_storeu_si128(mem, x0);
         _mm_storeu_si128(mem + size - XMM_SZ, x0);
         return mem;
@@ -80,7 +80,10 @@ static inline void *memset_le_2zmm(void *mem, int val, size_t size)
         *((uint16_t*)(mem + size - 2)) = shft_val;
         return mem;
     }
-    *((uint8_t*)mem) = (uint8_t)val;
+    if (size == 1)
+    {
+        *((uint8_t*)mem) = (uint8_t)val;
+    }
     return mem;
 }
 
@@ -95,8 +98,7 @@ void *__memset_avx512_unaligned(void *mem, int val, size_t size)
     if (size <= 2 * ZMM_SZ)
         return memset_le_2zmm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    z0 = _mm512_broadcastb_epi8(x0);
+    z0 = _mm512_set1_epi8(val);
     if (size <= 4 * ZMM_SZ)
     {
         _mm512_storeu_si512(mem , z0);
@@ -139,8 +141,7 @@ void *__memset_avx512_aligned(void *mem, int val, size_t size)
     if (size <= 2 * ZMM_SZ)
         return memset_le_2zmm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    z0 = _mm512_broadcastb_epi8(x0);
+    z0 = _mm512_set1_epi8(val);
 
     //compute the offset to align the mem to ZMM_SZ Byte boundary
     offset = ZMM_SZ - ((size_t)mem & (ZMM_SZ - 1));
@@ -186,8 +187,7 @@ void *__memset_avx512_nt(void *mem, int val, size_t size)
     if (size <= 2 * ZMM_SZ)
         return memset_le_2zmm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    z0 = _mm512_broadcastb_epi8(x0);
+    z0 = _mm512_set1_epi8(val);
     //compute the offset to align the mem to ZMM_SZ Bztes boundarz
     offset = ZMM_SZ - ((size_t)mem & (ZMM_SZ - 1));
     _mm512_storeu_si512(mem, z0);

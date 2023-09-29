@@ -76,17 +76,19 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
         *((uint16_t*)(mem + size - 2)) = shft_val;
         return mem;
     }
-    *((uint8_t*)mem) = (uint8_t)val;
+    if (size == 1)
+    {
+        *((uint8_t*)mem) = (uint8_t)val;
+    }
     return mem;
 }
 
 static inline void *_memset_avx2(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0 = _mm_set1_epi8(val);
     size_t offset = 0;
 
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     if (size < 4 * YMM_SZ)
     {
         _mm256_storeu_si256(mem , y0);
@@ -121,11 +123,9 @@ static inline void *_memset_avx2(void *mem, int val, size_t size)
 static inline void *nt_store(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0;
     size_t offset = 0;
 
-    x0 = _mm_set1_epi8(val);
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
     _mm256_storeu_si256(mem, y0);
     size -= offset;
