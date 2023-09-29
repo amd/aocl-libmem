@@ -81,10 +81,20 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
 static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
                                                  uint32_t src_alnmnt)
 {
-    uint8_t *buff, *buff_head, *buff_tail;
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
+
+    //special case to handle size ZERO with NULL buff.
+    if (size == 0)
+    {
+        ret = memcpy(buff, buff, size);
+        if (ret != NULL)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
 
@@ -125,6 +135,16 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
+
+    //special case to handle size ZERO with NULL buffer inputs.
+    if (size == 0)
+    {
+        ret = mempcpy(buff, buff, size);
+        if (ret != buff)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_tail, &buff_head, size, NON_OVERLAP_BUFFER);
 
@@ -170,6 +190,17 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL, *validation_addr = NULL;
     size_t index;
     void *ret = NULL;
+
+    //special case to handle size ZERO with NULL buffer inputs.
+    if (size == 0)
+    {
+        ret = memmove(buff, buff, size);
+        if (ret != buff)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
+
     // Overlapping Memory Validation
     buff = alloc_buffer(&buff_head, &buff_tail, size, OVERLAP_BUFFER);
 
@@ -281,6 +312,15 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
     int value;
     size_t index;
     void *ret = NULL;
+    //special case to handle size ZERO with NULL buff inputs.
+    if (size == 0)
+    {
+        ret = memset(buff, value, size);
+        if (ret != buff)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size, DEFAULT);
 
@@ -317,10 +357,20 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
 static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
                                                  uint32_t mem1_alnmnt)
 {
-    uint8_t *buff, *buff_head, *buff_tail;
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *mem2_alnd_addr = NULL, *mem1_alnd_addr = NULL;
     size_t index;
     int ret, exp_ret, validation_passed = 1;
+
+    //special case to handle size ZERO with NULL buff inputs.
+    if (size == 0)
+    {
+        ret = memcmp(buff, buff, size);
+        if (ret != 0)
+            printf("ERROR: Return value mismatch for size(%lu): expected - 0"\
+                        ", actual - %d\n", size, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
 
@@ -379,10 +429,20 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
 static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
                                                  uint32_t src_alnmnt)
 {
-    uint8_t *buff, *buff_head, *buff_tail;
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
+
+    //special case to handle size ZERO with NULL buff inputs.
+    if (size == 0)
+    {
+        ret = strcpy(buff, buff);
+        if (ret != buff)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size + 1, NON_OVERLAP_BUFFER);
 
@@ -438,10 +498,21 @@ static inline void boundary_check(uint8_t *dst, size_t size)
 static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
                                                  uint32_t src_alnmnt)
 {
-    uint8_t *buff, *buff_head, *buff_tail;
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
     size_t index, src_len;
     void *ret = NULL;
+
+
+    //special case to handle size ZERO with NULL buff inputs.
+    if (size == 0)
+    {
+        ret = strncpy(buff, buff, size);
+        if (ret != buff)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, buff, ret);
+        return;
+    }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
@@ -482,13 +553,6 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     //Check if the dst buffer was modified after 'n bytes' copy
     boundary_check(dst_alnd_addr, size);
-
-    //verfication for size = 0 ; but not strlen
-    if(size == 0)
-    {
-        free(buff);
-        return;
-    }
 
     //CASE 2:validation when index of NULL char is equal to strlen
     //Appending Null Charachter at the end of src string
@@ -623,9 +687,9 @@ int main(int argc, char **argv)
     {
         lm_func_validator->func(size, dst_alignment, src_alignment);
     }
-    
+
     else
-    {   
+    {
         for(unsigned int aln_src  = 0; aln_src < CACHE_LINE_SZ; aln_src++)
         {
             for(unsigned int aln_dst = 0; aln_dst < CACHE_LINE_SZ; aln_dst++)
@@ -633,6 +697,5 @@ int main(int argc, char **argv)
                 lm_func_validator->func(size, aln_dst, aln_src);
             }
         }
-            
     }
 }
