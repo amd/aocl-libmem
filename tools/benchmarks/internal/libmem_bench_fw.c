@@ -268,7 +268,7 @@ int main(int argc, char **argv)
         {
         case UNCACHED:
             BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
-            printf("%llu,", diff);
+            printf("%lu,", diff);
             break;
         case CACHED:
             memset(src_alnd, 'c', size);
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
             for (size_t iter = 0; iter < max_iters; iter++){
                BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
 	        }
-            printf("%llu,", diff/max_iters);
+            printf("%lu,", diff/max_iters);
             break;
         case WALK:
             for (int steps = 0; steps < WALK_STEPS; steps++)
@@ -303,7 +303,7 @@ int main(int argc, char **argv)
 
                 BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
             }
-            printf("%llu,", diff/WALK_STEPS);
+            printf("%lu,", diff/WALK_STEPS);
             break;
         case PAGE_WALK:
             diff = 0;
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
 
                 BENCHMARK_FUNC(lm_func->func, src_alnd, dst_alnd, size);
             }
-            printf("%llu,", diff/PAGE_WALK_STEPS);
+            printf("%lu,", diff/PAGE_WALK_STEPS);
             break;
         }
         free(src);

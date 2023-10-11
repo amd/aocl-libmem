@@ -139,7 +139,9 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
     //special case to handle size ZERO with NULL buffer inputs.
     if (size == 0)
     {
+        implicit_func_decl_push_ignore
         ret = mempcpy(buff, buff, size);
+        implicit_func_decl_pop
         if (ret != buff)
             printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
@@ -437,7 +439,7 @@ static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
     {
-        ret = strcpy(buff, buff);
+        ret = strcpy((char*)buff, (char*)buff);
         if (ret != buff)
             printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
@@ -507,7 +509,7 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
     {
-        ret = strncpy(buff, buff, size);
+        ret = strncpy((char*)buff, (char*)buff, size);
         if (ret != buff)
             printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);

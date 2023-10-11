@@ -90,7 +90,6 @@ static inline void *memset_le_2zmm(void *mem, int val, size_t size)
 void *__memset_avx512_unaligned(void *mem, int val, size_t size)
 {
     __m512i z0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
@@ -133,7 +132,6 @@ void *__memset_avx512_unaligned(void *mem, int val, size_t size)
 void *__memset_avx512_aligned(void *mem, int val, size_t size)
 {
     __m512i z0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
@@ -179,7 +177,6 @@ void *__memset_avx512_aligned(void *mem, int val, size_t size)
 void *__memset_avx512_nt(void *mem, int val, size_t size)
 {
     __m512i z0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
