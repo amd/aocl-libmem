@@ -78,6 +78,33 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
     return (uint8_t *)buff_addr;
 }
 
+static inline void prepare_boundary(uint8_t *dst, size_t size)
+{
+    for (size_t index = 1; index <= BOUNDARY_BYTES; index++)
+    {
+        *(dst - index) = '#';
+        *(dst + size + index - 1) = '#';
+    }
+}
+
+static inline void boundary_check(uint8_t *dst, size_t size)
+{
+    for (size_t index = 1; index <= BOUNDARY_BYTES; index++)
+    {
+        if (*(dst - index) != '#')
+        {
+            printf("ERROR: Out of bound Data corruption @pre_index:%ld for size: %ld\n", index, size);
+            break;
+        }
+        if (*(dst + size + index - 1) != '#')
+        {
+            printf("ERROR: Out of bound Data corruption @post_index:%ld for size: %ld\n", index, size);
+            break;
+        }
+    }
+
+}
+
 static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
                                                  uint32_t src_alnmnt)
 {
@@ -96,7 +123,7 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
         return;
     }
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -105,6 +132,8 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
     }
     dst_alnd_addr = buff_tail + dst_alnmnt;
     src_alnd_addr = buff_head + src_alnmnt;
+
+    prepare_boundary(dst_alnd_addr, size);
 
     //intialize src memory
     for (index = 0; index < size; index++)
@@ -124,6 +153,8 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
     //validation of return value
     if (ret != dst_alnd_addr)
         printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
+
+    boundary_check(dst_alnd_addr, size);
 
     free(buff);
 }
@@ -148,7 +179,7 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
         return;
     }
 
-    buff = alloc_buffer(&buff_tail, &buff_head, size, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -158,6 +189,8 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
 
     dst_alnd_addr = buff_tail + dst_alnmnt;
     src_alnd_addr = buff_head + src_alnmnt;
+
+    prepare_boundary(dst_alnd_addr, size);
 
     //intialize src memory
     for (index = 0; index < size; index++)
@@ -181,6 +214,8 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
     if (ret != (dst_alnd_addr + size))
         printf("ERROR: Return value mismatch: expected - %p, actual - %p\n",\
                                                  dst_alnd_addr + size, ret);
+
+    boundary_check(dst_alnd_addr, size);
 
     free(buff);
 }
@@ -272,7 +307,7 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
     free(validation_buff);
     buff = NULL;
     // Non Over-lapping memory validation
-    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -281,6 +316,8 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
     }
     dst_alnd_addr = buff_tail + dst_alnmnt;
     src_alnd_addr = buff_head + src_alnmnt;
+
+    prepare_boundary(dst_alnd_addr, size);
 
     //intialize src memory
     for (index = 0; index < size; index++)
@@ -302,8 +339,9 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
         printf("ERROR: Non-Overlapping Return value mismatch: expected - %p,"\
                                         " actual - %p\n", dst_alnd_addr, ret);
 
-    free(buff);
+    boundary_check(dst_alnd_addr, size);
 
+    free(buff);
 }
 
 static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
@@ -324,16 +362,17 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
         return;
     }
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size, DEFAULT);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + 2 * BOUNDARY_BYTES, DEFAULT);
 
     if(buff == NULL)
     {
         perror("Failed to allocate memory");
         exit(-1);
     }
+    //Adding offset of CACHE_LINE_SZ to fit in Boundary bytes
+    dst_alnd_addr = buff_tail + dst_alnmnt + CACHE_LINE_SZ;
 
-    dst_alnd_addr = buff_tail + dst_alnmnt;
-
+    prepare_boundary(dst_alnd_addr, size);
     //choose value to set
     value = rand()%256;
 
@@ -352,6 +391,8 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
     if (ret != dst_alnd_addr)
         printf("ERROR: Return value mismatch: expected - %p, actual - %p\n",\
                                                          dst_alnd_addr, ret);
+
+    boundary_check(dst_alnd_addr, size);
 
     free(buff);
 }
@@ -374,7 +415,7 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
         return;
     }
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
@@ -428,13 +469,14 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
 
 }
 
-static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
-                                                 uint32_t src_alnmnt)
+static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
+    srand(time(0));
 
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
@@ -446,65 +488,76 @@ static inline void strcpy_validator(size_t size, uint32_t dst_alnmnt,\
         return;
     }
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size + 1, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
 
     if(buff == NULL)
     {
         perror("Failed to allocate memory");
         exit(-1);
     }
-    dst_alnd_addr = buff_tail + dst_alnmnt;
-    src_alnd_addr = buff_head + src_alnmnt;
+    str2_alnd_addr = buff_tail + str2_alnmnt;
+    str1_alnd_addr = buff_head + str1_alnmnt;
 
-    //intialize src memory
+    prepare_boundary(str2_alnd_addr, size);
+
+    //intialize str1 memory
     for (index = 0; index < size; index++)
     {
-        *(src_alnd_addr + index) = (char)(rand()%128);
-        if (*(src_alnd_addr + index) == '\0')
-            *(src_alnd_addr + index) = 'a';
+        *(str1_alnd_addr + index) = (char)(rand() % 128);
+        if (*(str1_alnd_addr + index) == '\0')
+            *(str1_alnd_addr + index) = 'a';
     }
-    //Appending Null Charachter at the end of src string
-    *(src_alnd_addr + size) = '\0';
-    ret = strcpy((char *)dst_alnd_addr, (char *)src_alnd_addr);
+    //Appending Null Charachter at the end of str1 string
+    *(str1_alnd_addr + size - 1) = '\0';
+    ret = strcpy((char *)str2_alnd_addr, (char *)str1_alnd_addr);
 
-    //validation of dst memory
-    for (index = 0; (index <= size) && (*(dst_alnd_addr + index) == \
-                            *(src_alnd_addr + index)); index ++);
+    //validation of str2 memory
+    for (index = 0; (index <= size) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
 
-    if (index != (size + 1))
+    if (index != (size))
         printf("ERROR: Data Validation failed for size: %lu @index:%lu" \
-                    "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
         printf("Data Validation passed for size: %lu\n", size);
     //validation of return value
-    if (ret != dst_alnd_addr)
+    if (ret != str2_alnd_addr)
         printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", \
-                                                             dst_alnd_addr, ret);
+                                                             str2_alnd_addr, ret);
+
+    //Multi-Null check
+    size_t more_null_idx = rand() % (size);
+    *(str1_alnd_addr + more_null_idx) = '\0';
+
+    ret = strcpy((char *)str2_alnd_addr, (char *)str1_alnd_addr);
+    for (index = 0; (index <= more_null_idx) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
+
+    if (index != (more_null_idx + 1))
+        printf("ERROR: Multi-NULL check Validation failed for size: %lu @index:%lu" \
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+    else
+        printf("Multi-NULL check Validation passed for size: %lu\n", size);
+    //validation of return value
+    if (ret != str2_alnd_addr)
+        printf("ERROR: Multi-NULL check Return value mismatch: expected - %p, actual - %p\n", \
+                                                             str2_alnd_addr, ret);
+
+    boundary_check(str2_alnd_addr, size);
 
     free(buff);
 }
 
-static inline void boundary_check(uint8_t *dst, size_t size)
-{
-    for(size_t index = size; index <= size + BOUNDARY_BYTES; index++)
-    {
-        if(*(dst + index) != '#')
-        {
-            printf("ERROR: Dst corrupted beyond strlen @index:%ld for size: %ld\n", index, size);
-            break;
-        }
-    }
-
-}
-static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
-                                                 uint32_t src_alnmnt)
+static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *dst_alnd_addr = NULL, *src_alnd_addr = NULL;
-    size_t index, src_len;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
+    size_t index, str1_len;
     void *ret = NULL;
-
+    srand(time(0));
 
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
@@ -523,103 +576,109 @@ static inline void strncpy_validator(size_t size, uint32_t dst_alnmnt,\
         perror("Failed to allocate memory");
         exit(-1);
     }
-    dst_alnd_addr = buff_tail + dst_alnmnt;
-    src_alnd_addr = buff_head + src_alnmnt;
+    str2_alnd_addr = buff_tail + str2_alnmnt;
+    str1_alnd_addr = buff_head + str1_alnmnt;
+
+    prepare_boundary(str2_alnd_addr, size);
 
     for (index = 0; index <= size; index++)
     {
-        *(src_alnd_addr + index) = (char)(rand()%128);
-        if (*(src_alnd_addr + index) == '\0')
-            *(src_alnd_addr + index) = 'a';
+        *(str1_alnd_addr + index) = (char)(rand()%128);
+        if (*(str1_alnd_addr + index) == '\0')
+            *(str1_alnd_addr + index) = 'a';
     }
     for(index = size; index <= size + BOUNDARY_BYTES; index++)
-        *(dst_alnd_addr + index) = '#';
+        *(str2_alnd_addr + index) = '#';
 
     //CASE 1:validation when NULL terminating char is beyond strlen
-    ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
-    //validation of dst memory
-    for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
-                            *(src_alnd_addr + index)); index ++);
+    ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+    //validation of str2 memory
+    for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
 
     if (index != size)
         printf("ERROR:[strlen > n] Data Validation failed for size: %lu @index:%lu" \
-                    "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
         printf("[strlen > n] Data Validation passed for size: %lu\n", size);
     //validation of return value
-    if (ret != dst_alnd_addr)
+    if (ret != str2_alnd_addr)
         printf("ERROR:[strlen > n] Return value mismatch: expected - %p, actual - %p\n",
-                                                             dst_alnd_addr, ret);
+                                                             str2_alnd_addr, ret);
 
 
-    //Check if the dst buffer was modified after 'n bytes' copy
-    boundary_check(dst_alnd_addr, size);
+    //Check if the str2 buffer was modified after 'n bytes' copy
+    boundary_check(str2_alnd_addr, size);
 
     //CASE 2:validation when index of NULL char is equal to strlen
-    //Appending Null Charachter at the end of src string
-    *(src_alnd_addr + size - 1) = '\0';
+    //Appending Null Charachter at the end of str1 string
+    *(str1_alnd_addr + size - 1) = '\0';
 
     //Passing the size including the NULL char(size+1)
-    ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
+    ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
 
-    //validation of dst memory
-    for (index = 0; (index < size) && (*(dst_alnd_addr + index) == \
-                            *(src_alnd_addr + index)); index ++);
+    //validation of str2 memory
+    for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
 
     if (index != size)
         printf("ERROR:[strlen = n] Data Validation failed for size: %lu @index:%lu" \
-                    "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
         printf("[strlen = n] Data Validation passed for size: %lu\n", size);
     //validation of return value
-    if (ret != dst_alnd_addr)
+    if (ret != str2_alnd_addr)
         printf("ERROR:[strlen = n] Return value mismatch: expected - %p, actual - %p\n", \
-                                                             dst_alnd_addr, ret);
+                                                             str2_alnd_addr, ret);
 
-    //Check if the dst buffer was modified after 'n bytes' copy
-    boundary_check(dst_alnd_addr, size);
+    //Check if the str2 buffer was modified after 'n bytes' copy
+    boundary_check(str2_alnd_addr, size);
 
-    //CASE 3:validation when src length is less than that of 'n'(no.of bytes to be copied)
-    //Generating random src buffer of size less than n
+    //CASE 3:validation when str1 length is less than that of 'n'(no.of bytes to be copied)
+    //Generating random str1 buffer of size less than n
 
+    //Multi-Null check
     srand(time(0));
-    src_len = (rand() %(size));  //Min = 0, Max = size
-    if (src_len > 0)
-        src_len--;
+    size_t null_idx = rand() % (size);
+    size_t more_null_idx = rand() % (size - null_idx);
+    str1_len = null_idx;
 
-    *(src_alnd_addr + src_len) = '\0';
+    if (str1_len > 0)
+        str1_len--;
 
-    ret = strncpy((char *)dst_alnd_addr, (char *)src_alnd_addr, size);
-    //validation of dst memory
-    for (index = 0; (index <= src_len) && (*(dst_alnd_addr + index) == \
-                            *(src_alnd_addr + index)); index ++);
+    *(str1_alnd_addr + str1_len) = '\0';
+    *(str1_alnd_addr + str1_len + more_null_idx) = '\0';
 
-    if (index != (src_len + 1))
+    ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+    //validation of str2 memory
+    for (index = 0; (index <= str1_len) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
+
+    if (index != (str1_len + 1))
         printf("ERROR:[strlen < n] Data Validation failed for size: %lu @index:%lu" \
-                    "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
-              size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
-    //Checking for NULL after src_len in dst buffer
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)] (strlen = %lu)\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt, str1_len);
+    //Checking for NULL after str1_len in str2 buffer
     for (;index < size; index++)
     {
-        if(dst_alnd_addr[index] != '\0')
+        if(str2_alnd_addr[index] != '\0')
         {
             printf("ERROR:[strlen < n] NULL Validation failed at index:%lu" \
-                        " for size: %ld(strlen = %ld)\n", index, size, src_len);
+                        " for size: %ld(strlen = %ld)\n", index, size, str1_len);
             break;
         }
     }
     if (index == size)
         printf("[strlen < n] Data Validation passed for size: %lu\n", size);
     //validation of return value
-    if (ret != dst_alnd_addr)
+    if (ret != str2_alnd_addr)
         printf("ERROR:[strlen < n] Return value mismatch: expected - %p, actual - %p\n", \
-                                                             dst_alnd_addr, ret);
+                                                             str2_alnd_addr, ret);
 
-
-    //Check if the dst buffer was modified after 'n bytes' copy
-    boundary_check(dst_alnd_addr, size);
+    //Check if the str2 buffer was modified after 'n bytes' copy
+    boundary_check(str2_alnd_addr, size);
 
     free(buff);
 }
