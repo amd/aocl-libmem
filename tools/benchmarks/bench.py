@@ -71,7 +71,7 @@ class Bench:
             LBM_execute = LBM(ARGS=self.ARGS, class_obj=self)
             LBM_execute() #Status:Success/Failure
 
-libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp','strcpy','strncpy']
+libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp', 'strcpy', 'strncpy', 'strcmp']
 
 def main():
     """

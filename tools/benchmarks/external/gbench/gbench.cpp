@@ -64,10 +64,10 @@ static void cached_memcmp(benchmark::State& state) {
 static void cached_strcpy(benchmark::State& state) {
   char* src = new char[state.range(0)];
   char* dst = new char[state.range(0)];
-  for(unsigned long i=0;i<state.range(0);i++) {
+  for (unsigned long i = 0; i<state.range(0); i++) {
     *(src + i) = 'a' +rand()%26;
   }
-  *(src + state.range(0) -1) ='\0';
+  *(src + state.range(0) - 1) ='\0';
   for (auto _ : state) {
     benchmark::DoNotOptimize(strcpy(dst, src));
   }
@@ -80,10 +80,10 @@ static void cached_strcpy(benchmark::State& state) {
 static void cached_strncpy(benchmark::State& state) {
   char* src = new char[state.range(0)];
   char* dst = new char[state.range(0)];
-  for(unsigned long i=0;i<state.range(0);i++) {
+  for (unsigned long i = 0; i<state.range(0); i++) {
     *(src + i) = 'a' +rand()%26;
   }
-  *(src + state.range(0) -1) ='\0';
+  *(src + state.range(0) - 1) ='\0';
   for (auto _ : state) {
     benchmark::DoNotOptimize(strncpy(dst, src, state.range(0)));
   }
@@ -92,6 +92,25 @@ static void cached_strncpy(benchmark::State& state) {
   delete[] src;
   delete[] dst;
 }
+
+static void cached_strcmp(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+  char* dst = new char[state.range(0)];
+  for (unsigned long i = 0; i<state.range(0); i++) {
+    *(src + i) = *(dst + i) = 'a' +rand()%26;
+  }
+  *(src + state.range(0) - 1) ='\0';
+  *(dst + state.range(0) - 1) ='\0';
+
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(strcmp(dst, src));
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+  delete[] dst;
+}
+
 
 static void uncached_memcpy(benchmark::State& state) {
 const size_t bufferSize = state.range(0) * 4096 ;
@@ -143,10 +162,10 @@ static void uncached_memcmp(benchmark::State& state) {
     char* src = new char[state.range(0)];
     char* dst = new char[state.range(0)];
 
-  for(unsigned long i=0;i<state.range(0);i++) {
+  for (unsigned long i = 0; i<state.range(0); i++) {
     *(src + i) = *(dst + i) ='a' +rand()%26;
   }
-  *(src + state.range(0) -1) ='$';
+  *(src + state.range(0) - 1) ='$';
    state.ResumeTiming();
    benchmark::DoNotOptimize(memcmp(dst, src, state.range(0)));
 
@@ -165,10 +184,10 @@ static void uncached_strcpy(benchmark::State& state) {
     char *src = new char[state.range(0)];
     char *dst = new char[state.range(0)];
 
-    for(unsigned long i=0;i<state.range(0);i++) {
+    for (unsigned long i = 0; i<state.range(0); i++) {
     *(src + i) = 'a' +rand()%26;
     }
-    *(src + state.range(0) -1) ='\0';
+    *(src + state.range(0) - 1) ='\0';
 
     state.ResumeTiming();
     benchmark::DoNotOptimize(strcpy(dst, src));
@@ -189,10 +208,10 @@ static void uncached_strncpy(benchmark::State& state) {
     char *src = new char[state.range(0)];
     char *dst = new char[state.range(0)];
 
-    for(unsigned long i=0;i<state.range(0);i++) {
-    *(src + i) = 'a' +rand()%26;
+    for (unsigned long i = 0; i<state.range(0); i++) {
+        *(src + i) = 'a' +rand()%26;
     }
-    *(src + state.range(0) -1) ='\0';
+    *(src + state.range(0) - 1) ='\0';
 
     state.ResumeTiming();
     benchmark::DoNotOptimize(strncpy(dst, src, state.range(0)));
@@ -207,6 +226,29 @@ static void uncached_strncpy(benchmark::State& state) {
 
 }
 
+static void uncached_strcmp(benchmark::State& state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    char *src = new char[state.range(0)];
+    char *dst = new char[state.range(0)];
+
+    for (unsigned long i = 0; i < state.range(0); i++) {
+        *(src + i) = *(dst + i) = 'a' +rand() % 26;
+    }
+    *(src + state.range(0) - 1) ='\0';
+    *(dst + state.range(0) - 1) ='\0';
+
+    state.ResumeTiming();
+    benchmark::DoNotOptimize(strcmp(dst, src));
+
+    state.PauseTiming();
+    delete[] src;
+    delete[] dst;
+    state.ResumeTiming();
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+}
 
 typedef struct
 {
@@ -222,12 +264,14 @@ libmem_func supp_funcs[]=
     {"cmemcmp",  cached_memcmp},
     {"cstrcpy",  cached_strcpy},
     {"cstrncpy", cached_strncpy},
+    {"cstrcmp",  cached_strcmp},
     {"umemcpy",  uncached_memcpy},
     {"umemset",  uncached_memset},
     {"umemmove", uncached_memmove},
     {"umemcmp",  uncached_memcmp},
     {"ustrcpy",  uncached_strcpy},
     {"ustrncpy", uncached_strncpy},
+    {"ustrcmp",  uncached_strcmp},
     {"none",    NULL}
 };
 

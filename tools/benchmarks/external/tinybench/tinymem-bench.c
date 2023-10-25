@@ -174,6 +174,11 @@ void strncpy_wrapper(int64_t *dst, int64_t *src, int size)
     strncpy((char *)dst, (char *) src, size);
 }
 
+void strcmp_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strcmp((char *)dst, (char *) src);
+}
+
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
                      bench_info *bi)
@@ -196,6 +201,7 @@ bench_info supp_funcs[]=
     {"memcmp", 0, memcmp_wrapper},
     {"strcpy", 0, strcpy_wrapper},
     {"strncpy", 0, strncpy_wrapper},
+    {"strcmp", 0, strcmp_wrapper},
     {"none", 0,  NULL}
 };
 
@@ -241,6 +247,13 @@ int main(int argc, char **argv)
         {
             memset(srcbuf, 'c', bufsize);
            *((char *)srcbuf + bufsize -1) = '\0';
+        }
+        else if(!strcmp(bench_func[0].description, "strcmp"))
+        {
+            memset(srcbuf, 'c', bufsize);
+            memset(dstbuf, 'c', bufsize);
+            *((char *)srcbuf + bufsize -2) = 'C';
+            *((char *)srcbuf + bufsize -1) = *((char *)dstbuf + bufsize -1) = '\0';
         }
 
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
