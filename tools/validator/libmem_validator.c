@@ -49,10 +49,12 @@ typedef struct
 
 typedef uint8_t alloc_mode;
 
-int string_cmp(const char *str1, const char *str2)
+//Function for verifying string functions
+//Passing size = -1 for strcmp (Until Null is found)
+int string_cmp(const char *str1, const char *str2, size_t size)
 {
     int i;
-    for(i=0; (str1[i] != '\0') && (str2[i] != '\0') && (str2[i] == str1[i]); i++);
+    for(i=0; (str1[i] != '\0') && (str2[i] != '\0') && (str2[i] == str1[i]) && (i < (size -1)); i++);
     return (unsigned char)str1[i] - (unsigned char)str2[i];
 }
 
@@ -749,7 +751,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
            *(str1_alnd_addr + index) = '$';
 
        ret = strcmp((char *)str1_alnd_addr, (char *)str2_alnd_addr); // -ve value expected
-       exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+       exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, -1);
 
        if (ret != exp_ret)
        {
@@ -786,7 +788,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
         *(str1_alnd_addr + more_null_idx + 1) = '@';
 
         ret = strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
-        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
+        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, -1);
 
         if(ret != exp_ret)
         {
@@ -807,7 +809,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     }
 
     ret = strcmp((char *)str1_alnd_addr, (char *)str2_alnd_addr);
-    exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+    exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, -1);
 
     if (ret!=exp_ret)
     {
@@ -851,7 +853,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
         *(str2_alnd_addr + s2_sz) = '\0';
 
         ret = strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
-        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
+        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, -1);
 
         if (ret != exp_ret)
         {
@@ -861,7 +863,190 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         //case7(b): strlen(str1) > strlen(str2)
         ret = strcmp((char *)str1_alnd_addr, (char *)str2_alnd_addr);
-        exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+        exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, -1);
+
+        if (ret != exp_ret)
+        {
+           printf("ERROR [str1_sz > str2_sz] Data Validation failed for non-matching string str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d, exp_value=%d\n",str1_alnmnt,str2_alnmnt, size, ret,exp_ret);
+        }
+    }
+    free(buff);
+}
+
+static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
+    size_t index;
+    int ret = 0;
+    int validation1_passed = 1, validation2_passed = 1;
+    int exp_ret = 0;
+
+    //special case to handle size ZERO with NULL buff inputs.
+    if (size == 0)
+    {
+        ret = strncmp((char*)buff, (char*)buff, size);
+        if (ret != exp_ret)
+            printf("ERROR: Return value mismatch for size(%lu): expected - %d"\
+                        ", actual - %d\n", size, exp_ret, ret);
+        return;
+    }
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER);
+
+    if(buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    str2_alnd_addr = buff_tail + str2_alnmnt;
+    str1_alnd_addr = buff_head + str1_alnmnt;
+    srand(time(0));
+
+    //Case1: Equal strings with NULL
+    //intialize str1 and str2 memory
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'a' + rand() % 26);
+    }
+    //Appending Null Charachter at the end of str1 and str2
+    *(str1_alnd_addr + size - 1) = *(str2_alnd_addr + size - 1) = '\0';
+    ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+
+    if (ret != 0)
+    {
+        printf("ERROR: Data Validation failed for matching data of str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d\n",str1_alnmnt,str2_alnmnt, size, ret);
+    }
+    else
+    {
+        printf("Data  Validation passed for matching memory of size: %lu\n", size);
+    }
+
+    //Case2:  Validation of Byte by Byte mismtach for MATCHING string
+    for (index = 0; index < size; index++)
+    {
+       //set a byte of source different from destination @index
+       //Case2(a): s1 < s2
+           *(str1_alnd_addr + index) = '$';
+
+       ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size); // -ve value expected
+       exp_ret = (*(uint8_t *)(str1_alnd_addr + index) - \
+                        *(uint8_t *)(str2_alnd_addr + index));
+
+       if (ret != exp_ret)
+       {
+           printf("ERROR:(str1<str2) Data Validation failed for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
+           validation1_passed = 0;
+       }
+
+       //Case2(b): s1 > s2
+       ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size); // +ve value expected
+       exp_ret = (*(uint8_t *)(str2_alnd_addr + index) - \
+                        *(uint8_t *)(str1_alnd_addr + index));
+       if (ret != exp_ret)
+       {
+           printf("ERROR:(str1>str2) Data Validation failed for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
+           validation2_passed = 0;
+       }
+       //copying back the mismatching byte
+       *(str1_alnd_addr + index) = *(str2_alnd_addr + index);
+    }
+
+    if (validation1_passed && validation2_passed)
+         printf("Validation successfull for non-matching data of size: %lu\n",\
+                                                                          size);
+    //Case3: Multi-NULL check
+    //Can't have multiple NULL for size < 2
+    if(size >= 2)
+    {
+        size_t more_null_idx = rand() % (size - 1);
+        *(str1_alnd_addr + more_null_idx) = *(str2_alnd_addr + more_null_idx) = '\0';
+
+        //Set a Mismatching byte after NULL @more_null_idx + 1
+        *(str1_alnd_addr + more_null_idx + 1) = '@';
+
+        ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+
+        if(ret != exp_ret)
+        {
+            printf("ERROR: Multi-NULL check Validation failed for size: %lu @Mismatching index:%lu" \
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+                size, more_null_idx + 1, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+
+        }
+        else
+            printf("Multi-NULL check Validation passed for size: %lu\n", size);
+    }
+
+    //case4: strlen(str1), strlen(str2) > size and are matching
+
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'A'+ rand() % 26);
+    }
+
+    ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+    exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+
+    if (ret!=exp_ret)
+    {
+        printf("ERROR [str1(%lu) & str2(%lu) >size]: Data Validation failed for str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d, exp=%d",strlen((char*)str1_alnd_addr),strlen((char*)str2_alnd_addr),str1_alnmnt,str2_alnmnt, size, ret, exp_ret);
+    }
+
+    //case5: strlen(str1) = size and strlen(str2) > size
+
+    *(str1_alnd_addr + size -1) = '\0';
+    ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+    exp_ret = (*(uint8_t *)(str2_alnd_addr + size - 1) - \
+                        *(uint8_t *)(str1_alnd_addr + size - 1));
+    if (ret != exp_ret)
+    {
+        printf("ERROR [str1=size, str2 >size] Data Validation failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d\n",size-1,str1_alnmnt,str2_alnmnt, size, ret);
+    }
+
+    //case6:strlen(str2) = size and strlen(str1) > size
+
+    ret = strncmp((char *)str1_alnd_addr,(char *)str2_alnd_addr, size);
+    exp_ret = (*(uint8_t *)(str1_alnd_addr + size - 1) - \
+                        *(uint8_t *)(str2_alnd_addr + size - 1));
+
+    if (ret != exp_ret)
+    {
+        printf("ERROR [str2=size, str1 >size] Data Validation failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d\n",size-1,str1_alnmnt,str2_alnmnt, size, ret);
+    }
+
+    //Case7: strlen(str1), strlein(str2) < size
+    if(size >=2)
+    {
+        //case7(a): strlen(str1) < strlen(str2)
+        *(str1_alnd_addr + size - 1) = *(str2_alnd_addr + size - 1); //Removing Null from str1
+        size_t s1_sz = rand() % (size / 2 ); //strlen(str1) between [0, size/2 -1]
+        size_t s2_sz = rand() % (size / 2) + size / 2; //strlen(str2) between [size/2 + 1, size-1]
+
+        *(str1_alnd_addr + s1_sz) = '\0';
+        *(str2_alnd_addr + s2_sz) = '\0';
+
+        ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+        exp_ret = string_cmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+
+        if (ret != exp_ret)
+        {
+           printf("ERROR[str1_sz < str2_sz] Data Validation failed for non-matching string str1_aln:%u str2_aln:%u s1_sz: %lu s2_sz: %lu,"\
+                                    " return_value = %d, exp_value =%d\n",str1_alnmnt,str2_alnmnt, s1_sz,s2_sz,ret,exp_ret);
+        }
+
+        //case7(b): strlen(str1) > strlen(str2)
+        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+        exp_ret = string_cmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
 
         if (ret != exp_ret)
         {
@@ -882,6 +1067,7 @@ libmem_func supp_funcs[]=
     {"strcpy",  strcpy_validator},
     {"strncpy", strncpy_validator},
     {"strcmp",  strcmp_validator},
+    {"strncmp", strncmp_validator},
     {"none",    NULL}
 };
 
