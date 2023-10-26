@@ -179,6 +179,11 @@ void strcmp_wrapper(int64_t *dst, int64_t *src, int size)
     strcmp((char *)dst, (char *) src);
 }
 
+void strncmp_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strncmp((char *)dst, (char *) src, size);
+}
+
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
                      bench_info *bi)
@@ -202,6 +207,7 @@ bench_info supp_funcs[]=
     {"strcpy", 0, strcpy_wrapper},
     {"strncpy", 0, strncpy_wrapper},
     {"strcmp", 0, strcmp_wrapper},
+    {"strncmp", 0, strncmp_wrapper},
     {"none", 0,  NULL}
 };
 
@@ -243,17 +249,19 @@ int main(int argc, char **argv)
                                                 NULL, 0);
 
         printf("SIZE: %zu B \n",bufsize);
-        if (!strcmp(bench_func[0].description, "strcpy") || !strcmp(bench_func[0].description, "strncpy"))
+
+        //For handling string functions
+        if ( strstr(bench_func[0].description, "str"))
         {
             memset(srcbuf, 'c', bufsize);
            *((char *)srcbuf + bufsize -1) = '\0';
-        }
-        else if(!strcmp(bench_func[0].description, "strcmp"))
-        {
-            memset(srcbuf, 'c', bufsize);
-            memset(dstbuf, 'c', bufsize);
-            *((char *)srcbuf + bufsize -2) = 'C';
-            *((char *)srcbuf + bufsize -1) = *((char *)dstbuf + bufsize -1) = '\0';
+
+            if ( strstr(bench_func[0].description, "cmp"))
+            {
+                memset(dstbuf, 'c', bufsize);
+                *((char *)srcbuf + bufsize -2) = 'C';
+                *((char *)dstbuf + bufsize -1) = '\0';
+            }
         }
 
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
