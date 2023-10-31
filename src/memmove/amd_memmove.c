@@ -25,7 +25,9 @@
 #include "logger.h"
 #include "threshold.h"
 #include "../base_impls/load_store_impls.h"
+#include "zen_cpu_info.h"
 
+extern cpu_info zen_info;
 
 static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
 {
@@ -41,8 +43,37 @@ static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
         __load_store_le_8ymm_vec(dst, src, size);
         return dst;
     }
+    if (((dst + size) < src) || ((src + size) < dst))
+    {
+        size_t offset = 0;
+        uint32_t dst_align = ((size_t)dst & (YMM_SZ - 1));
 
-    if ((dst < (src + size)) && (src < dst))
+        __load_store_le_8ymm_vec(dst, src, size);
+
+        offset = 4 * YMM_SZ;
+
+        //Aligned Load and Store addresses
+        if (!((uintptr_t)src ^ dst_align))
+        {
+            if (size < __nt_start_threshold)
+               __aligned_load_and_store_4ymm_vec_loop(dst, src, size - offset, offset - dst_align);
+            else
+               __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size - offset - dst_align, offset - dst_align);
+        }
+        else
+        {
+            offset -= dst_align;
+
+            if (size < __nt_start_threshold)
+               __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+            else
+               __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        }
+        return dst;
+    }
+
+    // Handle overlapping memory blocks
+    if ((dst < (src + size)) && (src < dst)) //Backward Copy
     {
         y7 = _mm256_loadu_si256(src + 3 * YMM_SZ);
         y6 = _mm256_loadu_si256(src + 2 * YMM_SZ);
@@ -55,7 +86,7 @@ static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
         _mm256_storeu_si256(dst +  1 * YMM_SZ, y5);
         _mm256_storeu_si256(dst +  0 * YMM_SZ, y4);
     }
-    else
+    else //Forward Copy
     {
         y4 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
         y5 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
@@ -71,36 +102,71 @@ static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
     return dst;
 }
 
-static inline void *nt_store(void *dst, const void *src, size_t size)
-{
-    size_t offset = 0;
-
-    __load_store_le_8ymm_vec(dst, src, size);
-    //compute the offset to align the dst to YMM_SZB boundary
-    offset = 4 * YMM_SZ - ((size_t)dst & (YMM_SZ-1));
-    size -= offset;
-
-    __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size, offset);
-
-    return dst;
-}
-
-
 #ifdef AVX512_FEATURE_ENABLED
 static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
 {
     __m512i z4, z5, z6, z7, z8;
+    size_t offset = 0;
+
     if (size <= 2 * ZMM_SZ)
     {
-        __load_store_le_2zmm_vec(dst, src, size);    
+        __load_store_le_2zmm_vec(dst, src, size);
         return dst;
     }
     if (size <= 4 * ZMM_SZ)
     {
-        __load_store_le_4zmm_vec(dst, src, size);    
+        __load_store_le_4zmm_vec(dst, src, size);
         return dst;
     }
-    if ((dst < (src + size)) && (src < dst))
+    if (size <= 8 * ZMM_SZ)
+    {
+        __load_store_le_8zmm_vec(dst, src, size);
+        return dst;
+    }
+    if (((dst + size) < src) || ((src + size) < dst))
+    {
+        uint32_t dst_align = ((uintptr_t)dst & (ZMM_SZ - 1));
+
+        __load_store_le_8zmm_vec(dst, src, size);
+        offset = 4 * ZMM_SZ;
+
+        //Aligned Load and Store addresses
+        if (!((uintptr_t)src ^ dst_align))
+        {
+            // 4-ZMM registers
+            if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+            {
+                __aligned_load_and_store_8ymm_vec_loop(dst, src, size - offset, offset);
+            }
+            // 4-YMM registers with prefetch
+            else if (size < __nt_start_threshold)
+            {
+                __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - offset, offset);
+            }
+            // Non-temporal 4-ZMM registers with prefetch
+            else
+            {
+                __aligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - offset, offset);
+            }
+        }
+        //Unalgined Load/Store addresses: force-align store address to ZMM size
+        else
+        {
+            offset -= dst_align;
+
+            if (size < __nt_start_threshold)
+            {
+                __unaligned_load_aligned_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
+            }
+            else
+            {
+                __unaligned_load_nt_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
+            }
+        }
+        return dst;
+    }
+    // Handle overlapping memory blocks
+    if (src < dst) //Backward Copy
     {
          z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ);
          z5 = _mm512_loadu_si512(src + 2 * ZMM_SZ);
@@ -121,7 +187,7 @@ static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
          _mm512_storeu_si512(dst +  1 * ZMM_SZ, z6);
          _mm512_storeu_si512(dst +  0 * ZMM_SZ, z7);
     }
-    else
+    else //Forward Copy
     {
          z4 = _mm512_loadu_si512(src + size - 4 * ZMM_SZ);
          z5 = _mm512_loadu_si512(src + size - 3 * ZMM_SZ);
@@ -139,21 +205,6 @@ static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
     }
     return dst;
 }
-
-static inline void *nt_store_avx512(void *dst, const void *src, size_t size)
-{
-    size_t offset = 0;
-
-    __load_store_le_8zmm_vec(dst, src, size);
-    //compute the offset to align the dst to YMM_SZB boundary
-    offset = 4 * ZMM_SZ - ((size_t)dst & (ZMM_SZ-1));
-    size -= offset;
-
-    __unaligned_load_nt_store_4zmm_vec_loop(dst, src, size, offset);
-
-    return dst;
-}
-
 #endif
 
 void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
@@ -162,29 +213,13 @@ void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
     LOG_INFO("\n");
 #ifdef AVX512_FEATURE_ENABLED
     if (size <= ZMM_SZ)
-    {
         return __load_store_ble_zmm_vec(dst, src, size);
-    }
-    if (size >= __nt_start_threshold)
-    {
 
-        if (((dst + size) < src) || ((src + size) < dst))
-        {
-            return nt_store_avx512(dst, src, size);
-        }
-    }
     return _memmove_avx512(dst, src, size);
 #else
     if (size <= 2 * YMM_SZ)
         return __load_store_le_2ymm_vec_overlap(dst, src, size);
 
-    if (size >= __nt_start_threshold)
-    {
-        if (((dst + size) < src) || ((src + size) < dst))
-        {
-            return nt_store(dst, src, size);
-        }
-    }
     return _memmove_avx2(dst, src, size);
 #endif
 }
