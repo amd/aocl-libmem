@@ -70,6 +70,7 @@ add_subdirectory(memcmp)
 add_subdirectory(strcpy)
 add_subdirectory(strncpy)
 add_subdirectory(strcmp)
+add_subdirectory(strncmp)
 
 if (${BUILD_SHARED_LIBS})
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib/shared)
