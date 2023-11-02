@@ -129,6 +129,22 @@ static void cached_strncmp(benchmark::State& state) {
   delete[] dst;
 }
 
+static void cached_strlen(benchmark::State& state) {
+  char* src = new char[state.range(0)];
+
+  for (unsigned long i = 0; i<state.range(0); i++) {
+    *(src + i) = 'a' + rand()%26;
+  }
+
+  *(src + state.range(0) - 1) ='\0';
+
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(strlen(src));
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+  delete[] src;
+}
 
 static void uncached_memcpy(benchmark::State& state) {
 const size_t bufferSize = state.range(0) * 4096 ;
@@ -292,6 +308,28 @@ static void uncached_strncmp(benchmark::State& state) {
   state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
 }
 
+static void uncached_strlen(benchmark::State& state) {
+  for (auto _ : state) {
+    state.PauseTiming();
+    char *src = new char[state.range(0)];
+
+    for (unsigned long i = 0; i < state.range(0); i++) {
+        *(src + i) = 'a' + rand() % 26;
+    }
+
+    *(src + state.range(0) - 1) ='\0';
+
+    state.ResumeTiming();
+    benchmark::DoNotOptimize(strlen(src));
+
+    state.PauseTiming();
+    delete[] src;
+    state.ResumeTiming();
+  }
+  state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*state.range(0),benchmark::Counter::kIsRate);
+  state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
+}
+
 typedef struct
 {
     const char *func_name;
@@ -308,6 +346,7 @@ libmem_func supp_funcs[]=
     {"cstrncpy", cached_strncpy},
     {"cstrcmp",  cached_strcmp},
     {"cstrncmp", cached_strncmp},
+    {"cstrlen",  cached_strlen},
     {"umemcpy",  uncached_memcpy},
     {"umemset",  uncached_memset},
     {"umemmove", uncached_memmove},
@@ -316,6 +355,7 @@ libmem_func supp_funcs[]=
     {"ustrncpy", uncached_strncpy},
     {"ustrcmp",  uncached_strcmp},
     {"ustrncmp", uncached_strncmp},
+    {"ustrlen",  uncached_strlen},
     {"none",    NULL}
 };
 

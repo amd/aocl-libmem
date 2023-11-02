@@ -184,6 +184,12 @@ void strncmp_wrapper(int64_t *dst, int64_t *src, int size)
     strncmp((char *)dst, (char *) src, size);
 }
 
+void strlen_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strlen((char *)src);
+}
+
+
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
                      bench_info *bi)
@@ -208,6 +214,7 @@ bench_info supp_funcs[]=
     {"strncpy", 0, strncpy_wrapper},
     {"strcmp", 0, strcmp_wrapper},
     {"strncmp", 0, strncmp_wrapper},
+    {"strlen", 0, strlen_wrapper},
     {"none", 0,  NULL}
 };
 
