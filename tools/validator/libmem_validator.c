@@ -1057,6 +1057,49 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     free(buff);
 }
 
+static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str_alnd_addr = NULL;
+    size_t index;
+    int ret = 0;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + 1, DEFAULT);
+
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str_alnd_addr = buff_tail + str1_alnmnt;
+    srand(time(0));
+
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr + index) = ((char) 'a' + rand() % 26);
+    }
+    //Appending Null Charachter at the end of str
+    *(str_alnd_addr + size ) = '\0';
+
+    //Adding Additional NULL char after size
+    *(str_alnd_addr + size + rand() % 8 ) = '\0';
+    ret = strlen((char *)str_alnd_addr);
+
+    if (ret != size)
+    {
+        printf("ERROR: Validation failure for strlen of str1_aln:%u size: %lu,"\
+                                    " return_value = %d\n",str1_alnmnt, size, ret);
+    }
+    else
+    {
+        printf("Validation passed for strlen: %lu\n", size);
+    }
+
+    free(buff);
+}
+
 libmem_func supp_funcs[]=
 {
     {"memcpy",  memcpy_validator},
@@ -1068,6 +1111,7 @@ libmem_func supp_funcs[]=
     {"strncpy", strncpy_validator},
     {"strcmp",  strcmp_validator},
     {"strncmp", strncmp_validator},
+    {"strlen",  strlen_validator},
     {"none",    NULL}
 };
 

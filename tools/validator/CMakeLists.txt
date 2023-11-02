@@ -42,7 +42,8 @@ set(MAX_SIZE 33554432) #32MB
 set(MAX_TIMEOUT 12000) #Timout set to 200Mins for Memcmp
 set(LIBMEM_PATH ${CMAKE_BINARY_DIR}/lib/shared/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
-set(supp_func "memcpy" "memcmp" "memset" "memmove" "strcpy" "strncpy" "strcmp" "strncmp")
+set(supp_func "memcpy" "memcmp" "memset" "memmove"
+    "strcpy" "strncpy" "strcmp" "strncmp" "strlen")
 
 ##ITERATOR TESTING
 #[0,1,2...4096B]
