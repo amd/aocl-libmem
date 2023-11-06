@@ -27,6 +27,7 @@
 #include "threshold.h"
 #include <stdint.h>
 #include <immintrin.h>
+#include "alm_defs.h"
 
 #define PAGE_SZ         4096
 #define CACHELINE_SZ    64
@@ -62,7 +63,7 @@ uint8_t  _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
             if (!(ret & 0x3))
                  return YMM_SZ;
         }
-        cmp_idx += _tzcnt_u16(ret & 0x3);
+        cmp_idx += ALM_TZCNT_U16(ret & 0x3);
         return cmp_idx;
     }
     if (size <= 2 * DWORD_SZ)
@@ -83,7 +84,7 @@ uint8_t  _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
             if (!(ret & 0xf))
                  return YMM_SZ;
         }
-        cmp_idx += _tzcnt_u16(ret & 0xf);
+        cmp_idx += ALM_TZCNT_U16(ret & 0xf);
         return cmp_idx;
     }
     if (size <= 2 * QWORD_SZ)
@@ -104,7 +105,7 @@ uint8_t  _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
             if (!(ret & 0xff))
                  return YMM_SZ;
         }
-        cmp_idx += _tzcnt_u16(ret & 0xff);
+        cmp_idx += ALM_TZCNT_U16(ret & 0xff);
         return cmp_idx;
     }
     if (size <= 2 * XMM_SZ)
@@ -125,7 +126,7 @@ uint8_t  _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
             if (!ret)
                 return YMM_SZ;
         }
-        cmp_idx += _tzcnt_u16(ret);
+        cmp_idx += ALM_TZCNT_U16(ret);
         return cmp_idx;
     }
     return YMM_SZ;

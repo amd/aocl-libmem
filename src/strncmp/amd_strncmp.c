@@ -27,6 +27,7 @@
 #include "threshold.h"
 #include <stdint.h>
 #include <immintrin.h>
+#include "alm_defs.h"
 
 
 #define PAGE_SZ         4096
@@ -61,7 +62,7 @@ static inline int  _strncmp_ble_ymm(const char *str1, const char *str2, uint8_t 
             if (!(ret & 0x3))
                  return 0;
         }
-        cmp_idx += _tzcnt_u16(ret & 0x3);
+        cmp_idx += ALM_TZCNT_U16(ret & 0x3);
         return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
     }
 
@@ -83,7 +84,7 @@ static inline int  _strncmp_ble_ymm(const char *str1, const char *str2, uint8_t 
             if (!(ret & 0xf))
                  return 0;
         }
-        cmp_idx += _tzcnt_u16(ret & 0xf);
+        cmp_idx += ALM_TZCNT_U16(ret & 0xf);
         return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
     }
     if (size <= 2 * QWORD_SZ)
@@ -104,7 +105,7 @@ static inline int  _strncmp_ble_ymm(const char *str1, const char *str2, uint8_t 
             if (!(ret & 0xff))
                  return 0;
         }
-        cmp_idx += _tzcnt_u16(ret & 0xff);
+        cmp_idx += ALM_TZCNT_U16(ret & 0xff);
         return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
     }
     if (size <= 2 * XMM_SZ)
@@ -125,7 +126,7 @@ static inline int  _strncmp_ble_ymm(const char *str1, const char *str2, uint8_t 
             if (!ret)
                 return 0;
         }
-        cmp_idx += _tzcnt_u16(ret);
+        cmp_idx += ALM_TZCNT_U16(ret);
         return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
     }
     return 0;

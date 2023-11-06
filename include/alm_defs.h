@@ -26,12 +26,25 @@
 #ifndef _LIBMEM_DEFS_H_
 #define _LIBMEM_DEFS_H_
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef __linux__
 #define ALM_MEM_BARRIER() __asm__ __volatile__("":::"memory");
+
+/*
+    Intrinsic '_tzcnt_u16' is not supported on GCC major versions 11 and below.
+    Henceforth, handling '_tzcnt_u16' with masked '_tzcnt_u32' intrinsics.
+*/
+
+#if (( __GNUC__ <= 11 ))
+#define ALM_TZCNT_U16(x)    _tzcnt_u32((x) & 0xffff)
+#else
+#define ALM_TZCNT_U16(x)    _tzcnt_u16(x)
+#endif
+
 #endif
 
 #ifdef __cplusplus
