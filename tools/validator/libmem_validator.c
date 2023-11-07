@@ -36,6 +36,19 @@ typedef struct
     void  (*func)(size_t, uint32_t , uint32_t);
 } libmem_func;
 
+//uncomment the line below for verbosity of passed logs
+//#define ALM_VERBOSE
+
+#ifdef ALM_VERBOSE
+#define ALM_VERBOSE_LOG(fmt, ...)    do {   \
+                printf(fmt, ##__VA_ARGS__); \
+                                } while(0);
+#else
+#define ALM_VERBOSE_LOG(fmt, ...) do {      \
+                             } while (0)
+
+#endif
+
 #define OVERLAP_BUFFER        0
 #define NON_OVERLAP_BUFFER    1
 #define DEFAULT               2
@@ -102,12 +115,12 @@ static inline void boundary_check(uint8_t *dst, size_t size)
     {
         if (*(dst - index) != '#')
         {
-            printf("ERROR: Out of bound Data corruption @pre_index:%ld for size: %ld\n", index, size);
+            printf("ERROR:[BOUNDARY] Out of bound Data corruption @pre_index:%ld for size: %ld\n", index, size);
             break;
         }
         if (*(dst + size + index - 1) != '#')
         {
-            printf("ERROR: Out of bound Data corruption @post_index:%ld for size: %ld\n", index, size);
+            printf("ERROR:[BOUNDARY] Out of bound Data corruption @post_index:%ld for size: %ld\n", index, size);
             break;
         }
     }
@@ -127,7 +140,7 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
     {
         ret = memcpy(buff, buff, size);
         if (ret != NULL)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -154,14 +167,14 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
                             *(src_alnd_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR: Data Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] failed for size: %lu @index:%lu" \
                     "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n", \
                  size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
+        printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
 
     boundary_check(dst_alnd_addr, size);
 
@@ -183,7 +196,7 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
         ret = mempcpy(buff, buff, size);
         implicit_func_decl_pop
         if (ret != buff)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -214,14 +227,14 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
                             *(src_alnd_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR: Data Validation failed for size: %lu @index:%lu "\
+        printf("ERROR:[VALIDATION] failed for size: %lu @index:%lu "\
                              "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",\
                  size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != (dst_alnd_addr + size))
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n",\
+        printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n",\
                                                  dst_alnd_addr + size, ret);
 
     boundary_check(dst_alnd_addr, size);
@@ -242,7 +255,7 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
     {
         ret = memmove(buff, buff, size);
         if (ret != buff)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -278,16 +291,16 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
                             *(validation_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR: Forward Data Validation failed for size: %lu @index:%lu "\
+        printf("ERROR:[VALIDATION] Forward failed for size: %lu @index:%lu "\
                              "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",\
                  size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Forward Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Forward Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Forward Return value mismatch: expected - %p, actual - %p\n",\
+        printf("ERROR:[RETURN] Forward value mismatch: expected - %p, actual - %p\n",\
                                                          dst_alnd_addr, ret);
- 
+
     //Backward Validation
     src_alnd_addr = buff_head + src_alnmnt;
     dst_alnd_addr = buff_tail + dst_alnmnt;
@@ -302,14 +315,14 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
                             *(validation_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR: Backward Data Validation failed for size: %lu @index:%lu "\
+        printf("ERROR:[VALIDATION] Backward failed for size: %lu @index:%lu "\
                              "[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",\
                  size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Backward Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Backward Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n",\
+        printf("ERROR:[RETURN] Backward value mismatch: expected - %p, actual - %p\n",\
                                                          dst_alnd_addr, ret);
 
     free(buff);
@@ -338,14 +351,14 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
                             *(src_alnd_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR: Non-Overlapping Data Validation failed for size: %lu"\
+        printf("ERROR:[VALIDATION] Non-Overlap failed for size: %lu"\
             " @index:%lu [src: %p(alignment = %u), dst:%p(alignment = %u)]\n",\
             size, index, src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Non-Overlapping Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Non-Overlapping Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Non-Overlapping Return value mismatch: expected - %p,"\
+        printf("ERROR:[RETURN] Non-Overlap value mismatch: expected - %p,"\
                                         " actual - %p\n", dst_alnd_addr, ret);
 
     boundary_check(dst_alnd_addr, size);
@@ -366,7 +379,7 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
     {
         ret = memset(buff, value, size);
         if (ret != buff)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -391,14 +404,14 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
                                                      index ++);
 
     if (index != size)
-        printf("ERROR: Data Validation failed for size: %lu @index:%lu "\
+        printf("ERROR:[VALIDATION] failed for size: %lu @index:%lu "\
                              "[dst:%p(alignment = %u)]\n",\
                  size, index, dst_alnd_addr, dst_alnmnt);
     else
-        printf("Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != dst_alnd_addr)
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n",\
+        printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n",\
                                                          dst_alnd_addr, ret);
 
     boundary_check(dst_alnd_addr, size);
@@ -419,7 +432,7 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
     {
         ret = memcmp(buff, buff, size);
         if (ret != 0)
-            printf("ERROR: Return value mismatch for size(%lu): expected - 0"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - 0"\
                         ", actual - %d\n", size, ret);
         return;
     }
@@ -443,12 +456,12 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
 
     if (ret != 0)
     {
-        printf("ERROR: Validation failed for matching data of size: %lu,"\
+        printf("ERROR:[VALIDATION] failed for matching data of size: %lu,"\
                                     " return_value = %d\n", size, ret);
     }
     else
     {
-        printf("Validation passed for matching memory of size: %lu\n", size);
+        ALM_VERBOSE_LOG("Validation passed for matching memory of size: %lu\n", size);
     }
 
     // Validation of Byte by BYte mismtach
@@ -465,7 +478,7 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
                         *(uint8_t *)(mem2_alnd_addr + index));
        if (ret != exp_ret)
        {
-           printf("ERROR: Validation failed for non-matching string of "\
+           printf("ERROR:[VALIDATION] Non-Matching failed for string of "\
                     "size: %lu(index = %lu), return_value [actual= %d,"\
                                 " expected = %d]\n", size, index, ret, exp_ret);
            validation_passed = 0;
@@ -473,7 +486,7 @@ static inline void memcmp_validator(size_t size, uint32_t mem2_alnmnt,\
        *(mem1_alnd_addr + index) = *(mem2_alnd_addr + index);
     }
     if (validation_passed)
-         printf("Validation successfull for non-matching data of size: %lu\n",\
+         ALM_VERBOSE_LOG("Validation successfull for non-matching data of size: %lu\n",\
                                                                           size);
 
 }
@@ -492,7 +505,7 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     {
         ret = strcpy((char*)buff, (char*)buff);
         if (ret != buff)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -525,14 +538,14 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != (size))
-        printf("ERROR: Data Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] failed for size: %lu @index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
               size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
-        printf("Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != str2_alnd_addr)
-        printf("ERROR: Return value mismatch: expected - %p, actual - %p\n", \
+        printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
 
     //Multi-Null check
@@ -544,14 +557,14 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != (more_null_idx + 1))
-        printf("ERROR: Multi-NULL check Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] Multi-NULL failed for size: %lu @index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
               size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
-        printf("Multi-NULL check Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("Multi-NULL check Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != str2_alnd_addr)
-        printf("ERROR: Multi-NULL check Return value mismatch: expected - %p, actual - %p\n", \
+        printf("ERROR: [RETURN] Multi-NULL value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
 
     boundary_check(str2_alnd_addr, size);
@@ -573,7 +586,7 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     {
         ret = strncpy((char*)buff, (char*)buff, size);
         if (ret != buff)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %p"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
                         ", actual - %p\n", size, buff, ret);
         return;
     }
@@ -606,14 +619,14 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR:[strlen > n] Data Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] (strlen > n) failed for size: %lu @index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
               size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
-        printf("[strlen > n] Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("[strlen > n] Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != str2_alnd_addr)
-        printf("ERROR:[strlen > n] Return value mismatch: expected - %p, actual - %p\n",
+        printf("ERROR:[RETURN] (strlen > n) value mismatch: expected - %p, actual - %p\n",
                                                              str2_alnd_addr, ret);
 
 
@@ -632,14 +645,14 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != size)
-        printf("ERROR:[strlen = n] Data Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] (strlen = n) failed for size: %lu @index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
               size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
     else
-        printf("[strlen = n] Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("[strlen = n] Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != str2_alnd_addr)
-        printf("ERROR:[strlen = n] Return value mismatch: expected - %p, actual - %p\n", \
+        printf("ERROR:[RETURN] (strlen = n) Return value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
 
     //Check if the str2 buffer was modified after 'n bytes' copy
@@ -666,7 +679,7 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != (str1_len + 1))
-        printf("ERROR:[strlen < n] Data Validation failed for size: %lu @index:%lu" \
+        printf("ERROR:[VALIDATION] (strlen < n) failed for size: %lu @index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)] (strlen = %lu)\n", \
               size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt, str1_len);
     //Checking for NULL after str1_len in str2 buffer
@@ -674,16 +687,16 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     {
         if (str2_alnd_addr[index] != '\0')
         {
-            printf("ERROR:[strlen < n] NULL Validation failed at index:%lu" \
+            printf("ERROR:[VALIDATION] (strlen < n) NULL Validation failed at index:%lu" \
                         " for size: %ld(strlen = %ld)\n", index, size, str1_len);
             break;
         }
     }
     if (index == size)
-        printf("[strlen < n] Data Validation passed for size: %lu\n", size);
+        ALM_VERBOSE_LOG("[strlen < n] Data Validation passed for size: %lu\n", size);
     //validation of return value
     if (ret != str2_alnd_addr)
-        printf("ERROR:[strlen < n] Return value mismatch: expected - %p, actual - %p\n", \
+        printf("ERROR:[RETURN] (strlen < n) value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
 
     //Check if the str2 buffer was modified after 'n bytes' copy
@@ -707,7 +720,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     {
         ret = strcmp((char*)buff, (char*)buff);
         if (ret != exp_ret)
-            printf("ERROR: Return value mismatch for size(%lu): expected - %d"\
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %d"\
                         ", actual - %d\n", size, exp_ret, ret);
         return;
     }
@@ -735,12 +748,12 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret != 0)
     {
-        printf("ERROR: Validation failed for matching data of str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] failed for matching data of str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n",str1_alnmnt,str2_alnmnt, size, ret);
     }
     else
     {
-        printf("Validation passed for matching memory of size: %lu\n", size);
+        ALM_VERBOSE_LOG("Validation passed for matching memory of size: %lu\n", size);
     }
 
     //Case2:  Validation of Byte by Byte mismtach for MATCHING string
@@ -755,7 +768,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
        if (ret != exp_ret)
        {
-           printf("ERROR:(str1<str2) Validation failed for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1<str2) failed for Non-Matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
            validation1_passed = 0;
        }
@@ -766,7 +779,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
                         *(uint8_t *)(str1_alnd_addr + index));
        if (ret != exp_ret)
        {
-           printf("ERROR:(str1>str2) Validation failed for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1>str2) failed for Non-Matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
            validation2_passed = 0;
        }
@@ -775,7 +788,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     }
 
     if (validation1_passed && validation2_passed)
-         printf("Validation successfull for non-matching data of size: %lu\n",\
+         ALM_VERBOSE_LOG("Validation successfull for non-matching data of size: %lu\n",\
                                                                           size);
     //Case3: Multi-NULL check
     //Can't have multiple NULL for size < 2
@@ -792,13 +805,13 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-            printf("ERROR: Multi-NULL check Validation failed for size: %lu @Mismatching index:%lu" \
+            printf("ERROR:[VALIDATION] Multi-NULL failed for size: %lu @Mismatching index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
                 size, more_null_idx + 1, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
         }
         else
-            printf("Multi-NULL check Validation passed for size: %lu\n", size);
+            ALM_VERBOSE_LOG("Multi-NULL check Validation passed for size: %lu\n", size);
     }
 
     //case4: strlen(str1), strlen(str2) > size and are matching
@@ -813,7 +826,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret!=exp_ret)
     {
-        printf("ERROR [str1(%lu) & str2(%lu) >size]: Validation failed for str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str1(%lu) & str2(%lu) >size) failed for str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d, exp=%d",strlen((char*)str1_alnd_addr),strlen((char*)str2_alnd_addr),str1_alnmnt,str2_alnmnt, size, ret, exp_ret);
     }
 
@@ -825,7 +838,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
                         *(uint8_t *)(str1_alnd_addr + size - 1));
     if (ret != exp_ret)
     {
-        printf("ERROR [str1=size, str2(%lu) >size]: Validation failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str1=size, str2(%lu) >size) failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n",strlen((char*)str2_alnd_addr), size-1,str1_alnmnt,str2_alnmnt, size, ret);
     }
 
@@ -837,7 +850,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret != exp_ret)
     {
-        printf("ERROR [str2=size, str1(%lu) >size]: Validation failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str2=size, str1(%lu) >size) failed for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n",strlen((char*)str2_alnd_addr), size-1,str1_alnmnt,str2_alnmnt, size, ret);
     }
 
@@ -857,7 +870,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-           printf("ERROR[str1_sz(%lu) < str2_sz(%lu)]: Validation failed for non-matching string str1_aln:%u str2_aln:%u,"\
+           printf("ERROR:[VALIDATION] (str1_sz(%lu) < str2_sz(%lu)) failed for Non-Matching string str1_aln:%u str2_aln:%u,"\
                                     " return_value = %d, exp_value =%d\n",s1_sz, s2_sz, str1_alnmnt,str2_alnmnt, ret,exp_ret);
         }
 
@@ -867,7 +880,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-           printf("ERROR [str1_sz(%lu) > str2_sz(%lu)]: Validation failed for non-matching string str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1_sz(%lu) > str2_sz(%lu)) failed for Non-Matching string str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d, exp_value=%d\n",s1_sz, s2_sz, str1_alnmnt,str2_alnmnt, size, ret,exp_ret);
         }
     }
@@ -889,7 +902,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     {
         ret = strncmp((char*)buff, (char*)buff, size);
         if (ret != exp_ret)
-            printf("ERROR: Validation failure for size(%lu): expected - %d"\
+            printf("ERROR:[VALIDATION] failure for size(%lu): expected - %d"\
                         ", actual - %d\n", size, exp_ret, ret);
         return;
     }
@@ -917,12 +930,12 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret != 0)
     {
-        printf("ERROR: Validation failure for matching data of str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] Matching failure for str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n",str1_alnmnt,str2_alnmnt, size, ret);
     }
     else
     {
-        printf("Validation passed for matching memory of size: %lu\n", size);
+        ALM_VERBOSE_LOG("Validation passed for matching memory of size: %lu\n", size);
     }
 
     //Case2:  Validation of Byte by Byte mismtach for MATCHING string
@@ -938,7 +951,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
        if (ret != exp_ret)
        {
-           printf("ERROR: (str1<str2) Validation failure for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1<str2) failure for Non-Matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
            validation1_passed = 0;
        }
@@ -949,7 +962,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
                         *(uint8_t *)(str1_alnd_addr + index));
        if (ret != exp_ret)
        {
-           printf("ERROR: (str1>str2) Validation failure for non-matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1>str2) failure for Non-Matching @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d exp=%d\n", index, str1_alnmnt, str2_alnmnt, size, ret, exp_ret);
            validation2_passed = 0;
        }
@@ -958,7 +971,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     }
 
     if (validation1_passed && validation2_passed)
-         printf("Validation successfull for non-matching data of size: %lu\n",\
+         ALM_VERBOSE_LOG("Validation successfull for non-matching data of size: %lu\n",\
                                                                           size);
     //Case3: Multi-NULL check
     //Can't have multiple NULL for size < 2
@@ -975,13 +988,13 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-            printf("ERROR: Multi-NULL check Validation failed for size: %lu @Mismatching index:%lu" \
+            printf("ERROR:[VALIDATION] Multi-NULL failed for size: %lu @Mismatching index:%lu" \
                     "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
                 size, more_null_idx + 1, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
         }
         else
-            printf("Multi-NULL check Validation passed for size: %lu\n", size);
+            ALM_VERBOSE_LOG("Multi-NULL check Validation passed for size: %lu\n", size);
     }
 
     //case4: strlen(str1), strlen(str2) > size and are matching
@@ -996,7 +1009,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret!=exp_ret)
     {
-        printf("ERROR [str1(%lu) & str2(%lu) > size]: Validation failure for str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str1(%lu) & str2(%lu) > size) failure for str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d, exp=%d",strlen((char*)str1_alnd_addr),strlen((char*)str2_alnd_addr),str1_alnmnt,str2_alnmnt, size, ret, exp_ret);
     }
 
@@ -1008,7 +1021,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
                         *(uint8_t *)(str1_alnd_addr + size - 1));
     if (ret != exp_ret)
     {
-        printf("ERROR [str1=size, str2(%lu) > size] Validation failure for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str1=size, str2(%lu) > size) failure for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n", strlen((char*)str2_alnd_addr), size-1,str1_alnmnt,str2_alnmnt, size, ret);
     }
 
@@ -1020,7 +1033,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret != exp_ret)
     {
-        printf("ERROR [str2=size, str1(%lu) > size] Validation failure for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] (str2=size, str1(%lu) > size) failure for string @index:%lu str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n", strlen((char*)str2_alnd_addr), size-1,str1_alnmnt,str2_alnmnt, size, ret);
     }
 
@@ -1040,7 +1053,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-           printf("ERROR[str1(%lu) < str2(%lu)] Validation failure for non-matching string str1_aln:%u str2_aln:%u ,"\
+           printf("ERROR:[VALIDATION] (str1(%lu) < str2(%lu)) failure for Non-Matching string str1_aln:%u str2_aln:%u ,"\
                                     " return_value = %d, exp_value =%d\n", s1_sz, s2_sz, str1_alnmnt, str2_alnmnt, ret, exp_ret);
         }
 
@@ -1050,7 +1063,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
 
         if (ret != exp_ret)
         {
-           printf("ERROR [str1_sz(%lu) > str2_sz(%lu)] Validation failure for non-matching string str1_aln:%u str2_aln:%u size: %lu,"\
+           printf("ERROR:[VALIDATION] (str1_sz(%lu) > str2_sz(%lu)) failure for Non-Matching string str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d, exp_value=%d\n", s2_sz, s1_sz, str1_alnmnt, str2_alnmnt, size, ret,exp_ret);
         }
     }
@@ -1089,12 +1102,12 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
 
     if (ret != size)
     {
-        printf("ERROR: Validation failure for strlen of str1_aln:%u size: %lu,"\
+        printf("ERROR:[VALIDATION] failure for strlen of str1_aln:%u size: %lu,"\
                                     " return_value = %d\n",str1_alnmnt, size, ret);
     }
     else
     {
-        printf("Validation passed for strlen: %lu\n", size);
+        ALM_VERBOSE_LOG("Validation passed for strlen: %lu\n", size);
     }
 
     free(buff);
