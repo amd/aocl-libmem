@@ -30,6 +30,12 @@
 
 #define CACHE_LINE_SZ   64
 #define BOUNDARY_BYTES  8
+#define PAGE_SZ 4096
+#define YMM_SZ 32
+#define ZMM_SZ 64
+
+static int vec_size = YMM_SZ;
+
 typedef struct
 {
     const char *func_name;
@@ -576,6 +582,40 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     if (boundary_check(str2_alnd_addr, size))
         printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
+    //Page_check
+    void *page_buff = NULL;
+    posix_memalign(&page_buff, PAGE_SZ, size + PAGE_SZ + CACHE_LINE_SZ);
+
+    if (page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr +index) = ((char) 'a' + rand() % 26);
+    }
+    *(str1_alnd_addr + size -1) ='\0';
+
+    ret = strcpy((char *)str2_alnd_addr, (char *)str1_alnd_addr);
+
+    for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
+                            *(str1_alnd_addr + index)); index ++);
+
+    if (index != (size))
+        printf("ERROR:[PAGE-CROSS] validation failed for size: %lu @index:%lu" \
+                    "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+              size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+    else
+        ALM_VERBOSE_LOG("Page-cross validation passed for size: %lu\n", size);
+    //validation of return value
+    if (ret != str2_alnd_addr)
+        printf("ERROR:[PAGE-CROSS] Return value mismatch: expected - %p, actual - %p\n", \
+                                                             str2_alnd_addr, ret);
+    free(page_buff);
     free(buff);
 }
 
@@ -895,6 +935,33 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
                                     " return_value = %d, exp_value=%d\n",s1_sz, s2_sz, str1_alnmnt,str2_alnmnt, size, ret,exp_ret);
         }
     }
+
+    //Page_check
+    void *page_buff = NULL;
+    posix_memalign(&page_buff, PAGE_SZ, size + PAGE_SZ + 2 * CACHE_LINE_SZ);
+
+    if (page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+
+    srand(time(0));
+
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr +index) = *(str2_alnd_addr +index) = ((char) 'a' + rand() % 26);
+    }
+    *(str1_alnd_addr + size -1) = *(str2_alnd_addr + size -1) ='\0';
+
+    ret = strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
+    if (ret != 0 )
+    {
+        printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu\n", str1_alnmnt, size);
+    }
+    free(page_buff);
     free(buff);
 }
 
@@ -1121,6 +1188,33 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
         ALM_VERBOSE_LOG("Validation passed for strlen: %lu\n", size);
     }
 
+    //Page_check
+    void *page_buff = NULL;
+    posix_memalign(&page_buff, PAGE_SZ, size + PAGE_SZ + CACHE_LINE_SZ);
+
+    if (page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+
+    srand(time(0));
+
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr +index) = ((char) 'a' + rand() % 26);
+    }
+    *(str_alnd_addr + size) ='\0';
+
+    ret = strlen((char *)str_alnd_addr);
+    if (ret != size )
+    {
+        printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu\n", str1_alnmnt, size);
+    }
+
+    free(page_buff);
     free(buff);
 }
 
@@ -1150,6 +1244,11 @@ int main(int argc, char **argv)
     unsigned int offset, src_alignment = 0, dst_alignment = 0;
     libmem_func *lm_func_validator = &supp_funcs[0]; //default func is memcpy
 
+    if (__builtin_cpu_supports("avx512f"))
+    {
+        vec_size = ZMM_SZ;
+    }
+
     int al_check = 0;
 
     if (argc < 6)
@@ -1178,10 +1277,10 @@ int main(int argc, char **argv)
     size = strtoul(argv[2], &ptr, 10);
 
     if (argv[3] != NULL)
-        src_alignment = atoi(argv[3]) % CACHE_LINE_SZ;
+        src_alignment = atoi(argv[3]) % vec_size;
 
     if (argv[4] != NULL)
-        dst_alignment = atoi(argv[4]) % CACHE_LINE_SZ;
+        dst_alignment = atoi(argv[4]) % vec_size;
 
     srand(time(0));
 
@@ -1195,9 +1294,9 @@ int main(int argc, char **argv)
 
     else
     {
-        for(unsigned int aln_src  = 0; aln_src < CACHE_LINE_SZ; aln_src++)
+        for(unsigned int aln_src  = 0; aln_src < vec_size; aln_src++)
         {
-            for(unsigned int aln_dst = 0; aln_dst < CACHE_LINE_SZ; aln_dst++)
+            for(unsigned int aln_dst = 0; aln_dst < vec_size; aln_dst++)
             {
                 lm_func_validator->func(size, aln_dst, aln_src);
             }
