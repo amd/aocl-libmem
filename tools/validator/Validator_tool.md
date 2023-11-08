@@ -70,7 +70,8 @@ The following three test categories are supported:
 
     $ ctest -R <Matching test regex> -E <Exclude regex> -j [<jobs>]
     <regrex>:     function_[MODE]
-                  "memcpy","memset","memmove","memcmp","strcpy","strncpy"   (Runs all the test cases iter,shift and alignment)
+                  "memcpy","memset","memmove","memcmp", "mempcpy"
+                  "strcpy","strncpy","strcmp","strncmp","strlen"   (Runs all the test cases iter,shift and alignment)
                   "iter"                                 (Runs Iterator test cases on all the functions)
                   "shift"                                (Runs Shift test cases on all the functions)
                   "align"                                (Runs Alignment test cases on all the functions)
@@ -78,6 +79,11 @@ The following three test categories are supported:
 
     jobs:        Optional paramter for maximum no. of concurrent processes to be used. [0...$(nproc)]
 
+## For Minimized logs
+Storing only failure logs
+```sh
+   $ ctest --progress --output-on-failure -j $(nproc)
+```
 ## Examples
 
 1. Running ctest for all modes and all functions (default config)
@@ -114,4 +120,4 @@ The following three test categories are supported:
 ```
 
 Notes:
-1. Running ctest on Memcmp takes some extra time (as we are trying to compare all the Bytes).
+1. Running ctest on Memcmp, Strcmp and Strncmp takes some extra time (as we are trying to compare all the Bytes).

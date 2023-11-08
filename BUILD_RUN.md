@@ -9,69 +9,64 @@
 ## Build Procedure:
 ### Shared Library:
 ```sh
-    $ mkdir build
-    $ cd build
     #Configure for GCC build
         # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=gcc ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -S <source_dir> -B <build_dir>
         # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 -S <source_dir> -B <build_dir>
         # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
     #Configure for AOCC(Clang) build
         # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=clang ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -S <source_dir> -B <build_dir>
         # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 -S <source_dir> -B <build_dir>
         # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
     #Build
     $ cmake --build .
     #Install
     $ make install
 ```
 
-A shared library file 'libaocl-libmem.so' will be generated and stored under 'build/lib/shared/' path.
+A shared library file 'libaocl-libmem.so' will be generated and stored under '<build_dir>/lib/shared/' path.
 
 
 ### Static Library:
 ```sh
-    $ mkdir build
-    $ cd build
     #Configure for GCC build
         # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=gcc -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N ../aocl-libmem
-    #Configure for AOCC(Clang) build
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=clang -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N ../aocl-libmem
+        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
     #Build
     $ cmake --build .
     #Install
     $ make install
 ```
 
-A static library file 'libaocl-libmem.a' will be generated and stored under 'build/lib/static' path.
+A static library file 'libaocl-libmem.a' will be generated and stored under '<build_dir>/lib/static' path.
 
 ## Debug Build:
  To enable logging build the source as below
 ```sh
-    $ cmake -D ENABLE_LOGGING=Y ../aocl-libmem
+    $ cmake -D ENABLE_LOGGING=Y -S <source_dir> -B <build_dir>
 ```
  Logs will be stored in the`"/tmp/libmem.log"` file.
 

@@ -14,6 +14,9 @@ This release of AOCL-LibMem library supports the following functions:
 + memcmp
 + strcpy
 + strncpy
++ strcmp
++ strncmp
++ strlen
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:
@@ -27,10 +30,10 @@ For detailed instructions on how to configure, build, install, please refer to t
 Upstream repository contains LibMem reference manual that has all the information you need to get started with LibMem, including installation directions, usage examples, and a complete API reference.You may also find a copy of the document here on github.
 
 ## Build and Run:
-**Refer to BUILD_RUN.md**
+**Refer to [BUILD_RUN](https://github.com/amd/aocl-libmem/blob/main/BUILD_RUN.md)**
 
 ## User Guide:
-**Refer to docs/User_Guide.md**
+**Refer to [User_Guide](https://github.com/amd/aocl-libmem/blob/main/docs/User_Guide.md)**
 
 ## Validator Tool Guide:
 **Refer to tools/validator/Validator_tool.md**

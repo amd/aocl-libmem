@@ -19,5 +19,11 @@ implementation of the function as per the application requirements.
 
 Highlights of AMD AOCL-LibMem version 4.1.1
 --------------------------------------------
- * Optimized memcmp for AVX512.
- * Benchmarking improvements.
+ * Added support for below string functions
+    -strncpy
+    -strcmp
+    -strncmp
+    -strlen
+ * Optimized strcpy function
+ * Optimized memmove, memcmp and memset
+ * Ctest validation support
