@@ -109,22 +109,22 @@ static inline void prepare_boundary(uint8_t *dst, size_t size)
     }
 }
 
-static inline void boundary_check(uint8_t *dst, size_t size)
+static inline int boundary_check(uint8_t *dst, size_t size)
 {
     for (size_t index = 1; index <= BOUNDARY_BYTES; index++)
     {
         if (*(dst - index) != '#')
         {
-            printf("ERROR:[BOUNDARY] Out of bound Data corruption @pre_index:%ld for size: %ld\n", index, size);
-            break;
+            printf("ERROR:[BOUNDARY] Out of bound Data corruption @pre_index:%ld for size: %ld ", index, size);
+            return -1;
         }
         if (*(dst + size + index - 1) != '#')
         {
-            printf("ERROR:[BOUNDARY] Out of bound Data corruption @post_index:%ld for size: %ld\n", index, size);
-            break;
+            printf("ERROR:[BOUNDARY] Out of bound Data corruption @post_index:%ld for size: %ld ", index, size);
+            return -1;
         }
     }
-
+    return 0;
 }
 
 static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
@@ -176,7 +176,9 @@ static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
     if (ret != dst_alnd_addr)
         printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n", dst_alnd_addr, ret);
 
-    boundary_check(dst_alnd_addr, size);
+    if (boundary_check(dst_alnd_addr, size))
+        printf("[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+
 
     free(buff);
 }
@@ -237,7 +239,9 @@ static inline void mempcpy_validator(size_t size, uint32_t dst_alnmnt,\
         printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n",\
                                                  dst_alnd_addr + size, ret);
 
-    boundary_check(dst_alnd_addr, size);
+    if (boundary_check(dst_alnd_addr, size))
+        printf("[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+
 
     free(buff);
 }
@@ -361,7 +365,9 @@ static inline void memmove_validator(size_t size, uint32_t dst_alnmnt, uint32_t 
         printf("ERROR:[RETURN] Non-Overlap value mismatch: expected - %p,"\
                                         " actual - %p\n", dst_alnd_addr, ret);
 
-    boundary_check(dst_alnd_addr, size);
+    if (boundary_check(dst_alnd_addr, size))
+        printf("[src: %p(alignment = %u), dst:%p(alignment = %u)]\n",src_alnd_addr, src_alnmnt, dst_alnd_addr, dst_alnmnt);
+
 
     free(buff);
 }
@@ -414,7 +420,9 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
         printf("ERROR:[RETURN] value mismatch: expected - %p, actual - %p\n",\
                                                          dst_alnd_addr, ret);
 
-    boundary_check(dst_alnd_addr, size);
+    if (boundary_check(dst_alnd_addr, size))
+        printf("[dst:%p(alignment = %u)]\n",dst_alnd_addr, dst_alnmnt);
+
 
     free(buff);
 }
@@ -525,16 +533,14 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     //intialize str1 memory
     for (index = 0; index < size; index++)
     {
-        *(str1_alnd_addr + index) = (char)(rand() % 128);
-        if (*(str1_alnd_addr + index) == '\0')
-            *(str1_alnd_addr + index) = 'a';
+        *(str1_alnd_addr + index) = 'a' + (char)(rand() % 26);
     }
     //Appending Null Charachter at the end of str1 string
     *(str1_alnd_addr + size - 1) = '\0';
     ret = strcpy((char *)str2_alnd_addr, (char *)str1_alnd_addr);
 
     //validation of str2 memory
-    for (index = 0; (index <= size) && (*(str2_alnd_addr + index) == \
+    for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
                             *(str1_alnd_addr + index)); index ++);
 
     if (index != (size))
@@ -567,7 +573,8 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
         printf("ERROR: [RETURN] Multi-NULL value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
 
-    boundary_check(str2_alnd_addr, size);
+    if (boundary_check(str2_alnd_addr, size))
+        printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
     free(buff);
 }
@@ -605,9 +612,7 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
 
     for (index = 0; index <= size; index++)
     {
-        *(str1_alnd_addr + index) = (char)(rand()%128);
-        if (*(str1_alnd_addr + index) == '\0')
-            *(str1_alnd_addr + index) = 'a';
+        *(str1_alnd_addr + index) = 'a' + (char)(rand() % 26);
     }
     for(index = size; index <= size + BOUNDARY_BYTES; index++)
         *(str2_alnd_addr + index) = '#';
@@ -631,7 +636,9 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
 
 
     //Check if the str2 buffer was modified after 'n bytes' copy
-    boundary_check(str2_alnd_addr, size);
+    if (boundary_check(str2_alnd_addr, size))
+        printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+
 
     //CASE 2:validation when index of NULL char is equal to strlen
     //Appending Null Charachter at the end of str1 string
@@ -656,7 +663,9 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
                                                              str2_alnd_addr, ret);
 
     //Check if the str2 buffer was modified after 'n bytes' copy
-    boundary_check(str2_alnd_addr, size);
+    if (boundary_check(str2_alnd_addr, size))
+        printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+
 
     //CASE 3:validation when str1 length is less than that of 'n'(no.of bytes to be copied)
     //Generating random str1 buffer of size less than n
@@ -700,7 +709,9 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
                                                              str2_alnd_addr, ret);
 
     //Check if the str2 buffer was modified after 'n bytes' copy
-    boundary_check(str2_alnd_addr, size);
+    if (boundary_check(str2_alnd_addr, size))
+        printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+
 
     free(buff);
 }
