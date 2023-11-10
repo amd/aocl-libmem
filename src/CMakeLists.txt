@@ -23,7 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -mavx2 -O3 -mbmi -mcmodel=small -mlzcnt)
+add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -mavx2 -O3 -mbmi -mcmodel=small -mlzcnt -Wno-implicit-fallthrough)
 
 if (AVX512_FEATURE_AVAILABLE)
     add_compile_options(-mavx512f -mavx512bw)

@@ -268,55 +268,54 @@ static inline int _strncmp_avx2(const char *str1, const char *str2, size_t size)
         }
         offset += 4 * YMM_SZ;
     }
-    if (offset == size)
+    uint8_t left_out = size - offset;
+    if (!left_out)
         return 0;
 
-    //Handling the last 4*YMM_SZ
+    switch(left_out >> 5)
     {
-        offset = size - 4 * YMM_SZ;
-        y1 = _mm256_loadu_si256((void*)str1 + offset);
-        y2 = _mm256_loadu_si256((void*)str2 + offset);
-        y_cmp = _mm256_cmpeq_epi8(y1, y2);
-        y_null = _mm256_cmpgt_epi8(y1, y0);
-        ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
+        case 3:
+            offset = size - 4 * YMM_SZ;
+            y1 = _mm256_loadu_si256((void *)str1 + offset);
+            y2 = _mm256_loadu_si256((void *)str2 + offset);
+            y_cmp = _mm256_cmpeq_epi8(y1, y2);
+            y_null = _mm256_cmpgt_epi8(y1, y0);
+            ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
 
-        if (!ret)
-        {
-            offset += YMM_SZ;
-            y3 = _mm256_loadu_si256((void*)str1 + offset);
-            y4 = _mm256_loadu_si256((void*)str2 + offset);
+            if (ret)
+                break;
+        case 2:
+            offset = size - 3 * YMM_SZ;
+            y3 = _mm256_loadu_si256((void *)str1 + offset);
+            y4 = _mm256_loadu_si256((void *)str2 + offset);
+            y_cmp = _mm256_cmpeq_epi8(y3, y4);
+            y_null = _mm256_cmpgt_epi8(y3, y0);
+            ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
+            if(ret)
+                break;
+        case 1:
+            offset = size - 2 * YMM_SZ;
+            y1 = _mm256_loadu_si256((void *)str1 + offset);
+            y2 = _mm256_loadu_si256((void *)str2 + offset);
+            y_cmp = _mm256_cmpeq_epi8(y1, y2);
+            y_null = _mm256_cmpgt_epi8(y1, y0);
+            ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
+
+            if(ret)
+                break;
+        case 0:
+            offset = size - YMM_SZ;
+            y3 = _mm256_loadu_si256((void *)str1 + offset);
+            y4 = _mm256_loadu_si256((void *)str2 + offset);
             y_cmp = _mm256_cmpeq_epi8(y3, y4);
             y_null = _mm256_cmpgt_epi8(y3, y0);
             ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
 
             if(!ret)
-            {
-                offset += YMM_SZ;
-                y1 = _mm256_loadu_si256((void*)str1 + offset);
-                y2 = _mm256_loadu_si256((void*)str2 + offset);
-                y_cmp = _mm256_cmpeq_epi8(y1, y2);
-                y_null = _mm256_cmpgt_epi8(y1, y0);
-                ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
-                if(!ret)
-                {
-                    offset += YMM_SZ;
-                    y3 = _mm256_loadu_si256((void*)str1 + offset);
-                    y4 = _mm256_loadu_si256((void*)str2 + offset);
-                    y_cmp = _mm256_cmpeq_epi8(y3, y4);
-                    y_null = _mm256_cmpgt_epi8(y3, y0);
-                    ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
-
-                    if(!ret)
-                    {
-                        return 0;
-                    }
-                }
-            }
-        }
-        cmp_idx = _tzcnt_u32(ret) + offset;
-        return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+                return 0;
     }
-    return 0;
+    cmp_idx = _tzcnt_u32(ret) + offset;
+    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }
 
 #ifdef AVX512_FEATURE_ENABLED
@@ -339,11 +338,11 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
             z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
             z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
 
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            ret = _mm512_cmpneq_epu8_mask(z1,z2);
 
             if (ret)
             {
-                cmp_idx = _tzcnt_u64(ret);
+                cmp_idx = _tzcnt_u64(ret | _mm512_cmpeq_epu8_mask(z1, z0));
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
         }
@@ -375,15 +374,12 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
         uint64_t mask1 = 0, mask2 = 0;
         z1 = _mm512_loadu_si512(str1);
         z2 = _mm512_loadu_si512(str1 + ZMM_SZ);
-        z3 = _mm512_loadu_si512(str1 + size - 2 * ZMM_SZ);
-        z4 = _mm512_loadu_si512(str1 + size - ZMM_SZ);
 
         z5 = _mm512_loadu_si512(str2);
         z6 = _mm512_loadu_si512(str2 + ZMM_SZ);
-        z7 = _mm512_loadu_si512(str2 + size - 2 * ZMM_SZ);
-        z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
+
         ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
         if (ret1)
         {
@@ -396,6 +392,11 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
             cmp_idx = _tzcnt_u64(ret) + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+        z3 = _mm512_loadu_si512(str1 + size - 2 * ZMM_SZ);
+        z4 = _mm512_loadu_si512(str1 + size - ZMM_SZ);
+        z7 = _mm512_loadu_si512(str2 + size - 2 * ZMM_SZ);
+        z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
+
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
         ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
         if (ret2)
@@ -417,16 +418,13 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
     {
         z1 = _mm512_loadu_si512(str1 + offset);
         z2 = _mm512_loadu_si512(str1 + offset + 1 * ZMM_SZ);
-        z3 = _mm512_loadu_si512(str1 + offset + 2 * ZMM_SZ);
-        z4 = _mm512_loadu_si512(str1 + offset + 3 * ZMM_SZ);
 
         z5 = _mm512_loadu_si512(str2 + offset);
         z6 = _mm512_loadu_si512(str2 + offset + 1 * ZMM_SZ);
-        z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
-        z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
         ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
+
         if (ret1)
         {
             ret = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
@@ -438,8 +436,14 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
             cmp_idx = _tzcnt_u64(ret) + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+
+        z3 = _mm512_loadu_si512(str1 + offset + 2 * ZMM_SZ);
+        z4 = _mm512_loadu_si512(str1 + offset + 3 * ZMM_SZ);
+        z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
+        z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
         ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
+
         if (ret2)
         {
             offset +=  2 * ZMM_SZ;
@@ -454,45 +458,44 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
         }
         offset += 4 * ZMM_SZ;
     }
-    if (offset == size)
+    uint8_t left_out = size - offset;
+    if (!left_out)
         return 0;
-    //Handling the last 4*ZMM_SZ
+
+    switch(left_out >> 6)
     {
-        offset = size - 4 * ZMM_SZ;
-        z1 = _mm512_loadu_si512(str1 + offset);
-        z2 = _mm512_loadu_si512(str2 + offset);
-        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-        if (!ret)
-        {
-            offset += ZMM_SZ;
+        case 3:
+            offset = size - 4 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(str1 + offset);
+            z2 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            if (ret)
+                break;
+        case 2:
+            offset = size - 3 * ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
             z4 = _mm512_loadu_si512(str2 + offset);
-            //Check for NULL
             ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-            if (!ret)
-            {
-                offset += ZMM_SZ;
-                z1 = _mm512_loadu_si512(str1 + offset);
-                z2 = _mm512_loadu_si512(str2 + offset);
-                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                if (!ret)
-                {
-                    offset += ZMM_SZ;
-                    z3 = _mm512_loadu_si512(str1 + offset);
-                    z4 = _mm512_loadu_si512(str2 + offset);
-                    ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+            if(ret)
+                break;
+        case 1:
+            offset = size - 2 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(str1 + offset);
+            z2 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            if(ret)
+                break;
+        case 0:
+            offset = size - ZMM_SZ;
+            z3 = _mm512_loadu_si512(str1 + offset);
+            z4 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
 
-                    if (!ret)
-                    {
-                        return 0;
-                    }
-                }
-            }
-        }
-        cmp_idx = _tzcnt_u64(ret) + offset;
-        return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+            if(!ret)
+                return 0;
     }
-    return 0;
+    cmp_idx = _tzcnt_u64(ret) + offset;
+    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }
 #endif
 
