@@ -28,7 +28,7 @@
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
     #Build
-    $ cmake --build .
+    $ cmake --build <build_dir>
     #Install
     $ make install
 ```
@@ -47,6 +47,7 @@ A shared library file 'libaocl-libmem.so' will be generated and stored under '<b
         $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
+    #Configure for AOCC(Clang) build
         # Default Native Build
         $ cmake -D CMAKE_C_COMPILER=clang -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
         # Cross Compiling AVX2 binary on AVX512 machine
@@ -56,7 +57,7 @@ A shared library file 'libaocl-libmem.so' will be generated and stored under '<b
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
     #Build
-    $ cmake --build .
+    $ cmake --build <build_dir>
     #Install
     $ make install
 ```

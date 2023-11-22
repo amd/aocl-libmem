@@ -48,39 +48,25 @@ static inline void *_mempcpy_avx2(void *dst, const void *src, size_t size)
 
     dst_align = ((size_t)dst & (YMM_SZ - 1));
 
-    if ((((size_t)src & (YMM_SZ - 1)) == 0) && (dst_align == 0))
+
+    //Aligned Load and Store addresses
+    if ((((size_t)src & (YMM_SZ - 1)) | dst_align) == 0)
     {
-        __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        if (size < __nt_start_threshold)
+           __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        else
+           __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, offset);
     }
     else
     {
         offset -= dst_align;
-        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        if (size < __nt_start_threshold)
+           __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        else
+           __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
     }
     return dst + size;
 }
-
-static inline void *nt_store_avx2(void *dst, const void *src, size_t size)
-{
-    size_t offset = 0;
-
-    __load_store_ymm_vec(dst, src, offset);
-    //compute the offset to align the dst to YMM_SZB boundary
-    offset = YMM_SZ - ((size_t)dst & (YMM_SZ-1));
-
-    offset = __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size, offset);
-
-    if (size - offset >= 2 * YMM_SZ)
-        offset = __unaligned_load_nt_store_2ymm_vec_loop(dst, src, size, offset);
-
-    if (size - offset > YMM_SZ)
-        __load_store_ymm_vec(dst, src, offset);
-    //copy last YMM_SZ Bytes
-    __load_store_ymm_vec(dst, src, size - YMM_SZ);
-
-    return dst + size;
-}
-
 
 #ifdef AVX512_FEATURE_ENABLED
 static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
@@ -111,12 +97,12 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
     if ((((size_t)src & (ZMM_SZ - 1)) | dst_align) == 0)
     {
         // 4-ZMM registers
-        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size    
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
         {
             __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
         // 4-YMM registers with SW- prefetch
-        else if (size < zen_info.zen_cache_info.l3_per_ccx)//L3 Cache Size
+        else if (size < __nt_start_threshold)//NT-Threshold
         {
             __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
@@ -130,7 +116,7 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
     else
     {
         offset -= dst_align;
-        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+        if (size < __nt_start_threshold)//NT-Threshold
         {
             __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
@@ -149,11 +135,10 @@ void *  __attribute__((flatten)) __mempcpy_zen1(void * __restrict dst,
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
+    {
         return size + __load_store_le_2ymm_vec(dst, src, size);
-    if (size < __nt_start_threshold)
-        return _mempcpy_avx2(dst, src, size);
-    else
-        return nt_store_avx2(dst, src, size);
+    }
+    return _mempcpy_avx2(dst, src, size);
 }
 
 void *  __attribute__((flatten)) __mempcpy_zen2(void * __restrict dst,
@@ -161,11 +146,10 @@ void *  __attribute__((flatten)) __mempcpy_zen2(void * __restrict dst,
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
+    {
         return size + __load_store_le_2ymm_vec(dst, src, size);
-    if (size < __nt_start_threshold)
-        return _mempcpy_avx2(dst, src, size);
-    else
-        return nt_store_avx2(dst, src, size);
+    }
+    return _mempcpy_avx2(dst, src, size);
 }
 
 void *  __attribute__((flatten)) __mempcpy_zen3(void * __restrict dst,
@@ -173,11 +157,10 @@ void *  __attribute__((flatten)) __mempcpy_zen3(void * __restrict dst,
 {
     LOG_INFO("\n");
     if (size <= 2 * YMM_SZ)
+    {
         return size + __load_store_le_2ymm_vec(dst, src, size);
-    if (size < __nt_start_threshold)
-        return _mempcpy_avx2(dst, src, size);
-    else
-        return nt_store_avx2(dst, src, size);
+    }
+    return _mempcpy_avx2(dst, src, size);
 }
 
 void *  __attribute__((flatten)) __mempcpy_zen4(void * __restrict dst,
@@ -192,10 +175,9 @@ void *  __attribute__((flatten)) __mempcpy_zen4(void * __restrict dst,
     return _mempcpy_avx512(dst, src, size);
 #else
     if (size <= 2 * YMM_SZ)
+    {
         return size + __load_store_le_2ymm_vec(dst, src, size);
-    if (size < __nt_start_threshold)
-        return _mempcpy_avx2(dst, src, size);
-    else
-        return nt_store_avx2(dst, src, size);
+    }
+    return _mempcpy_avx2(dst, src, size);
 #endif
 }
