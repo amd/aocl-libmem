@@ -33,17 +33,9 @@ if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ENABLE_TUNABLES)
     add_definitions(-DALMEM_CMPSD_CLANG_WORKAROUND)
 endif ()
 
-if (${BUILD_SHARED_LIBS})
-# build a shared library
-add_compile_options(-fPIC -flto)
-add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 if(ENABLE_GCOV AND ENABLE_LOGGING)
   target_compile_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
   target_link_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
-endif()
-else ()
-# build a static library
-add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
 endif()
 
 set(SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/cache_info.c   ${CMAKE_CURRENT_SOURCE_DIR}/cpu_features.c  ${CMAKE_CURRENT_SOURCE_DIR}/threshold.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem.c)
@@ -57,28 +49,41 @@ add_definitions(-DENABLE_TUNABLES)
 set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/env_parser.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem_iface.c)
 endif ()
 
-# include the header files
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/include)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
+# shared lib
+set(CMAKE_SHARED_LINKER_FLAGS "-flto -fpic")
+add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+# static lib
+add_library("${PROJECT_NAME}_static" STATIC ${SOURCE_FILES})
 
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
 
+# include the header files
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories("${PROJECT_NAME}_static" PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+# renaming static binary
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
+
+# Memory Functions
 add_subdirectory(memcpy)
 add_subdirectory(mempcpy)
 add_subdirectory(memmove)
 add_subdirectory(memset)
 add_subdirectory(memcmp)
 
-#String Functions
+# String Functions
 add_subdirectory(strcpy)
 add_subdirectory(strncpy)
 add_subdirectory(strcmp)
 add_subdirectory(strncmp)
 add_subdirectory(strlen)
 
-if (${BUILD_SHARED_LIBS})
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/lib/shared)
-else ()
-install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_BINARY_DIR}/lib/static)
-endif ()
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR} CACHE PATH "..." FORCE)
+endif()
+
+# installing the target libraries
+install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+install(TARGETS "${PROJECT_NAME}_static" ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)

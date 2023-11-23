@@ -33,7 +33,7 @@ import re
 import csv
 import datetime
 from statistics import mean
-
+from libmem_defs import *
 
 
 class FBM:
@@ -142,12 +142,12 @@ class FBM:
 
     def fbm_run(self):
         if self.variant =="amd":
-            self.LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
-                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
+            self.LibMemVersion = subprocess.check_output("file " + LIBMEM_BIN_PATH + \
+                "| awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             #Setting up the Absolute path for LD_PRELOAD
             mycwd=os.getcwd()
-            dirname = os.path.dirname(mycwd)
-            env['LD_PRELOAD']= dirname+str('/lib/shared/libaocl-libmem.so')
+            env['LD_PRELOAD'] = LIBMEM_BIN_PATH
+
             print("FBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
         else:
             self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)

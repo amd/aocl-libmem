@@ -28,3 +28,6 @@ add_subdirectory(benchmarks)
 add_subdirectory(analyser)
 add_subdirectory(validator)
 add_subdirectory(graph_generator)
+
+# generating a file to parse the library path for tools
+file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'")

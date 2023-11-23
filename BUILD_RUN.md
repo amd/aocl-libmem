@@ -6,8 +6,7 @@
  * **gcc 12.2.0**
  * **aocc 4.0**
 
-## Build Procedure:
-### Shared Library:
+## Build and Install Procedure:
 ```sh
     #Configure for GCC build
         # Default Native Build
@@ -27,42 +26,16 @@
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -S <source_dir> -B <build_dir>
         # Enabling Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
-    #Build
+    # Build
     $ cmake --build <build_dir>
-    #Install
-    $ make install
+
+    # Install
+    $ cmake --install <build_dir>
+    ## For custom install path, run configure with "CMAKE_INSTALL_PREFIX"
 ```
 
-A shared library file 'libaocl-libmem.so' will be generated and stored under '<build_dir>/lib/shared/' path.
+Both shared library: 'libaocl-libmem.so' and static library: 'libaocl-libmem.a' are installed under '<build_dir>/lib/' path.
 
-
-### Static Library:
-```sh
-    #Configure for GCC build
-        # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=gcc -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-    #Configure for AOCC(Clang) build
-        # Default Native Build
-        $ cmake -D CMAKE_C_COMPILER=clang -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-        # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -D BUILD_SHARED_LIBS=N -S <source_dir> -B <build_dir>
-    #Build
-    $ cmake --build <build_dir>
-    #Install
-    $ make install
-```
-
-A static library file 'libaocl-libmem.a' will be generated and stored under '<build_dir>/lib/static' path.
 
 ## Debug Build:
  To enable logging build the source as below
@@ -77,7 +50,7 @@ A static library file 'libaocl-libmem.a' will be generated and stored under '<bu
 ## Running application:
  ``Run the application by preloading the shared 'libaocl-libmem.so' generated from the above build procedure.``
 ```sh
-    $ LD_PRELOAD=<path to build/lib/shared/libaocl-libmem.so> <executable> <params>
+    $ LD_PRELOAD=<path to build/lib/libaocl-libmem.so> <executable> <params>
 ```
  * **`WARNING: Do not load/run AVX512 library on Non-AVX512 machine. Running AVX512 on non-AVX512 will lead to crash(invalid instructions).`**
 
@@ -106,7 +79,7 @@ The library will choose the implementation based on the tuned parameter at run t
 
  e.g.:  To use only avx2 based move operations with both unaligned source and destination addresses.
 ```sh
-    LD_PRELOAD=<build/lib/shared/libaocl-libmem.so> LIBMEM_OPERATION=avx2,b,b <executable>
+    LD_PRELOAD=<build/lib/libaocl-libmem.so> LIBMEM_OPERATION=avx2,b,b <executable>
 ```
 
 #### 2.2. _LIBMEM_THRESHOLD_ :
@@ -125,6 +98,6 @@ The library will choose the implementation based on the tuned parameter at run t
 
  e.g.: To use **REP MOVE** instructions for a range of 1KB to 2KB and non_temporal instructions for a range of 512KB and above.
  ```sh
- LD_PRELOAD=<build/lib/shared/libaocl-libmem.so> LIBMEM_THRESHOLD=1024,2048,524288,-1 <executable>
+ LD_PRELOAD=<build/lib/libaocl-libmem.so> LIBMEM_THRESHOLD=1024,2048,524288,-1 <executable>
  ```
  **` Kindly refer to User Guide(docs/User_Guide.md) for the detailed tuning of parameters.`**

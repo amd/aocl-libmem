@@ -33,6 +33,8 @@ import csv
 import argparse
 import datetime
 import pandas as pd
+from libmem_defs import *
+
 class LBM:
     def __init__(self,**kwargs):
         self.ARGS = kwargs
@@ -72,9 +74,9 @@ class LBM:
             #set the early binding option for the loader
             os.environ['LD_BIND_NOW'] = '1'
             if lib_variant == 'amd':
-                LibMemVersion = subprocess.check_output("file ../lib/shared/libaocl-libmem.so \
-                | awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
-                env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
+                LibMemVersion = subprocess.check_output("file " + LIBMEM_BIN_PATH + \
+                "| awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
+                env['LD_PRELOAD'] = LIBMEM_BIN_PATH
                 print("LBM : Running Benchmark on AOCL-LibMem "+str(LibMemVersion,'utf-8').strip())
             else:
                 GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)

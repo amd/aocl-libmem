@@ -40,7 +40,7 @@ enable_testing()
 set(PAGE_SIZE 4096)    #4KB
 set(MAX_SIZE 33554432) #32MB
 set(MAX_TIMEOUT 12000) #Timout set to 200Mins for Memcmp
-set(LIBMEM_PATH ${CMAKE_BINARY_DIR}/lib/shared/libaocl-libmem.so)
+set(LIBMEM_PATH ${CMAKE_INSTALL_PREFIX}/lib/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy"
     "strcpy" "strncpy" "strcmp" "strncmp" "strlen")

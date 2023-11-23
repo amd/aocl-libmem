@@ -29,7 +29,6 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR “In-source build detected!”)
 endif()
 
-
 # set the project name and version
 set(LIBMEM_VERSION_STRING 4.1.1)
 
@@ -45,7 +44,6 @@ add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
 option(ENABLE_LOGGING "Enable Logger" OFF)
 
@@ -96,9 +94,6 @@ else ()
         message("Native-Compiling for AVX2 Arch...")
     endif ()
 endif ()
-
-# option for building shared lib
-option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)

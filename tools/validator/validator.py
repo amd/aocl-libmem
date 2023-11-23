@@ -32,6 +32,7 @@ from os import environ as env
 import csv
 import argparse
 import datetime
+from libmem_defs import *
 
 class Libmem_Validator:
     def __init__(self, args):
@@ -61,7 +62,7 @@ def data_validator(mem_func, size_range, alignment, iterator):
           +str(size_range[0])+"-"+str(size_range[1])+'] with src_alignment = '\
           +src_align+', dst_alignment = '+dst_align)
 
-    env['LD_PRELOAD'] = '../lib/shared/libaocl-libmem.so'
+    env['LD_PRELOAD'] = LIBMEM_BIN_PATH
 
     validation_status = 'Success'
     with open("validation_report.csv", 'a+') as v_result:
