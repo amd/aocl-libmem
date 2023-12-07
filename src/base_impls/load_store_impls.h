@@ -96,6 +96,7 @@
     vec(1) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + VEC_SZ(vec));       \
     vec(2) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 2 * VEC_SZ(vec));   \
     vec(3) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 3 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                                        \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset , vec(0));                  \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + VEC_SZ(vec), vec(1));     \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 2 * VEC_SZ(vec), vec(2)); \
@@ -112,6 +113,7 @@
     vec(1) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 2 * VEC_SZ(vec));   \
     vec(2) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 3 * VEC_SZ(vec));   \
     vec(3) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 4 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                              \
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 1 * VEC_SZ(vec), vec(0)); \
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 2 * VEC_SZ(vec), vec(1)); \
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 3 * VEC_SZ(vec), vec(2)); \
@@ -134,6 +136,7 @@
     vec(5) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 5 * VEC_SZ(vec));   \
     vec(6) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 6 * VEC_SZ(vec));   \
     vec(7) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 7 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                                        \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset, vec(0));                   \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset +  VEC_SZ(vec), vec(1));    \
     ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 2 * VEC_SZ(vec), vec(2)); \
