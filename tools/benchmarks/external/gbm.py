@@ -83,7 +83,7 @@ class GBM:
         self.variant="amd"
         self.gbm_run()
 
-        values= subprocess.run(["awk", "/^.*func/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        values= subprocess.run(["awk", "/^.*CACHED/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.size_values= [val.split('/')[1] for val in values]
         self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
