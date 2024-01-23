@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -73,8 +73,13 @@ static variant_index amd_libmem_resolver(void)
 {
     variant_index var_idx = SYSTEM;
     //GCC 12.2 doesnt support znver4 flags at the time of release
-    if (__builtin_cpu_supports("avx512f"))//"znver4"
-        var_idx = ARC_ZEN4;
+    if (__builtin_cpu_supports("avx512f"))//"znver4" and above
+    {
+        if (__builtin_cpu_supports("movdir64b"))//"znver5"
+            var_idx = ARC_ZEN5;
+        else
+            var_idx = ARC_ZEN4;
+    }
     else if (__builtin_cpu_is("znver3"))
         var_idx = ARC_ZEN3;
     else if (__builtin_cpu_is("znver2"))

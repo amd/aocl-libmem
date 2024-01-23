@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -451,3 +451,6 @@ int __memcmp_zen4(const void *mem1, const void *mem2, size_t size)
     return unaligned_ld_cmp(mem1, mem2, size);
 #endif
 }
+
+int __memcmp_zen5 (const void * mem1, const void * mem2, size_t size)
+                                 __attribute__((alias("__memcmp_zen4")));

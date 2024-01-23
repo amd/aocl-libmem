@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -72,6 +72,7 @@ typedef enum{
     ARC_ZEN2,
     ARC_ZEN3,
     ARC_ZEN4,
+    ARC_ZEN5,
     VAR_COUNT
 }variant_index;
 
@@ -103,7 +104,8 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memcpy_zen1,
         __memcpy_zen2,
         __memcpy_zen3,
-        __memcpy_zen4
+        __memcpy_zen4,
+        __memcpy_zen5
     },
     {
         __mempcpy_system,
@@ -131,7 +133,8 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __mempcpy_zen1,
         __mempcpy_zen2,
         __mempcpy_zen3,
-        __mempcpy_zen4
+        __mempcpy_zen4,
+        __mempcpy_zen5
     },
     {
         __memmove_system,
@@ -159,7 +162,8 @@ void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
         __memmove_zen1,
         __memmove_zen2,
         __memmove_zen3,
-        __memmove_zen4
+        __memmove_zen4,
+        __memmove_zen5
     }
 };
 
@@ -191,7 +195,8 @@ void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
         __memset_zen1,
         __memset_zen2,
         __memset_zen3,
-        __memset_zen4
+        __memset_zen4,
+        __memset_zen5
     }
 };
 
@@ -223,7 +228,8 @@ int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
         __memcmp_zen1,
         __memcmp_zen2,
         __memcmp_zen3,
-        __memcmp_zen4
+        __memcmp_zen4,
+        __memcmp_zen5
     }
 };
 

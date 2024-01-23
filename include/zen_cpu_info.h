@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -71,9 +71,11 @@ uint64_t nt_stop_threshold;
 #define ZEN2_L3 16*1024*1024    //16MB per CCX
 #define ZEN3_L3 32*1024*1024    //32MB per CCX
 #define ZEN4_L3 32*1024*1024    //32MB per CCX
+#define ZEN5_L3 32*1024*1024    //32MB per CCX
 
 #define ZEN3_L2 512*1024        //512MB per CORE
 #define ZEN4_L2 1*1024*1024     //1MB per CORE
+#define ZEN5_L2 1*1024*1024     //1MB per CORE
 
 typedef enum
 {

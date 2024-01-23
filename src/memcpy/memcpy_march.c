@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -175,3 +175,6 @@ void * __attribute__((flatten)) __memcpy_zen4(void * __restrict dst, \
     return _memcpy_avx2(dst, src, size);
 #endif
 }
+
+void * __memcpy_zen5 (void * __restrict dst, const void * __restrict src,
+                     size_t size) __attribute__((alias("__memcpy_zen4")));

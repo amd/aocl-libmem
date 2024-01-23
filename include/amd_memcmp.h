@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@ extern int __memcmp_zen1(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen2(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen3(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen4(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_zen5(const void *mem1,const void *mem2, size_t size);
 
 //System solution which takes in system config and  threshold values.
 extern int __memcmp_system(const void *mem1,const void *mem2, size_t size);

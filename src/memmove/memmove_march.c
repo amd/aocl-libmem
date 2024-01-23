@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -257,4 +257,7 @@ void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
 #endif
 
 }
+
+void * __memmove_zen5 (void * __restrict dst, const void * __restrict src,
+                     size_t size) __attribute__((alias("__memmove_zen4")));
 
