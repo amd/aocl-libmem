@@ -68,11 +68,11 @@ typedef enum{
     ERMS_MOVSD,
     ERMS_MOVSQ,
 /*uArch based*/
-    ARC_ZEN1,
-    ARC_ZEN2,
-    ARC_ZEN3,
-    ARC_ZEN4,
-    ARC_ZEN5,
+    ARCH_ZEN1,
+    ARCH_ZEN2,
+    ARCH_ZEN3,
+    ARCH_ZEN4,
+    ARCH_ZEN5,
     VAR_COUNT
 }variant_index;
 

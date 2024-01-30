@@ -35,6 +35,7 @@ config active_operation_cfg = SYS_CFG;
 config active_threshold_cfg = SYS_CFG;
 extern user_cfg user_config;
 
+
 static void get_cpu_capabilities()
 {
     cpuid_registers cpuid_regs;
@@ -45,23 +46,28 @@ static void get_cpu_capabilities()
 
     if (cpuid_regs.ebx & AVX512_MASK)
     {
-        zen_info.zen_cpu_features.avx512 = 1;
-        LOG_INFO("AVX512 Enabled\n");
+        zen_info.zen_cpu_features.avx512 = ENABLED;
+        LOG_INFO("CPU feature AVX512 Enabled\n");
     }
     if (cpuid_regs.ebx & AVX2_MASK)
     {
-        zen_info.zen_cpu_features.avx2 = 1;
-        LOG_INFO("AVX2 Enabled\n");
+        zen_info.zen_cpu_features.avx2 = ENABLED;
+        LOG_INFO("CPU feature AVX2 Enabled\n");
     }
     if (cpuid_regs.ebx & ERMS_MASK)
     {
-        zen_info.zen_cpu_features.erms = 1;
-        LOG_INFO("ERMS Enabled\n");
+        zen_info.zen_cpu_features.erms = ENABLED;
+        LOG_INFO("CPU feature ERMS Enabled\n");
     }
     if (cpuid_regs.edx & FSRM_MASK)
     {
-        zen_info.zen_cpu_features.fsrm = 1;
-        LOG_INFO("FSRM Enabled\n");
+        zen_info.zen_cpu_features.fsrm = ENABLED;
+        LOG_INFO("CPU feature FSRM Enabled\n");
+    }
+    if (cpuid_regs.ecx & MOVDIRI_MASK)
+    {
+        zen_info.zen_cpu_features.movdiri = ENABLED;
+        LOG_INFO("CPU feature MOVDIRI Enabled\n");
     }
 }
 
@@ -73,19 +79,34 @@ static variant_index amd_libmem_resolver(void)
 {
     variant_index var_idx = SYSTEM;
     //GCC 12.2 doesnt support znver4 flags at the time of release
-    if (__builtin_cpu_supports("avx512f"))//"znver4" and above
+    if (zen_info.zen_cpu_features.avx512 == ENABLED)//"znver4" and above
     {
-        if (__builtin_cpu_supports("movdir64b"))//"znver5"
-            var_idx = ARC_ZEN5;
+        if (zen_info.zen_cpu_features.movdiri == ENABLED)//"znver5"
+        {
+            var_idx = ARCH_ZEN5;
+            LOG_INFO("Detected CPU uArch: Zen5\n");
+        }
         else
-            var_idx = ARC_ZEN4;
+        {
+            var_idx = ARCH_ZEN4;
+            LOG_INFO("Detected CPU uArch: Zen4\n");
+        }
     }
     else if (__builtin_cpu_is("znver3"))
-        var_idx = ARC_ZEN3;
+    {
+        var_idx = ARCH_ZEN3;
+        LOG_INFO("Detected CPU uArch: Zen3\n");
+    }
     else if (__builtin_cpu_is("znver2"))
-        var_idx = ARC_ZEN2;
+    {
+        var_idx = ARCH_ZEN2;
+        LOG_INFO("Detected CPU uArch: Zen2\n");
+    }
     else if (__builtin_cpu_is("znver1"))
-        var_idx = ARC_ZEN1;
+    {
+        var_idx = ARCH_ZEN1;
+        LOG_INFO("Detected CPU uArch: Zen1\n");
+    }
     else
     {
         //System operation Config
