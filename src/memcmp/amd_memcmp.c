@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@ static int memcmp_le_2ymm(const void *mem1, const void *mem2, size_t size)
     __m128i x0, x1, x2, x3;
     int ret = 0;
     uint32_t index = 0;
+
     if (size == 0)
         return 0;
 
@@ -253,7 +254,6 @@ static int unaligned_ld_cmp(const void *mem1, const void *mem2, size_t size)
 }
 
 #ifdef AVX512_FEATURE_ENABLED
-#ifdef FORCE_ENABLE_AVX512_MEMCMP
 static int unaligned_avx512_ld_cmp(const void *mem1, const void *mem2, size_t size)
 {
     __m512i z0, z1, z2, z3, z4, z5, z6, z7;
@@ -391,20 +391,43 @@ static int unaligned_avx512_ld_cmp(const void *mem1, const void *mem2, size_t si
     return 0;
 }
 #endif
-#endif
 
-int amd_memcmp(const void *mem1, const void *mem2, size_t size)
+int  __attribute__((flatten)) amd_memcmp(const void *mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
+#ifdef AVX512_FEATURE_ENABLED
+    if ((size <= 1))
+    {
+        if (size != 0)
+            return *(uint8_t*)mem1 - *(uint8_t*)mem2;
+        return 0;
+    }
+    if (size <= ZMM_SZ)
+    {
+        __m512i z0, z1, z2;
+        __mmask64 mask;
+        uint64_t index, ret;
+
+        mask = ((uint64_t)-1) >> (64 - size);
+        z0 = _mm512_setzero_epi32();
+        z1 =  _mm512_mask_loadu_epi8(z0 ,mask, mem1);
+        z2 =  _mm512_mask_loadu_epi8(z0 ,mask, mem2);
+
+        ret = _mm512_cmpeq_epu8_mask(z1, z2) + 1;
+        if (ret != 0)
+        {
+            index = _tzcnt_u64(ret);
+            return ((*(uint8_t*)(mem1 + index)) - (*(uint8_t*)(mem2 + index)));
+        }
+        return 0;
+    }
+
+    return unaligned_avx512_ld_cmp(mem1, mem2, size);
+#else
     if (size <= 2 * YMM_SZ)
         return memcmp_le_2ymm(mem1, mem2, size);
-#ifdef AVX512_FEATURE_ENABLED
-//AVX2 out performing AVX512, hence AVX512 implementation will be bypassed.
-#ifdef FORCE_ENABLE_AVX512_MEMCMP
-   return unaligned_avx512_ld_cmp(mem1, mem2, size);
+    return unaligned_ld_cmp(mem1, mem2, size);
 #endif
-#endif
-   return unaligned_ld_cmp(mem1, mem2, size);
 }
 
 int memcmp(const void *, const void *, size_t) __attribute__((weak, alias("amd_memcmp"), visibility("default")));

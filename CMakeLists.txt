@@ -29,9 +29,8 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR “In-source build detected!”)
 endif()
 
-
 # set the project name and version
-set(LIBMEM_VERSION_STRING 4.1.0)
+set(LIBMEM_VERSION_STRING 4.2.0)
 
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
                         "Library of AMD optimized string/memory functions")
@@ -45,11 +44,12 @@ add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
 option(ENABLE_LOGGING "Enable Logger" OFF)
 
 option(ENABLE_TUNABLES "Enable user input" OFF)
+
+option(ENABLE_GCOV "Enable Code Coverage" OFF)
 
 if (ENABLE_LOGGING)
 add_definitions(-DENABLE_LOGGER)
@@ -95,10 +95,10 @@ else ()
     endif ()
 endif ()
 
-# option for building shared lib
-option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
-
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+# let the build system know the tools directory
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
 
 file(WRITE ${CMAKE_BINARY_DIR}/version.h ${LIBMEM_BUILD_VERSION_STR})

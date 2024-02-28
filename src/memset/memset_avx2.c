@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,14 +35,14 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 
     if (size >= XMM_SZ)
     {
-        x0 = _mm_set1_epi8(val);
         if (size >= YMM_SZ)
         {
-            y0 = _mm256_broadcastb_epi8(x0);
+            y0 = _mm256_set1_epi8(val);
             _mm256_storeu_si256(mem, y0);
             _mm256_storeu_si256(mem + size - YMM_SZ, y0);
             return mem;
         }
+        x0 = _mm_set1_epi8(val);
         _mm_storeu_si128(mem, x0);
         _mm_storeu_si128(mem + size - XMM_SZ, x0);
         return mem;
@@ -72,14 +72,16 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
         *((uint16_t*)(mem + size - WORD_SZ)) = shft_val;
         return mem;
     }
-    *((uint8_t*)mem) = (uint8_t)val;
+    if (size == 1)
+    {
+        *((uint8_t*)mem) = (uint8_t)val;
+    }
     return mem;
 }
 
 void *__memset_avx2_unaligned(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
@@ -87,8 +89,7 @@ void *__memset_avx2_unaligned(void *mem, int val, size_t size)
     if (size < 2 * YMM_SZ)
         return memset_le_2ymm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     if (size < 4 * YMM_SZ)
     {
         _mm256_storeu_si256 (mem , y0);
@@ -123,7 +124,6 @@ void *__memset_avx2_unaligned(void *mem, int val, size_t size)
 void *__memset_avx2_aligned(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
@@ -131,8 +131,7 @@ void *__memset_avx2_aligned(void *mem, int val, size_t size)
     if (size < 2 * YMM_SZ)
         return memset_le_2ymm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
 
     //compute the offset to align the mem to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
@@ -170,7 +169,6 @@ void *__memset_avx2_aligned(void *mem, int val, size_t size)
 void *__memset_avx2_nt(void *mem, int val, size_t size)
 {
     __m256i y0;
-    __m128i x0;
     size_t offset = 0;
 
     LOG_INFO("\n");
@@ -178,8 +176,7 @@ void *__memset_avx2_nt(void *mem, int val, size_t size)
     if (size <= 2 * YMM_SZ)
         return memset_le_2ymm(mem, val, size);
 
-    x0 = _mm_set1_epi8(val);
-    y0 = _mm256_broadcastb_epi8(x0);
+    y0 = _mm256_set1_epi8(val);
     //compute the offset to align the mem to YMM_SZ Bytes boundary
     offset = YMM_SZ - ((size_t)mem & (YMM_SZ - 1));
     _mm256_storeu_si256 (mem, y0);

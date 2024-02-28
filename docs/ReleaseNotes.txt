@@ -1,25 +1,29 @@
 (C) 2022-23 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 4.1.0
+AMD Memory/String Library - AOCL-LibMem Release Notes 4.2.0
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
 ---------------------------
-AOCL-LibMem is a library of the most widely used string/memory functions of
-C library optimized for AMD Zen microarchitecture.
-This library supports both static and dynamic/shared builds.
-The shared library should be LD_PRELOAD'ed by the application to replace standard
-string/memory functions for better performance gains on AMD Zen microarchitectures.
-a) Default build picks the best-fit implementation based on the
-underlying micro-architectural support.
-b) Tunable build lets the user choose a specific implementation based on the
-tunables parameters.
 
-Highlights of AMD AOCL-LibMem version 4.1.0
+AOCL-LibMem is a library of the most widely used string/memory functions of
+Glibc optimized for AMD Zen microarchitecture. This shared library should be
+preloaded by application to replace standard string/memory functions for
+better performance gains on AMD Zen microarchitectures.
+a) By default this library will choose the best fit implementation w.r.t
+the underlying micro-architectural support for CPU features, instructions,
+cache, and threads per CCX.
+b) This library also provides tunables for the user to choose specific
+implementation of the function as per the application requirements.
+
+
+Highlights of AMD AOCL-LibMem version 4.2.0
 --------------------------------------------
- * Added support for cross-compiling avx2 binaries on avx512 machine
-    and vice-versa.
-   Note: Running avx512 binary on non-avx512 machine will crash.
- * Optimization for Zen4 architecture.
- * Added static library support.
- * Added support for strcpy function.
+ * Added support for below string functions
+    -strncpy
+    -strcmp
+    -strncmp
+    -strlen
+ * Optimized strcpy function
+ * Optimized memmove, memcmp and memset
+ * Ctest validation support

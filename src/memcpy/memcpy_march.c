@@ -103,7 +103,7 @@ static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
             __aligned_load_and_store_4zmm_vec_loop(dst, src, size, offset);
         }
         // 4-YMM registers with prefetch
-        else if (size < zen_info.zen_cache_info.l3_per_ccx)//L3 Cache Size
+        else if (size < __nt_start_threshold)
         {
             __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size, offset);
         }
@@ -117,7 +117,7 @@ static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
     else
     {
         offset -= dst_align;
-        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+        if (size < __nt_start_threshold)
         {
             __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size, offset);
         }
