@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -98,10 +98,11 @@ def main():
                             GBM supports [c,u] & LBM supports [c,u,w,p]",\
                             type = str, choices = ['c', 'u', 'w', 'p'], \
                             default = 'm')
-    parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
-                                and destination addresses. Default alignment\
-                                is 64B for both source and destination.(ONLY LBM)",
-                            type = int, default = (64, 64))
+    parser.add_argument("-a", "--align", help = "alignemnt of source\
+                                and destination addresses: p - page_aligned,\
+                                v - vector_aligned, u - unaligned, c - cache_aligned and d - default alignment\
+                                is random.[p,v,u and c are Experimental options]",\
+                                type = str, choices = ['p', 'v', 'u', 'c', 'd'],  default = 'd')
     parser.add_argument("-mem_alloc", help = "specify the memory allocator\
                                 for FleetBench",type = str,choices=['tcmalloc','glibc'], \
                                 default= ['glibc'])

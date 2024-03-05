@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -41,6 +41,7 @@ class GBM:
         self.ARGS = kwargs
         self.MYPARSER = self.ARGS["ARGS"]
         self.func=self.MYPARSER['ARGS']['func']
+        self.align = str(self.MYPARSER['ARGS']['align'])
         self.path="../tools/benchmarks/external/gbench/"
         self.variant=""
         self.isExist=""
@@ -170,6 +171,6 @@ class GBM:
             self.ranges[0] = 1;
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return
