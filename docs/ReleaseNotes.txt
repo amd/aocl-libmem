@@ -1,6 +1,6 @@
-(C) 2022-23 Advanced Micro Devices, Inc. All Rights Reserved.
+(C) 2022-24 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 4.1.1
+AMD Memory/String Library - AOCL-LibMem Release Notes 4.2.1
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
@@ -17,13 +17,11 @@ b) This library also provides tunables for the user to choose specific
 implementation of the function as per the application requirements.
 
 
-Highlights of AMD AOCL-LibMem version 4.1.1
+Highlights of AMD AOCL-LibMem version 4.2.1
 --------------------------------------------
- * Added support for below string functions
-    -strncpy
-    -strcmp
-    -strncmp
-    -strlen
- * Optimized strcpy function
- * Optimized memmove, memcmp and memset
- * Ctest validation support
+ * Added support for aligned benchmarks in GBM
+    -Page_aligned
+    -Vector_aligned
+    -Cache_aligned
+    -Unaligned
+    -Default alignment
