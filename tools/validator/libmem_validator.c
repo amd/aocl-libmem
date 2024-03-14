@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -77,6 +77,15 @@ int string_cmp(const char *str1, const char *str2, size_t size)
     return (unsigned char)str1[i] - (unsigned char)str2[i];
 }
 
+char *test_memchr( const char *src, int ch, size_t len)
+{
+    size_t n;
+    for(n=0;n<len;n++)
+        if(src[n] == ch)
+            return (void*)&src[n];
+    return NULL;
+}
+
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
@@ -133,6 +142,27 @@ static inline int boundary_check(uint8_t *dst, size_t size)
     return 0;
 }
 
+static inline void init_buffer(char* src, size_t size)
+{
+    size_t index = 0;
+    for (index = 0; index < size; index++)
+    {
+        *(src + index) = ((char) ((rand() % 92) +36));//[ASCII value 36 ($) -> 127 (DEL)]
+    }
+    //Random needle char at index, index<size/2, index> size/2
+    index = rand()%size;
+    *(src + index) = (int)'!';
+    if (size != 1)
+    {
+        int pos = size/2;
+        index = rand()%pos;
+        *(src + index) = (int)'!';
+        index = rand()%(size - pos +1) +pos;
+        index = rand()%pos;
+        *(src + index) = (int)'!';
+    }
+
+}
 static inline void memcpy_validator(size_t size, uint32_t dst_alnmnt,\
                                                  uint32_t src_alnmnt)
 {
@@ -1218,6 +1248,119 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
     free(buff);
 }
 
+static inline void memchr_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str_alnd_addr = NULL;
+    size_t index, pos = 0;
+    char* res;
+    int find = '#';
+    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
+
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    srand(time(0));
+    str_alnd_addr = buff_tail + str1_alnmnt;
+
+    if (size == 0)
+    {
+        res = memchr((char *)str_alnd_addr, find, size);
+        if (res != NULL)
+            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - NULL"\
+                        ", actual - %p\n", size, res);
+        return;
+    }
+
+    init_buffer((char*)str_alnd_addr, size);
+    prepare_boundary(str_alnd_addr, size);
+
+    find = '#'; //ASCII value 35
+    res = memchr((char *)str_alnd_addr, find, size);
+
+    if(res != NULL)
+    {
+        printf("ERROR:[BOUNDARY] Out of bound Data failure for memchr of str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n EXP:NULL\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+
+    init_buffer((char*)str_alnd_addr, size);
+    find = '!'; // ASCII value 33
+    res = memchr((char *)str_alnd_addr, find, size);
+
+    if (res != test_memchr((char *)str_alnd_addr, find, size))
+    {
+        printf("ERROR:[VALIDATION] failure for memchr of str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+    else
+    {
+        ALM_VERBOSE_LOG("Validation passed for memchr: %lu\n", size);
+    }
+
+    //Modifying the needle char
+    find = ' '; //ASCII value 32 (SPACE)
+    res = memchr((char *)str_alnd_addr, find, size);
+
+    if (res != NULL)
+    {
+        printf("ERROR:[VALIDATION] failure for memchr of str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n EXP:NULL\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+    else
+    {
+        ALM_VERBOSE_LOG("Validation passed for memchr: %lu\n", size);
+    }
+
+    //PageCross_check
+    void *page_buff = NULL;
+    posix_memalign(&page_buff, PAGE_SZ, size + PAGE_SZ + CACHE_LINE_SZ);
+
+    if (page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+
+    init_buffer((char*)str_alnd_addr, size);
+    prepare_boundary(str_alnd_addr, size);
+    find = '#';
+    res = memchr((char *)str_alnd_addr, find, size);
+
+    if(res != NULL)
+    {
+        printf("ERROR:[PAGE_BOUNDARY] Out of bound Data failure for memchr of str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n EXP:NULL\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+
+    *(str_alnd_addr + size -1) = find; //pos of the needle at the end for page_check
+
+    res = memchr((char *)str_alnd_addr, find, size);
+    if (res != test_memchr((char *)str_alnd_addr, find, size))
+    {
+        printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n STR:%s\n", str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+
+    init_buffer((char*)str_alnd_addr, size);
+    find = '!';
+    res = memchr((char *)str_alnd_addr, find, size);
+
+    if (res != test_memchr((char *)str_alnd_addr, find, size))
+    {
+        printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu, find:%c\n"\
+                                    " return_value =%s\n STR:%s\n", str1_alnmnt, size, find, res, str_alnd_addr);
+    }
+
+    free(page_buff);
+    free(buff);
+}
+
 libmem_func supp_funcs[]=
 {
     {"memcpy",  memcpy_validator},
@@ -1230,6 +1373,7 @@ libmem_func supp_funcs[]=
     {"strcmp",  strcmp_validator},
     {"strncmp", strncmp_validator},
     {"strlen",  strlen_validator},
+    {"memchr",  memchr_validator},
     {"none",    NULL}
 };
 
