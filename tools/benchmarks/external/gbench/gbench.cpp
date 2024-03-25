@@ -124,6 +124,7 @@ public:
             std::cerr<< "Memory Allocation Failed!\n";
             exit(-1);
         }
+        memset(src_alnd,'$',size);
         memcpy(dst_alnd,src_alnd,size);
     }
 
@@ -157,7 +158,7 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void memsetRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
+    void Misc_memRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         if(mode == CACHED)
         {
@@ -192,9 +193,9 @@ void runMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alignmen
     fixture.memRunBenchmark(state, mode, alignment, func, name, args...);
 }
 template <typename MemFunction, typename... Args>
-void runMemsetMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
+void runMiscMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
     MemoryCopyFixture fixture;
-    fixture.memsetRunBenchmark(state, mode, alignment, func, name, args...);
+    fixture.Misc_memRunBenchmark(state, mode, alignment, func, name, args...);
 }
 
 
@@ -398,13 +399,14 @@ MemData functionList[] = {
 };
 
 //Functions with diff signatrues
-struct Memset_Data {
+struct Misc_MemData {
     const char *functionName;
     void *(*functionPtr)(void*src, int value, size_t size);
 };
 
-Memset_Data Memset_functionList[] = {
+Misc_MemData Misc_Mem_functionList[] = {
     {"memset",  (void *(*)(void *, int, size_t))memset},
+    {"memchr",  (void *(*)(void *, int, size_t))memchr}
 };
 
 struct StrData {
@@ -476,10 +478,10 @@ int main(int argc, char** argv) {
     }
     };
 
-    auto memsetBenchmark = [&](benchmark::State& state) {
-        for (const auto &Memset_Data : Memset_functionList) {
-    if (func == Memset_Data.functionName) {
-        runMemsetMemoryBenchmark(state, operation, alignment, Memset_Data.functionPtr, Memset_Data.functionName);
+    auto Misc_memoryBenchmark = [&](benchmark::State& state) {
+        for (const auto &Misc_MemData : Misc_Mem_functionList) {
+    if (func == Misc_MemData.functionName) {
+        runMiscMemoryBenchmark(state, operation, alignment, Misc_MemData.functionPtr, Misc_MemData.functionName);
         }
     }
     };
@@ -519,8 +521,8 @@ int main(int argc, char** argv) {
 
         if (func.compare(0, 3, "mem") == 0)
         {
-            if(func.compare(0, 4, "mems")== 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), memsetBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
+            if(func.compare(0, 4, "mems")== 0 || func.compare(0, 5, "memch")== 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), Misc_memoryBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), memoryBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
         }
@@ -540,8 +542,8 @@ int main(int argc, char** argv) {
     {
         if (func.compare(0, 3, "mem") == 0)
         {
-            if(func.compare(0, 4, "mems") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), memsetBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
+            if(func.compare(0, 4, "mems")== 0 || func.compare(0, 5, "memch")== 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), Misc_memoryBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), memoryBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
 

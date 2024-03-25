@@ -189,6 +189,11 @@ void strlen_wrapper(int64_t *dst, int64_t *src, int size)
     strlen((char *)src);
 }
 
+void memchr_wrapper(int64_t *src, int c, int size)
+{
+    memchr((char*)src, c , size);
+}
+
 
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                      int size, int blocksize, const char *indent_prefix,
@@ -210,6 +215,7 @@ bench_info supp_funcs[]=
     {"memmove", 0, memmove_wrapper},
     {"memset", 0, memset_wrapper},
     {"memcmp", 0, memcmp_wrapper},
+    {"memchr", 0, memchr_wrapper},
     {"strcpy", 0, strcpy_wrapper},
     {"strncpy", 0, strncpy_wrapper},
     {"strcmp", 0, strcmp_wrapper},
