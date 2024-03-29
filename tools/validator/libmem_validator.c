@@ -58,6 +58,7 @@ typedef struct
 #define OVERLAP_BUFFER        0
 #define NON_OVERLAP_BUFFER    1
 #define DEFAULT               2
+#define NON_OVERLAP_BUFFER_EXTRA 3
 
 #define implicit_func_decl_push_ignore \
     _Pragma("GCC diagnostic push") \
@@ -86,6 +87,16 @@ char *test_memchr( const char *src, int ch, size_t len)
     return NULL;
 }
 
+char *test_strcat( char *dst, char *src)
+{
+    char *ret = dst;
+    while(*dst++ != '\0');
+    --dst;
+
+    while((*dst++ = *src++) != '\0');
+    return ret;
+}
+
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
@@ -107,6 +118,15 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
                      size + 2*CACHE_LINE_SZ) & ~(CACHE_LINE_SZ - 1));
             break;
+
+        case NON_OVERLAP_BUFFER_EXTRA:
+            posix_memalign(&buff_addr, CACHE_LINE_SZ, \
+                            3 * (size + 2 * CACHE_LINE_SZ));
+            * head_buff = (uint8_t *)buff_addr;
+            * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
+                     2*size + 2*CACHE_LINE_SZ) & ~(CACHE_LINE_SZ - 1));
+            break;
+
         default:
             posix_memalign(&buff_addr, CACHE_LINE_SZ, size + 2 * CACHE_LINE_SZ);
             * tail_buff = (uint8_t *)buff_addr;
@@ -1361,6 +1381,136 @@ static inline void memchr_validator(size_t size, uint32_t str2_alnmnt,\
     free(buff);
 }
 
+static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *temp_buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
+    size_t index;
+    void *ret = NULL;
+    srand(time(0));
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size, NON_OVERLAP_BUFFER_EXTRA);
+
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    if(size == 0) //For Null expected behaviour is SEGFAULT
+    {
+        return;
+    }
+
+    str2_alnd_addr = buff_tail + str2_alnmnt;
+    str1_alnd_addr = buff_head + str1_alnmnt; // String size big enough to accommodate str2
+
+    //intialize str1 & str2 memory
+    //TODO: Need to add /n in the string
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr + index) = 'a' + (char)(rand() % 26);
+        *(str2_alnd_addr + index) = 'a' + (char)(rand() % 26);
+    }
+    //Appending Null Charachter at the end of str1 string
+    *(str1_alnd_addr + size - 1) = '\0';
+    *(str2_alnd_addr + (rand()%size)) = '\0';
+    //Source Corruption
+    temp_buff = alloc_buffer(&buff_head, &buff_tail, 2 * size, DEFAULT);
+
+    if (temp_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        free(buff);
+        exit(-1);
+    }
+    uint8_t *tmp_alnd_addr = NULL;
+    tmp_alnd_addr = buff_tail + str1_alnmnt;
+
+    strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
+    strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+
+    if(strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr) != 0)
+    {
+        printf("ERROR: [VALIDATION] failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    //Multi-Null check
+    size_t more_null_idx = rand() % (size);
+    *(tmp_alnd_addr + more_null_idx) = '\0';
+    strcpy((char *)str1_alnd_addr, (char *)tmp_alnd_addr);
+
+    *(str2_alnd_addr + more_null_idx) = '\0';
+    strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+
+    if(strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr ) != 0)
+    {
+        printf("ERROR: [VALIDATION] MultiNull check failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    free(buff);
+    //Page_check
+    void *str1_page_buff = NULL, *str2_page_buff = NULL, *temp_page_buff = NULL;
+
+    posix_memalign(&str1_page_buff, PAGE_SZ,  2 * size + PAGE_SZ + CACHE_LINE_SZ);
+    if (str1_page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    posix_memalign(&temp_page_buff, PAGE_SZ,  2 * size + PAGE_SZ + CACHE_LINE_SZ);
+    if (temp_page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    posix_memalign(&str2_page_buff, PAGE_SZ,  size + PAGE_SZ + CACHE_LINE_SZ);
+    if (str2_page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str1_alnd_addr = (uint8_t *)str1_page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str2_alnd_addr = (uint8_t *)str2_page_buff + PAGE_SZ - vec_size + str2_alnmnt;
+    tmp_alnd_addr = (uint8_t *)temp_page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr +index) = ((char) 'a' + rand() % 26);
+        *(str2_alnd_addr +index) = ((char) 'a' + rand() % 26);
+    }
+    *(str1_alnd_addr + size -1) = *(str2_alnd_addr + (rand()%size)) = '\0';
+
+    strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
+    strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+
+    if(strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr), (char *)str1_alnd_addr) != 0)
+    {
+        printf("ERROR: [PAGE-CROSS] failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    //Page_check with Multi-NULL
+    more_null_idx = rand() % size;
+    *(tmp_alnd_addr + more_null_idx) = '\0';
+    strcpy((char *)str1_alnd_addr, (char *)tmp_alnd_addr);
+
+    *(str2_alnd_addr + more_null_idx) = '\0';
+    strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+
+    if(strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr) != 0)
+    {
+        printf("ERROR: [PAGE-CROSS] MultiNull check failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    free(temp_buff);
+    free(str1_page_buff);
+    free(str2_page_buff);
+    free(temp_page_buff);
+}
+
 libmem_func supp_funcs[]=
 {
     {"memcpy",  memcpy_validator},
@@ -1368,12 +1518,13 @@ libmem_func supp_funcs[]=
     {"memmove", memmove_validator},
     {"memset",  memset_validator},
     {"memcmp",  memcmp_validator},
+    {"memchr",  memchr_validator},
     {"strcpy",  strcpy_validator},
     {"strncpy", strncpy_validator},
     {"strcmp",  strcmp_validator},
     {"strncmp", strncmp_validator},
     {"strlen",  strlen_validator},
-    {"memchr",  memchr_validator},
+    {"strcat",  strcat_validator},
     {"none",    NULL}
 };
 
