@@ -80,6 +80,7 @@ add_subdirectory(strncpy)
 add_subdirectory(strcmp)
 add_subdirectory(strncmp)
 add_subdirectory(strlen)
+add_subdirectory(strcat)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR} CACHE PATH "..." FORCE)
