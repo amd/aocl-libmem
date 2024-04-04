@@ -52,6 +52,15 @@ state.counters["Throughput(Bytes/s)"]=benchmark::Counter(state.iterations()*stat
 state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range(0)),benchmark::Counter::kDefaults,benchmark::Counter::kIs1024);
 }
 
+#define REGISTER_MEM_FUNCTION(name) \
+    { #name, (void *(*)(void *, const void *, size_t))name }
+
+#define REGISTER_MISC_MEM_FUNCTION(name) \
+    { #name, (void *(*)(void *, int, size_t))name }
+
+#define REGISTER_STR_FUNCTION(name) \
+    { #name, (void *(*)(char *,const char *))name }
+
 class MemoryCopyFixture {
 public:
     void SetUp(size_t size, char alignment) {
@@ -198,7 +207,7 @@ void runMiscMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alig
     fixture.Misc_memRunBenchmark(state, mode, alignment, func, name, args...);
 }
 
-
+//For string functions dst_buffer is 2* size (for handling strcat and buffer overflow)
 class StringFixture {
 public:
     void SetUp(size_t size, char alignment) {
@@ -212,7 +221,7 @@ public:
              {  page_size = sysconf(_SC_PAGESIZE);
                 SIZE = size + page_size;
                 src = new char[SIZE];
-                dst = new char[SIZE];
+                dst = new char[2 * SIZE];
                 src_alnd = src;
                 std::align(page_size, size, src_alnd, SIZE);
                 dst_alnd = dst;
@@ -223,7 +232,7 @@ public:
               {
                 SIZE = size + VEC_SIZE;
                 src = new char[SIZE];
-                dst = new char[SIZE];
+                dst = new char[2 * SIZE];
                 src_alnd = src;
                 dst_alnd = dst;
 
@@ -235,7 +244,7 @@ public:
               {
                 SIZE = size + CL_SIZE;
                 src = new char[SIZE];
-                dst = new char[SIZE];
+                dst = new char[2 * SIZE];
                 src_alnd = src;
                 dst_alnd = dst;
 
@@ -251,7 +260,7 @@ public:
                 offset = (uint64_t)src & (src_alnmnt-1);
                 src_alnd = src+src_alnmnt-offset;
 
-                dst = new char[size + dst_alnmnt];
+                dst = new char[2 * size + dst_alnmnt];
                 offset = (uint64_t)dst & (dst_alnmnt-1);
                 dst_alnd = dst+dst_alnmnt-offset;
                 break;
@@ -259,7 +268,7 @@ public:
             default: //Random allocation
               {
                 src = new char[size];
-                dst = new char[size];
+                dst = new char[2 * size];
                 src_alnd = src;
                 dst_alnd = dst;
               }
@@ -273,7 +282,7 @@ public:
         memset(src_alnd, 'x', size);
 
         char* val = static_cast<char*>(src_alnd);
-        val[size -1 ] = '\0';
+        val[size -1] = '\0';
         strcpy((char*)dst_alnd,(char*)src_alnd);
     }
 
@@ -287,22 +296,52 @@ public:
         int size = state.range(0);
         if(mode == CACHED)
         {
-            SetUp(size, alignment);
-            for (auto _ : state) {
-            benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+            if (name == "strcat")
+            {
+                SetUp(size, alignment);           
+                for (auto _ : state) {
+                    char *val = static_cast<char*>(dst_alnd);
+                    val[size -1] = '\0';
+                    benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+                }
             }
+            else
+            {
+                SetUp(size, alignment);
+                for (auto _ : state) {
+                    benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+                }
+            }
+
             TearDown();
         }
         else
         {
-            for (auto _ : state) {
-            state.PauseTiming();
-            SetUp(size, alignment);
-            state.ResumeTiming();
-            benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
-            state.PauseTiming();
-            TearDown();
-            state.ResumeTiming();
+            if (name == "strcat")
+            {   for (auto _ : state) {
+                state.PauseTiming();
+                SetUp(size, alignment);                       
+                char* val = static_cast<char*>(src_alnd);
+                val[size/2] = '\0';
+                strcpy((char*)dst_alnd,(char*)src_alnd);
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
+                }
+            }
+            else
+            {
+                for (auto _ : state) {
+                state.PauseTiming();
+                SetUp(size, alignment);
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
+            }
             }
         }
     Bench_Result(state);
@@ -392,10 +431,10 @@ struct MemData {
 };
 
 MemData functionList[] = {
-    {"memcpy", (void *(*)(void *, const void *, size_t))memcpy},
-    {"mempcpy", (void *(*)(void *, const void *, size_t))mempcpy},
-    {"memmove", (void *(*)(void *, const void *, size_t))memmove},
-    {"memcmp", (void *(*)(void *, const void *, size_t))memcmp},
+    REGISTER_MEM_FUNCTION(memcpy),
+    REGISTER_MEM_FUNCTION(mempcpy),
+    REGISTER_MEM_FUNCTION(memmove),
+    REGISTER_MEM_FUNCTION(memcmp),
 };
 
 //Functions with diff signatrues
@@ -405,8 +444,8 @@ struct Misc_MemData {
 };
 
 Misc_MemData Misc_Mem_functionList[] = {
-    {"memset",  (void *(*)(void *, int, size_t))memset},
-    {"memchr",  (void *(*)(void *, int, size_t))memchr}
+    REGISTER_MISC_MEM_FUNCTION(memset),
+    REGISTER_MISC_MEM_FUNCTION(memchr),
 };
 
 struct StrData {
@@ -415,8 +454,9 @@ struct StrData {
 };
 
 StrData strfunctionList[] = {
-    {"strcpy", (void *(*)(char *, const char *))strcpy},
-    {"strcmp", (void *(*)(char *, const char *))strcmp},
+    REGISTER_STR_FUNCTION(strcpy),
+    REGISTER_STR_FUNCTION(strcmp),
+    REGISTER_STR_FUNCTION(strcat),
 };
 
 struct Str_n_Data {
@@ -424,9 +464,12 @@ struct Str_n_Data {
     void *(*functionPtr)(char *dest, const char *src, size_t n);
 };
 
+#define REGISTER_STR_N_FUNCTION(name) \
+    { #name, (void *(*)(char *,const char *, size_t))name }
+
 Str_n_Data str_n_functionList[] = {
-    {"strncpy", (void *(*)(char *, const char *, size_t))strncpy},
-    {"strncmp", (void *(*)(char *, const char *, size_t))strncmp},
+    REGISTER_STR_N_FUNCTION(strncpy),
+    REGISTER_STR_N_FUNCTION(strncmp),
 };
 
 struct Strlen_Data {
@@ -534,7 +577,6 @@ int main(int argc, char** argv) {
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-
         }
     }
     //Iterative Benchmark

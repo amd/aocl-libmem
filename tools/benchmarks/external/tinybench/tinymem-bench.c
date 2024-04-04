@@ -107,9 +107,20 @@ static double bandwidth_bench_helper(int64_t *dstbuf, int64_t *srcbuf,
             }
             else
             {
-                for (i = 0; i < innerloopcount; i++)
+                if(strcmp(description,"strcat") !=0 )
+                {   for (i = 0; i < innerloopcount; i++)
+                    {
+                        f(dstbuf, srcbuf, size);
+                    }
+                }
+                else
                 {
-                    f(dstbuf, srcbuf, size);
+                    for (i = 0; i < innerloopcount; i++)
+                    {
+                        *(dstbuf + size - 1) = '\0';
+                        f(dstbuf, srcbuf, size);
+                    }
+
                 }
             }
             innerloopcount *= 2;
@@ -189,6 +200,11 @@ void strlen_wrapper(int64_t *dst, int64_t *src, int size)
     strlen((char *)src);
 }
 
+void strcat_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strcat((char *)dst, (char *)src);
+}
+
 void memchr_wrapper(int64_t *src, int c, int size)
 {
     memchr((char*)src, c , size);
@@ -221,6 +237,7 @@ bench_info supp_funcs[]=
     {"strcmp", 0, strcmp_wrapper},
     {"strncmp", 0, strncmp_wrapper},
     {"strlen", 0, strlen_wrapper},
+    {"strcat", 0, strcat_wrapper},
     {"none", 0,  NULL}
 };
 
@@ -256,10 +273,21 @@ int main(int argc, char **argv)
 
     for(bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
     {
-        poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
-                                                (void **)&dstbuf, bufsize,
-                                                (void **)&tmpbuf, BLOCKSIZE,
-                                                NULL, 0);
+        //Bigger dst buffer for strcat operation
+        if (strstr(bench_func[0].description,"strcat"))
+        {
+            poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
+                                                    (void **)&dstbuf, MAXREPEATS * bufsize,
+                                                    (void **)&tmpbuf, BLOCKSIZE,
+                                                    NULL, 0);
+        }
+        else
+        {
+            poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
+                                                    (void **)&dstbuf, bufsize,
+                                                    (void **)&tmpbuf, BLOCKSIZE,
+                                                    NULL, 0);
+        }
 
         printf("SIZE: %zu B \n",bufsize);
 
@@ -269,12 +297,13 @@ int main(int argc, char **argv)
             memset(srcbuf, 'c', bufsize);
            *((char *)srcbuf + bufsize -1) = '\0';
 
-            if ( strstr(bench_func[0].description, "cmp"))
+            if ( strstr(bench_func[0].description, "cmp") || strstr(bench_func[0].description, "cat"))
             {
                 memset(dstbuf, 'c', bufsize);
                 *((char *)srcbuf + bufsize -2) = 'C';
                 *((char *)dstbuf + bufsize -1) = '\0';
             }
+
         }
 
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
