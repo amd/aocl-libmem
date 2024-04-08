@@ -34,7 +34,11 @@
 #define YMM_SZ 32
 #define ZMM_SZ 64
 
-static int vec_size = YMM_SZ;
+#ifdef AVX512_FEATURE_ENABLED
+    #define VEC_SZ ZMM_SZ
+#else
+    #define VEC_SZ YMM_SZ
+#endif
 
 typedef struct
 {
@@ -642,7 +646,7 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
         exit(-1);
     }
 
-    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
 
     for (index = 0; index < size; index++)
     {
@@ -996,7 +1000,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
         exit(-1);
     }
 
-    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str1_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
 
     srand(time(0));
 
@@ -1248,7 +1252,7 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
         exit(-1);
     }
 
-    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
 
     srand(time(0));
 
@@ -1345,7 +1349,7 @@ static inline void memchr_validator(size_t size, uint32_t str2_alnmnt,\
         exit(-1);
     }
 
-    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
 
     init_buffer((char*)str_alnd_addr, size);
     prepare_boundary(str_alnd_addr, size);
@@ -1473,9 +1477,9 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
         exit(-1);
     }
 
-    str1_alnd_addr = (uint8_t *)str1_page_buff + PAGE_SZ - vec_size + str1_alnmnt;
-    str2_alnd_addr = (uint8_t *)str2_page_buff + PAGE_SZ - vec_size + str2_alnmnt;
-    tmp_alnd_addr = (uint8_t *)temp_page_buff + PAGE_SZ - vec_size + str1_alnmnt;
+    str1_alnd_addr = (uint8_t *)str1_page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
+    str2_alnd_addr = (uint8_t *)str2_page_buff + PAGE_SZ - VEC_SZ + str2_alnmnt;
+    tmp_alnd_addr = (uint8_t *)temp_page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
 
     for (index = 0; index < size; index++)
     {
@@ -1539,11 +1543,6 @@ int main(int argc, char **argv)
     unsigned int offset, src_alignment = 0, dst_alignment = 0;
     libmem_func *lm_func_validator = &supp_funcs[0]; //default func is memcpy
 
-    if (__builtin_cpu_supports("avx512f"))
-    {
-        vec_size = ZMM_SZ;
-    }
-
     int al_check = 0;
 
     if (argc < 6)
@@ -1572,10 +1571,10 @@ int main(int argc, char **argv)
     size = strtoul(argv[2], &ptr, 10);
 
     if (argv[3] != NULL)
-        src_alignment = atoi(argv[3]) % vec_size;
+        src_alignment = atoi(argv[3]) % VEC_SZ;
 
     if (argv[4] != NULL)
-        dst_alignment = atoi(argv[4]) % vec_size;
+        dst_alignment = atoi(argv[4]) % VEC_SZ;
 
     srand(time(0));
 
@@ -1589,9 +1588,9 @@ int main(int argc, char **argv)
 
     else
     {
-        for(unsigned int aln_src  = 0; aln_src < vec_size; aln_src++)
+        for(unsigned int aln_src  = 0; aln_src < VEC_SZ; aln_src++)
         {
-            for(unsigned int aln_dst = 0; aln_dst < vec_size; aln_dst++)
+            for(unsigned int aln_dst = 0; aln_dst < VEC_SZ; aln_dst++)
             {
                 lm_func_validator->func(size, aln_dst, aln_src);
             }
