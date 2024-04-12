@@ -150,20 +150,26 @@ public:
         {
             SetUp(size, alignment);
             for (auto _ : state) {
-            benchmark::DoNotOptimize(func(dst_alnd, src_alnd, size));
+                benchmark::DoNotOptimize(func(dst_alnd, src_alnd, size));
             }
+            TearDown();
         }
         else
         {
-            SetUp(state.range(0) * 4096, alignment);
-            srand(time(0));
             for (auto _ : state) {
-            benchmark::DoNotOptimize(func(src_alnd + (rand()%1024), dst_alnd + (rand()%1024) ,state.range(0)));
+                state.PauseTiming();
+                SetUp(size, alignment);
+                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
             }
         }
 
         Bench_Result(state);
-        TearDown();
     }
 
     template <typename MemFunction, typename... Args>
@@ -173,20 +179,25 @@ public:
         {
             SetUp(size, alignment);
             for (auto _ : state) {
-            benchmark::DoNotOptimize(func(src_alnd, 'x', size));
+                benchmark::DoNotOptimize(func(src_alnd, 'x', size));
             }
+            TearDown();
         }
         else
         {
-            SetUp(state.range(0) * 4096, alignment);
-            srand(time(0));
             for (auto _ : state) {
-            benchmark::DoNotOptimize(func(src_alnd + (rand()%1024), 'x',state.range(0)));
+                state.PauseTiming();
+                SetUp(size, alignment);
+                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func(src_alnd, 'x', size));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
             }
-        }
 
         Bench_Result(state);
-        TearDown();
+        }
     }
 
 protected:
@@ -317,31 +328,16 @@ public:
         }
         else
         {
-            if (name == "strcat")
-            {   for (auto _ : state) {
-                state.PauseTiming();
-                SetUp(size, alignment);                       
-                char* val = static_cast<char*>(src_alnd);
-                val[size/2] = '\0';
-                strcpy((char*)dst_alnd,(char*)src_alnd);
-                state.ResumeTiming();
-                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
-                }
-            }
-            else
-            {
-                for (auto _ : state) {
+            for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
+                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 state.PauseTiming();
                 TearDown();
                 state.ResumeTiming();
-            }
             }
         }
     Bench_Result(state);
@@ -354,20 +350,21 @@ public:
         {
             SetUp(size, alignment);
             for (auto _ : state) {
-            benchmark::DoNotOptimize(strlen((char*)src_alnd));
+            benchmark::DoNotOptimize(func((char*)src_alnd));
             }
             TearDown();
         }
         else
         {
             for (auto _ : state) {
-            state.PauseTiming();
-            SetUp(size, alignment);
-            state.ResumeTiming();
-            benchmark::DoNotOptimize(func((char*)src_alnd));
-            state.PauseTiming();
-            TearDown();
-            state.ResumeTiming();
+                state.PauseTiming();
+                SetUp(size, alignment);
+                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)src_alnd));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
             }
         }
     Bench_Result(state);
@@ -387,13 +384,15 @@ public:
         else
         {
             for (auto _ : state) {
-            state.PauseTiming();
-            SetUp(size, alignment);
-            state.ResumeTiming();
-            benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
-            state.PauseTiming();
-            TearDown();
-            state.ResumeTiming();
+                state.PauseTiming();
+                SetUp(size, alignment);
+                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
             }
         }
     Bench_Result(state);
