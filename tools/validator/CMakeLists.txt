@@ -36,14 +36,71 @@ add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/libmem_validator.c)
 # Enable testing
 enable_testing()
 
+# Check L2cache sizes using a command line utility
+execute_process(
+    COMMAND bash -c "lscpu --caches | grep 'L2' | awk '{print $2}'"
+    OUTPUT_VARIABLE LSCPU_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(LSCPU_OUTPUT MATCHES "([0-9]+)M")
+    string(REGEX REPLACE "([0-9]+)M" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
+    math(EXPR L2_CACHE_SIZE "${LSCPU_OUTPUT} * 1024 * 1024")
+
+elseif(LSCPU_OUTPUT MATCHES "([0-9]+)K")
+    string(REGEX REPLACE "([0-9]+)K" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
+    math(EXPR L2_CACHE_SIZE "${LSCPU_OUTPUT} * 1024")
+
+else()
+    set(L2_CACHE_SIZE 1048320)
+endif()
+
+# Convert LSCPU_OUTPUT to an integer
+math(EXPR LSCPU_OUTPUT_INT "${L2_CACHE_SIZE}")
+
+# Calculate start and end sizes
+#1MB +- 256 L2 Cahce [Zen3 and Zen4]
+math(EXPR L2TH_START "${LSCPU_OUTPUT_INT} - 256")
+math(EXPR L2TH_END "${LSCPU_OUTPUT_INT} + 256")
+
+# Check L3cache sizes using a command line utility
+execute_process(
+    COMMAND bash -c "lscpu --caches | grep 'L3' | awk '{print $2}'"
+    OUTPUT_VARIABLE LSCPU_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(LSCPU_OUTPUT MATCHES "([0-9]+)M")
+    string(REGEX REPLACE "([0-9]+)M" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
+    math(EXPR L3_CACHE_SIZE "${LSCPU_OUTPUT} * 1024 * 1024")
+
+elseif(LSCPU_OUTPUT MATCHES "([0-9]+)K")
+    string(REGEX REPLACE "([0-9]+)K" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
+    math(EXPR L3_CACHE_SIZE "${LSCPU_OUTPUT} * 1024")
+
+else()
+    set(L3_CACHE_SIZE 33554432)
+endif()
+
+# Convert LSCPU_OUTPUT to an integer
+math(EXPR LSCPU_OUTPUT_INT "${L3_CACHE_SIZE}")
+
+# Calculate start and end sizes
+#24MB +- 256 3/4th of L3 Cache [Zen4]
+math(EXPR L3TH_START "${LSCPU_OUTPUT_INT} * 3 / 4 - 256")
+math(EXPR L3TH_END "${LSCPU_OUTPUT_INT} * 3 / 4  + 256")
+
 # Define test values
 set(PAGE_SIZE 4096)    #4KB
 set(MAX_SIZE 33554432) #32MB
+
 set(MAX_TIMEOUT 12000) #Timout set to 200Mins for Memcmp
 set(LIBMEM_PATH ${CMAKE_INSTALL_PREFIX}/lib/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
     "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat")
+
+set(memory_threshold_func "memcpy" "memmove" "mempcpy")
 
 ##ITERATOR TESTING
 #[0,1,2...4096B]
@@ -136,6 +193,53 @@ foreach(pattern IN LISTS supp_func)
         )
         set_tests_properties(
             "${sanitized_pattern}_align_${size}B"
+            PROPERTIES
+            FAIL_REGULAR_EXPRESSION "ERROR"
+        )
+    endforeach()
+endforeach()
+
+#Threshold boundary checks for memory functions
+set(size_values "")
+while(${L2TH_START} LESS_EQUAL ${L2TH_END})
+    list(APPEND size_values ${L2TH_START})
+    math(EXPR L2TH_START "${L2TH_START} + 1")
+endwhile()
+
+foreach(pattern IN LISTS memory_threshold_func)
+    string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+    foreach(size ${size_values})
+        set(test_name "${sanitized_pattern}_thresholdL2_${size}B")
+        add_test(
+            NAME "${test_name}"
+            COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+            ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+        )
+        set_tests_properties(
+            "${sanitized_pattern}_thresholdL2_${size}B"
+            PROPERTIES
+            FAIL_REGULAR_EXPRESSION "ERROR"
+        )
+    endforeach()
+endforeach()
+
+set(size_values "")
+while(${L3TH_START} LESS_EQUAL ${L3TH_END})
+    list(APPEND size_values ${L3TH_START})
+    math(EXPR L3TH_START "${L3TH_START} + 1")
+endwhile()
+
+foreach(pattern IN LISTS memory_threshold_func)
+    string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+    foreach(size ${size_values})
+        set(test_name "${sanitized_pattern}_thresholdL3_${size}B")
+        add_test(
+            NAME "${test_name}"
+            COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+            ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+        )
+        set_tests_properties(
+            "${sanitized_pattern}_thresholdL3_${size}B"
             PROPERTIES
             FAIL_REGULAR_EXPRESSION "ERROR"
         )
