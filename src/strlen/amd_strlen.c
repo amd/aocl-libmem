@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,9 +28,6 @@
 #include <stdint.h>
 #include <immintrin.h>
 #include "alm_defs.h"
-
-#define PAGE_SZ         4096
-#define CACHELINE_SZ    64
 
 
 uint8_t _strlen_ble_ymm(const char *str1, uint8_t size)
@@ -185,10 +182,10 @@ static inline size_t _strlen_avx2(const char *str)
         y3 = _mm256_load_si256((void *)str + offset + 2 * YMM_SZ);
         y4 = _mm256_load_si256((void *)str + offset + 3 * YMM_SZ);
 
-        y5 = _mm256_min_epi8(y1, y2);
-        y6 = _mm256_min_epi8(y3, y4);
+        y5 = _mm256_min_epu8(y1, y2);
+        y6 = _mm256_min_epu8(y3, y4);
 
-        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_min_epi8(y5, y6), y0));
+        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0));
         if (ret != 0)
             break;
 
@@ -277,10 +274,10 @@ static inline size_t _strlen_avx512(const char *str)
         z3 = _mm512_load_si512(str + offset + 2 * ZMM_SZ);
         z4 = _mm512_load_si512(str + offset + 3 * ZMM_SZ);
 
-        z5 = _mm512_min_epi8(z1,z2);
-        z6 = _mm512_min_epi8(z3,z4);
+        z5 = _mm512_min_epu8(z1,z2);
+        z6 = _mm512_min_epu8(z3,z4);
 
-        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z5, z6), z0);
+        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
         if (ret != 0)
           break;
 
