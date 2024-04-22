@@ -568,14 +568,10 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     void *ret = NULL;
     srand(time(0));
 
-    //special case to handle size ZERO with NULL buff inputs.
+    //special case to handle size ZERO with NULL buff.
     if (size == 0)
     {
-        ret = strcpy((char*)buff, (char*)buff);
-        if (ret != buff)
-            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %p"\
-                        ", actual - %p\n", size, buff, ret);
-        return;
+      return ;
     }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);

@@ -272,10 +272,10 @@ static inline char *_strncpy_avx2(char *dst, const char *src, size_t size)
     y3 = _mm256_loadu_si256((void *)src + offset + 2 * YMM_SZ);
     y4 = _mm256_loadu_si256((void *)src + offset + 3 * YMM_SZ);
 
-    y5 = _mm256_min_epi8(y1, y2);
-    y6 = _mm256_min_epi8(y3, y4);
+    y5 = _mm256_min_epu8(y1, y2);
+    y6 = _mm256_min_epu8(y3, y4);
 
-    y_cmp = _mm256_cmpeq_epi8(_mm256_min_epi8(y5, y6), y0);
+    y_cmp = _mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0);
     ret = _mm256_movemask_epi8(y_cmp);
 
     if (!ret)
@@ -295,10 +295,10 @@ static inline char *_strncpy_avx2(char *dst, const char *src, size_t size)
                 y3 = _mm256_loadu_si256((void *)src + offset + 2 * YMM_SZ);
                 y4 = _mm256_loadu_si256((void *)src + offset + 3 * YMM_SZ);
 
-                y5 = _mm256_min_epi8(y1, y2);
-                y6 = _mm256_min_epi8(y3, y4);
+                y5 = _mm256_min_epu8(y1, y2);
+                y6 = _mm256_min_epu8(y3, y4);
 
-                y_cmp = _mm256_cmpeq_epi8(_mm256_min_epi8(y5, y6), y0);
+                y_cmp = _mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0);
                 ret = _mm256_movemask_epi8(y_cmp);
                 if (ret)
                     break;
@@ -318,10 +318,10 @@ static inline char *_strncpy_avx2(char *dst, const char *src, size_t size)
             y3 = _mm256_loadu_si256((void *)src + offset + 2 * YMM_SZ);
             y4 = _mm256_loadu_si256((void *)src + offset + 3 * YMM_SZ);
 
-            y5 = _mm256_min_epi8(y1, y2);
-            y6 = _mm256_min_epi8(y3, y4);
+            y5 = _mm256_min_epu8(y1, y2);
+            y6 = _mm256_min_epu8(y3, y4);
 
-            y_cmp = _mm256_cmpeq_epi8(_mm256_min_epi8(y5, y6), y0);
+            y_cmp = _mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0);
             ret = _mm256_movemask_epi8(y_cmp);
             if (ret == 0)
             {
@@ -498,7 +498,7 @@ static inline char *_strncpy_avx512(char *dst, const char *src, size_t size)
         _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z3);
         _mm512_storeu_si512(dst + size - ZMM_SZ, z4);
 
-        if ((ret1 = _mm512_cmpeq_epu8_mask(z0, _mm512_min_epi8(z1,z2))))
+        if ((ret1 = _mm512_cmpeq_epu8_mask(z0, _mm512_min_epu8(z1,z2))))
         {
             ret = _mm512_cmpeq_epu8_mask(z0, z1);
             if (ret == 0)
@@ -509,7 +509,7 @@ static inline char *_strncpy_avx512(char *dst, const char *src, size_t size)
             index +=  _tzcnt_u64(ret);
             _fill_null_avx512(dst + index, size - index);
         }
-        else if ((ret2 = _mm512_cmpeq_epu8_mask(z0, _mm512_min_epi8(z3,z4))))
+        else if ((ret2 = _mm512_cmpeq_epu8_mask(z0, _mm512_min_epu8(z3,z4))))
         {
             index = size - 2 * ZMM_SZ;
             ret = _mm512_cmpeq_epu8_mask(z0, z3);
@@ -532,10 +532,10 @@ static inline char *_strncpy_avx512(char *dst, const char *src, size_t size)
     z3 = _mm512_loadu_si512((void *)src + offset + 2 * ZMM_SZ);
     z4 = _mm512_loadu_si512((void *)src + offset + 3 * ZMM_SZ);
 
-    z5 = _mm512_min_epi8(z1, z2);
-    z6 = _mm512_min_epi8(z3, z4);
+    z5 = _mm512_min_epu8(z1, z2);
+    z6 = _mm512_min_epu8(z3, z4);
 
-    ret = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z5, z6), z0);
+    ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
 
     if (!ret)
     {
@@ -554,10 +554,10 @@ static inline char *_strncpy_avx512(char *dst, const char *src, size_t size)
                 z3 = _mm512_loadu_si512((void *)src + offset + 2 * ZMM_SZ);
                 z4 = _mm512_loadu_si512((void *)src + offset + 3 * ZMM_SZ);
 
-                z5 = _mm512_min_epi8(z1, z2);
-                z6 = _mm512_min_epi8(z3, z4);
+                z5 = _mm512_min_epu8(z1, z2);
+                z6 = _mm512_min_epu8(z3, z4);
 
-                ret = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z5, z6), z0);
+                ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
                 if (ret)
                     break;
                 _mm512_store_si512((void*)dst + offset, z1);
@@ -576,10 +576,10 @@ static inline char *_strncpy_avx512(char *dst, const char *src, size_t size)
             z3 = _mm512_loadu_si512((void *)src + offset + 2 * ZMM_SZ);
             z4 = _mm512_loadu_si512((void *)src + offset + 3 * ZMM_SZ);
 
-            z5 = _mm512_min_epi8(z1, z2);
-            z6 = _mm512_min_epi8(z3, z4);
+            z5 = _mm512_min_epu8(z1, z2);
+            z6 = _mm512_min_epu8(z3, z4);
 
-            ret = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z5, z6), z0);
+            ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
             if (ret == 0)
             {
                 _mm512_storeu_si512((void*)dst + offset, z1);
