@@ -31,6 +31,15 @@ void get_cache_info(cpu_info *zen_info)
 
     cache_info *zen_cache = &(zen_info->zen_cache_info);
 
+    //get L1D cache details
+    cpuid_regs.eax = 0x8000001D;
+    cpuid_regs.ecx = 0x0;
+    __get_cpu_features(&cpuid_regs);
+
+    //Compute L1D Cache Info
+    zen_cache->l1d_per_core = (((cpuid_regs.ebx>>22) & 0x3ff)+1)*((cpuid_regs.ebx & 0xfff)+1)*(cpuid_regs.ecx+1);
+
+
     //get L2 cache details
     cpuid_regs.eax = 0x8000001D;
     cpuid_regs.ecx = 0x2;

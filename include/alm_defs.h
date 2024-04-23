@@ -31,6 +31,9 @@
 #define STR_TERM_CHAR   '\0'
 
 
+#define likely(x)      __builtin_expect(!!(x), 1)
+#define unlikely(x)    __builtin_expect(!!(x), 0)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

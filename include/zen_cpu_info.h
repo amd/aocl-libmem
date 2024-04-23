@@ -40,6 +40,7 @@ unsigned int edx;
 } cpuid_registers;
 
 typedef struct{
+uint64_t l1d_per_core;
 uint64_t l2_per_core;
 uint64_t l3_per_ccx;
 uint64_t l3_per_ccd;
