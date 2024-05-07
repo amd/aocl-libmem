@@ -195,9 +195,8 @@ public:
                 TearDown();
                 state.ResumeTiming();
             }
-
-        Bench_Result(state);
         }
+        Bench_Result(state);
     }
 
 protected:
