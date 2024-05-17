@@ -174,7 +174,34 @@ static inline size_t _strlen_avx2(const char *str)
         return _tzcnt_u32(ret) + offset;
 
     offset += YMM_SZ;
-    offset = ((4 * YMM_SZ -1) & offset);
+    uint32_t vec_offset = ((uintptr_t)str + offset) & (4 * YMM_SZ - 1);
+    if (vec_offset)
+    {
+        switch(vec_offset)
+        {
+            case YMM_SZ:
+                y1 = _mm256_load_si256((void *)str + offset);
+                y_null = _mm256_cmpeq_epi8(y1, y0);
+                ret = _mm256_movemask_epi8(y_null);
+                if (ret)
+                    return _tzcnt_u32(ret) + offset;
+                offset += YMM_SZ;
+            case (2 * YMM_SZ):
+                y2 = _mm256_load_si256((void *)str + offset);
+                y_null = _mm256_cmpeq_epi8(y2, y0);
+                ret = _mm256_movemask_epi8(y_null);
+                if (ret)
+                    return _tzcnt_u32(ret) + offset;
+                offset += YMM_SZ;
+            case (3 * YMM_SZ):
+                y3 = _mm256_load_si256((void *)str + offset);
+                y_null = _mm256_cmpeq_epi8(y3, y0);
+                ret = _mm256_movemask_epi8(y_null);
+                if (ret)
+                    return _tzcnt_u32(ret) + offset;
+                offset += YMM_SZ;
+        }
+    }
     while(1)
     {
         y1 = _mm256_load_si256((void *)str + offset);
@@ -191,23 +218,28 @@ static inline size_t _strlen_avx2(const char *str)
 
         offset += 4 * YMM_SZ;
     }
-    if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
-    {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
-        {
-            return (_tzcnt_u32(ret2) + offset);
-        }
-        return (_tzcnt_u32(ret1) + YMM_SZ + offset);
-    }
 
-    else
+    if (ret)
     {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
+        if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
         {
-            return (_tzcnt_u32(ret2) + 2 * YMM_SZ + offset);
+            if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
+            {
+                return (_tzcnt_u32(ret2) + offset);
+            }
+            return (_tzcnt_u32(ret1) + YMM_SZ + offset);
         }
-        return (_tzcnt_u32(ret) + 3 * YMM_SZ + offset);
+
+        else
+        {
+            if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
+            {
+                return (_tzcnt_u32(ret2) + 2 * YMM_SZ + offset);
+            }
+            return (_tzcnt_u32(ret) + 3 * YMM_SZ + offset);
+        }
     }
+    return 0;
 }
 
 #ifdef AVX512_FEATURE_ENABLED
@@ -266,7 +298,32 @@ static inline size_t _strlen_avx512(const char *str)
         return _tzcnt_u64(ret) + offset;
 
     offset +=  ZMM_SZ;
-    offset = ((4 * ZMM_SZ -1)  & offset);
+    uint64_t vec_offset = ((uintptr_t)str + offset) & (4 * ZMM_SZ - 1);
+   if (vec_offset)
+    {
+        switch(vec_offset)
+        {
+            case ZMM_SZ:
+                z1 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z1, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+            case (2 * ZMM_SZ):
+                z2 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z2, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+            case (3 * ZMM_SZ):
+                z3 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z3, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+        }
+    }
+
     while (1)
     {
         z1 = _mm512_load_si512(str + offset);
@@ -284,22 +341,26 @@ static inline size_t _strlen_avx512(const char *str)
         offset += 4 * ZMM_SZ;
     }
 
-    if ((ret1 = _mm512_cmpeq_epu8_mask(z5, z0)))
+    if  (ret)
     {
-        if ((ret2 = _mm512_cmpeq_epu8_mask(z1, z0)))
+        if ((ret1 = _mm512_cmpeq_epu8_mask(z5, z0)))
         {
-            return (_tzcnt_u64(ret2) + offset);
+            if ((ret2 = _mm512_cmpeq_epu8_mask(z1, z0)))
+            {
+                return (_tzcnt_u64(ret2) + offset);
+            }
+            return (_tzcnt_u64(ret1) + ZMM_SZ + offset);
         }
-        return (_tzcnt_u64(ret1) + ZMM_SZ +offset);
-    }
-    else
-    {
-        if ((ret2 =_mm512_cmpeq_epu8_mask(z3, z0)))
+        else
         {
-            return (_tzcnt_u64(ret2) + 2 * ZMM_SZ + offset);
+            if ((ret2 =_mm512_cmpeq_epu8_mask(z3, z0)))
+            {
+                return (_tzcnt_u64(ret2) + 2 * ZMM_SZ + offset);
+            }
+            return  (_tzcnt_u64(ret) + 3 * ZMM_SZ + offset);
         }
-        return  (_tzcnt_u64(ret) + 3 * ZMM_SZ + offset);
     }
+    return 0;
 }
 #endif
 
