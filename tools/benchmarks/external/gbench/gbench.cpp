@@ -159,8 +159,10 @@ public:
             for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
-                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
-                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
+
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
+
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
                 state.PauseTiming();
@@ -188,7 +190,7 @@ public:
             for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
-                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func(src_alnd, 'x', size));
                 state.PauseTiming();
@@ -308,7 +310,7 @@ public:
         {
             if (name == "strcat")
             {
-                SetUp(size, alignment);           
+                SetUp(size, alignment);
                 for (auto _ : state) {
                     char *val = static_cast<char*>(dst_alnd);
                     val[size -1] = '\0';
@@ -330,8 +332,8 @@ public:
             for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
-                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
-                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 state.PauseTiming();
@@ -358,7 +360,7 @@ public:
             for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
-                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)src_alnd));
                 state.PauseTiming();
@@ -385,8 +387,8 @@ public:
             for (auto _ : state) {
                 state.PauseTiming();
                 SetUp(size, alignment);
-                __asm__ volatile ("clflush (%0)" : : "r" (src_alnd));
-                __asm__ volatile ("clflush (%0)" : : "r" (dst_alnd));
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
                 state.PauseTiming();
