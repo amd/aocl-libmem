@@ -95,7 +95,7 @@ def whole_number(value):
 
 def main():
     libmem_funcs = ['memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp',
-                    'strcpy','strncpy','strcmp','strncmp', 'strlen', 'memchr', 'strcat']
+                    'strcpy','strncpy','strcmp','strncmp', 'strlen', 'memchr', 'strcat', 'strstr']
 
     parser = argparse.ArgumentParser(prog='libmem_validator', description='This\
                             program will perform data validation of\
