@@ -49,17 +49,19 @@ add_definitions(-DENABLE_TUNABLES)
 set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/env_parser.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem_iface.c)
 endif ()
 
+#common object lib
+add_library(libmem_objlib OBJECT ${SOURCE_FILES})
+target_include_directories(libmem_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+set_property(TARGET libmem_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
+
 # shared lib
 set(CMAKE_SHARED_LINKER_FLAGS "-flto -fpic")
-add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+add_library(${PROJECT_NAME} SHARED)
+target_link_libraries(${PROJECT_NAME} libmem_objlib)
+
 # static lib
-add_library("${PROJECT_NAME}_static" STATIC ${SOURCE_FILES})
-
-target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
-
-# include the header files
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_include_directories("${PROJECT_NAME}_static" PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_library("${PROJECT_NAME}_static" STATIC)
+target_link_libraries("${PROJECT_NAME}_static" libmem_objlib)
 
 # renaming static binary
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})

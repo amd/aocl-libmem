@@ -27,4 +27,4 @@
 set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
 set(SOURCE_FILES ${SRC_PATH}/amd_strcat.c)
 
-target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
+target_sources(libmem_objlib PRIVATE ${SOURCE_FILES})
