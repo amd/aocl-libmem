@@ -32,7 +32,7 @@
 #define PAGE_SZ         4096
 #define CACHELINE_SZ    64
 
-uint8_t  _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
+static inline uint8_t _strcmp_ble_ymm(const char *str1, const char *str2, uint8_t size)
 {
     __m128i x0, x1, x2, x3, x4, x_cmp, x_null;
     uint16_t ret = 0;

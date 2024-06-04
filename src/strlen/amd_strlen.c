@@ -30,7 +30,7 @@
 #include "alm_defs.h"
 
 
-uint8_t _strlen_ble_ymm(const char *str1, uint8_t size)
+static inline uint8_t _strlen_ble_ymm(const char *str1, uint8_t size)
 {
     __m128i x0, x1, x2, x_null;
     uint16_t ret = 0;
