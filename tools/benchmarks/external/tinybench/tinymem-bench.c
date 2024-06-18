@@ -213,6 +213,10 @@ void strspn_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strspn((char *)dst, (char *)src);
 }
+void strstr_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strstr((char *)dst, (char *)src);
+}
 
 void memchr_wrapper(int64_t *src, int c, int size)
 {
@@ -248,9 +252,33 @@ bench_info supp_funcs[]=
     {"strlen", 0, strlen_wrapper},
     {"strcat", 0, strcat_wrapper},
     {"strspn", 0, strspn_wrapper},
+    {"strstr", 0, strstr_wrapper},
     {"none", 0,  NULL}
 };
 
+char *test_strstr(const char *str1, const char *str2)
+{
+    if (*str2 == '\0') {
+        return (char*)str1;
+    }
+    const char *p1 = str1;
+    const char *p2 = str2;
+    while (*p1 != '\0') {
+        if (*p1 == *p2) {
+            const char *q1 = p1;
+            const char *q2 = p2;
+            while (*q1 != '\0' && *q2 != '\0' && *q1 == *q2) {
+                ++q1;
+                ++q2;
+            }
+            if (*q2 == '\0') {
+                return (char*)p1;
+            }
+        }
+        ++p1;
+    }
+    return NULL;
+}
 
 void generate_uniq_random_string(char * str, size_t length) {
     size_t i;
@@ -294,7 +322,7 @@ int main(int argc, char **argv)
     for(bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
     {
         //Bigger dst buffer for strcat operation
-        if (strstr(bench_func[0].description,"strcat"))
+        if (test_strstr(bench_func[0].description,"strcat"))
         {
             poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
                                                     (void **)&dstbuf, MAXREPEATS * bufsize,
@@ -312,9 +340,9 @@ int main(int argc, char **argv)
         printf("SIZE: %zu B \n",bufsize);
 
         //For handling string functions
-        if ( strstr(bench_func[0].description, "str"))
+        if ( test_strstr(bench_func[0].description, "str"))
         {
-            if(strstr(bench_func[0].description, "strspn"))
+            if(test_strstr(bench_func[0].description, "strspn"))
             {
                 size_t accept_len = ceil(sqrt(bufsize));
 
@@ -332,7 +360,7 @@ int main(int argc, char **argv)
                 memset(srcbuf, 'c', bufsize);
                 *((char *)srcbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
 
-                if ( strstr(bench_func[0].description, "cmp") || strstr(bench_func[0].description, "cat"))
+                if (test_strstr(bench_func[0].description, "cmp") || test_strstr(bench_func[0].description, "cat") || test_strstr(bench_func[0].description, "strstr") )
                 {
                     memcpy(dstbuf, srcbuf, bufsize);
                     *((char *)srcbuf + bufsize - 2) = NULL_TERM_CHAR;

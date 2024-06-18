@@ -65,8 +65,9 @@ class Bench:
         elif(self.MYPARSER['benchmark']=='fbm'):
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
-
-libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp','memchr', 'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn']
+libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp','memchr']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn', 'strstr']
+libmem_funcs = libmem_memory + libmem_string
 
 def main():
     """
@@ -82,7 +83,7 @@ def main():
     parser.add_argument("benchmark", help="select the \
             benchmarking tool for LibMem",
                          type=str,choices = ["tbm", "gbm","fbm"], default="gbm")
-    parser.add_argument("func", help="LibMem function whose performance needs to be analyzed",
+    parser.add_argument("func", help="LibMem supported functions",
                             type=str, choices = libmem_funcs,default="memcpy")
 
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\

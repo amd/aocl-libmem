@@ -33,14 +33,18 @@
 #include <math.h>
 #include <algorithm>
 
+#define MIN_PRINTABLE_ASCII     32
+#define MAX_PRINTABLE_ASCII     127
+#define NULL_TERM_CHAR          '\0'
+
 
 #if defined(__AVX512F__)
-    #define VEC_SIZE 64
+    #define VEC_SIZE            64
 #else
-    #define VEC_SIZE 32
+    #define VEC_SIZE            32
 #endif
 
-#define CL_SIZE 64
+#define CL_SIZE                 64
 
 
 enum MemoryMode {
@@ -296,7 +300,7 @@ public:
         memset(src_alnd, 'x', size);
 
         char* val = static_cast<char*>(src_alnd);
-        val[size -1] = '\0';
+        val[size -1] = NULL_TERM_CHAR;
         strcpy((char*)dst_alnd,(char*)src_alnd);
     }
 
@@ -305,15 +309,30 @@ public:
         delete[] dst;
     }
 
-    std::string generate_uniq_random_string(size_t length) {
-        std::set<char> unique_chars;
-        while (unique_chars.size() < length)
+    void string_setup(std::string& accept, int size, std::string& s)
+    {
+        size_t accept_len = ceil(sqrt(size));
+        accept = generate_random_string(accept_len);
+        for (size_t i=0 ; i < accept_len; i++)
         {
-            char c = 32 + (rand() % (95));
-            unique_chars.insert(c);
+            s += accept.substr(0,i);  // All the substrings of accept
         }
-        return std::string(unique_chars.begin(), unique_chars.end());
+
+        //Using the permutations of accept
+        do
+        {
+            s += accept;
+        }while( s.length() <= size && std::next_permutation(accept.begin(), accept.end()));
     }
+
+    std::string generate_random_string(size_t length) {
+        std::string random_string;
+        for (int i = 0; i < length; ++i) {
+            random_string += MIN_PRINTABLE_ASCII + (i % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII));
+        }
+        return random_string;
+    }
+
 
     template <typename MemFunction, typename... Args>
     void strRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
@@ -325,7 +344,7 @@ public:
                 SetUp(size, alignment);
                 for (auto _ : state) {
                     char *val = static_cast<char*>(dst_alnd);
-                    val[size -1] = '\0';
+                    val[size -1] = NULL_TERM_CHAR;
                     benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 }
             }
@@ -336,19 +355,7 @@ public:
                 std::string s;
                 std::string accept;
 
-                size_t accept_len = ceil(sqrt(size));
-                accept = generate_uniq_random_string(accept_len);
-                for (size_t i=0 ; i < accept_len; i++)
-                {
-                    s += accept.substr(0,i);  // All the substrings of accept
-                }
-
-                //Using the permutations of accept
-                do
-                {
-                    s += accept;
-                }while( s.length() <= size && std::next_permutation(accept.begin(), accept.end()));
-
+                string_setup(accept, size, s);
                 for (auto _ : state) {
                     benchmark::DoNotOptimize(strspn(s.c_str(), accept.c_str()));
                 }
@@ -370,19 +377,11 @@ public:
             {
                 std::string s;
                 std::string accept;
-                size_t accept_len = ceil(sqrt(size));
+                string_setup(accept, size, s);
+
                 for (auto _ : state) {
                     state.PauseTiming();
                     SetUp(size, alignment);
-                    accept = generate_uniq_random_string(accept_len);
-                    for (size_t i=0 ; i < accept_len; i++)
-                    {
-                        s += accept.substr(0,i);
-                    }
-                    do
-                    {
-                        s += accept;
-                    }while ( s.length() <= size && std::next_permutation(accept.begin(), accept.end()));
 
                     __builtin___clear_cache(&s[0], &s[0] + s.length());
                     __builtin___clear_cache(&accept[0], &accept[0] + accept.length());
@@ -398,14 +397,14 @@ public:
             {
                 for (auto _ : state) {
                     state.PauseTiming();
-                SetUp(size, alignment);
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
-                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
-                state.ResumeTiming();
-                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
+                    SetUp(size, alignment);
+                    __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                    __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
+                    state.ResumeTiming();
+                    benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
+                    state.PauseTiming();
+                    TearDown();
+                    state.ResumeTiming();
                 }
             }
         }
@@ -441,13 +440,90 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
+    void substrRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, MemFunction func, const char* name, Args... args) {
+        int size = state.range(0);
+        if (mode == CACHED)
+        {
+            SetUp(size, alignment);
+            std::string haystack_best, haystack_nomatch, haystack_avg;
+            std::string needle;
+
+            size_t needle_len = ceil(sqrt(size));
+            needle = generate_random_string(needle_len);
+
+            //Match at the beginning:
+            haystack_best += needle;
+            for (size_t i = 0; i < size - needle_len; i++)
+                haystack_best += 'A' + rand() % 26;
+
+            //NO - Match case:
+            for (size_t i = 0; i < size; i++)
+                haystack_nomatch += 'A' + rand() % 26;
+
+            //Match at the end:
+            for (size_t i = 0 ; i < needle_len; i++)
+            {
+               haystack_avg += needle.substr(0,i);  //All the substrings of needle, except the needle itself
+                if (haystack_avg.length() <= size)
+                {
+                    haystack_avg += 'A' + rand() % 26;
+                }
+            }
+            while (haystack_avg.length() + needle_len <= size) {
+                haystack_avg += generate_random_string(1);  //Padding with dummy chars
+            }
+            haystack_avg += needle; //needle is the last part of haystack
+
+            for (auto _ : state) {
+                benchmark::DoNotOptimize(strstr(haystack_best.c_str(), needle.c_str()));
+                benchmark::DoNotOptimize(strstr(haystack_nomatch.c_str(), needle.c_str()));
+                benchmark::DoNotOptimize(strstr(haystack_avg.c_str(), needle.c_str()));
+            }
+            TearDown();
+        }
+        else
+        {
+            for (auto _ : state) {
+                state.PauseTiming();
+                SetUp(size, alignment);
+                std::string haystack;
+                std::string needle;
+                size_t needle_len = ceil(sqrt(size));
+                needle = generate_random_string(needle_len);
+                for (size_t i=0; i < needle_len; i++)
+                {
+                    haystack += needle.substr(0,i);
+                    if(haystack.length() <= size)
+                    {
+                        haystack += 'A' + rand() % 26;
+                    }
+                }
+                while (haystack.length() + needle_len <= size) {
+                    haystack += generate_random_string(1);
+                }
+                haystack += needle;
+
+                __builtin___clear_cache(&haystack[0], &haystack[0] + haystack.length());
+                __builtin___clear_cache(&needle[0], &needle[0] + needle.length());
+                state.ResumeTiming();
+
+                benchmark::DoNotOptimize(strstr(haystack.c_str(), needle.c_str()));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
+            }
+        }
+    Bench_Result(state);
+    }
+
+    template <typename MemFunction, typename... Args>
     void str_n_RunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
-        if(mode == CACHED)
+        if  (mode == CACHED)
         {
             SetUp(size, alignment);
             for (auto _ : state) {
-            benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
             }
             TearDown();
         }
@@ -493,6 +569,12 @@ void runstrlenBenchmark(benchmark::State& state, MemoryMode mode, char alignment
     fixture.strlenRunBenchmark(state, mode, alignment, func, name, args...);
 }
 
+template <typename MemFunction, typename... Args>
+void runsubstrBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
+    StringFixture fixture;
+    fixture.substrRunBenchmark(state, mode, alignment, func, name, args...);
+}
+
 
 struct MemData {
     const char *functionName;
@@ -527,6 +609,21 @@ StrData strfunctionList[] = {
     REGISTER_STR_FUNCTION(strcmp),
     REGISTER_STR_FUNCTION(strcat),
     REGISTER_STR_FUNCTION(strspn),
+};
+#define REGISTER_SUB_FUNCTION(name) \
+    { #name, (char *(*)(char *, const char *))name }
+
+char* my_strstr(char* haystack, const char* needle) {
+    return strstr(haystack, needle);
+}
+
+struct substr{
+    char* functionName;
+    char* (*functionPtr)(char*, const char*);
+};
+
+substr subfunctionList[] = {
+    {"strstr", (char *(*)(char *, const char *)) my_strstr},
 };
 
 struct Str_n_Data {
@@ -623,6 +720,14 @@ int main(int argc, char** argv) {
         }
     }
     };
+
+    auto substrBenchmark = [&](benchmark::State& state) {
+        for (const auto &strData : subfunctionList) {
+    if (func == strData.functionName) {
+        runsubstrBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+        }
+    }
+    };
     //Register Benchmark
     std::string _Mode;
     if(operation == UNCACHED)
@@ -646,6 +751,10 @@ int main(int argc, char** argv) {
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), string_n_Benchmark)->RangeMultiplier(2)->Range(size_start, size_end);
             else if(func.compare(0, 4, "strl") == 0)
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
+
+            else if(func.compare(0, 6, "strstr") == 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
+
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
         }
@@ -667,6 +776,9 @@ int main(int argc, char** argv) {
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), string_n_Benchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
             else if(func.compare(0, 4, "strl") == 0)
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
+            else if(func.compare(0, 6, "strstr") == 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
+
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
 
