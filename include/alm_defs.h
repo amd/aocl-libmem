@@ -28,6 +28,8 @@
 
 #define PAGE_SZ         4096
 #define CACHELINE_SZ    64
+#define STR_TERM_CHAR   '\0'
+
 
 #ifdef __cplusplus
 extern "C" {
