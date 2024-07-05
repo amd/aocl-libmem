@@ -3,9 +3,6 @@
 ## Description
 - AOCL-LibMem Benchmarking Framework is used for performance analysis of LibMem supported functions  against the  Glibc installed host machine under test.
 - AOCL-LibMem Benchmarking Tool supports the below benchmark framework and their respecitve modes.
-    - LibMemBench : cached, uncached, walk, page & mixed modes
-
-        Internal benchmarking tool which supports different modes for benchmarking.
     - TinyMemBench:
 
         External benchmark tool which uses the existing tbm framework.
@@ -70,19 +67,16 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 ## Running Bench framework
 
     $ ./bench.py <benchmark_name> <memory_function> -m <mode> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
-        <benchmark_name>  = gbm,tbm,lbm,fbm.
+        <benchmark_name>  = gbm, tbm, fbm.
         <memory_function> = memcpy,memset,memmove,memcmp,strcpy,strncpy.
-        -m <Mode>         = c,u,p,w (LBM) and c,u(GBM)
-        -x <core_id>      =  Enter the CPU core on which you want to run the benchmark.
+        -m <Mode>         = c,u(GBM)
+        -x <core_id>      = Enter the CPU core on which you want to run the benchmark.
         -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)
         -t "iter_value"   = increments the start size by "value".(0 stands for size<<1; other +ve integers stands for incremental iterations.)
         -i <iterations>   = specify the no.of iterations.
 
     Example:
-    Running LibMem bench framework
-    $ ./bench.py lbm memcpy -r 8 4096  -i 1000 -x 16
-    Runs the LBM benchmark for size[8,16,32,64...] with 1000 iterations on core -16
-    Here default iter_value 0 does size<<1
+    Running Google BenchMark framework
     $ ./bench.py gbm memcpy -r 8 16 -m c -t "1" -x 16
     Runs the Google Benchmark for Cached Mode Memcpy for sizes[8,9,..16] on core -16
 

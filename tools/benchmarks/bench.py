@@ -37,8 +37,6 @@ import datetime
 from statistics import mean
 import sys
 
-sys.path.insert(0, '../tools/benchmarks/internal')
-from lbm import LBM
 sys.path.insert(0, '../tools/benchmarks/external')
 import GetParser as ParserConfig
 from gbm import GBM
@@ -67,9 +65,6 @@ class Bench:
         elif(self.MYPARSER['benchmark']=='fbm'):
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
-        elif(self.MYPARSER['benchmark']=='lbm'):
-            LBM_execute = LBM(ARGS=self.ARGS, class_obj=self)
-            LBM_execute() #Status:Success/Failure
 
 libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp','memchr', 'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat']
 
@@ -81,12 +76,12 @@ def main():
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
     parser = argparse.ArgumentParser(prog='bench', description='This\
-            program will perform the benchmarking:TBM PBM GBM FBM LBM')
+            program will perform the benchmarking:TBM GBM FBM ')
     parser = ParserConfig.add_parser('This\
                             program will perform the benchmarking ')
     parser.add_argument("benchmark", help="select the \
             benchmarking tool for LibMem",
-                         type=str,choices = ["tbm", "gbm","fbm","lbm"], default="lbm")
+                         type=str,choices = ["tbm", "gbm","fbm"], default="gbm")
     parser.add_argument("func", help="LibMem function whose performance needs to be analyzed",
                             type=str, choices = libmem_funcs,default="memcpy")
 
@@ -95,7 +90,7 @@ def main():
                             type=int, default = [8, 32*1024*1024])
     parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
                             c - cached, u - un-cached, w - walk, p - page_walk\
-                            GBM supports [c,u] & LBM supports [c,u,w,p]",\
+                            GBM supports [c,u]",\
                             type = str, choices = ['c', 'u', 'w', 'p'], \
                             default = 'm')
     parser.add_argument("-a", "--align", help = "alignemnt of source\
