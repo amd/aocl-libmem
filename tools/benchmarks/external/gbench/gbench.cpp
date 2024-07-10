@@ -30,6 +30,8 @@
 #include <unistd.h> //for Page_size
 #include <memory>
 #include <immintrin.h>
+#include <math.h>
+#include <algorithm>
 
 
 #if defined(__AVX512F__)
@@ -303,6 +305,16 @@ public:
         delete[] dst;
     }
 
+    std::string generate_uniq_random_string(size_t length) {
+        std::set<char> unique_chars;
+        while (unique_chars.size() < length)
+        {
+            char c = 32 + (rand() % (95));
+            unique_chars.insert(c);
+        }
+        return std::string(unique_chars.begin(), unique_chars.end());
+    }
+
     template <typename MemFunction, typename... Args>
     void strRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
@@ -317,6 +329,31 @@ public:
                     benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 }
             }
+            else if (name == "strspn")
+            {
+                SetUp(size, alignment);
+
+                std::string s;
+                std::string accept;
+
+                size_t accept_len = ceil(sqrt(size));
+                accept = generate_uniq_random_string(accept_len);
+                for (size_t i=0 ; i < accept_len; i++)
+                {
+                    s += accept.substr(0,i);  // All the substrings of accept
+                }
+
+                //Using the permutations of accept
+                do
+                {
+                    s += accept;
+                }while( s.length() <= size && std::next_permutation(accept.begin(), accept.end()));
+
+                for (auto _ : state) {
+                    benchmark::DoNotOptimize(strspn(s.c_str(), accept.c_str()));
+                }
+
+            }
             else
             {
                 SetUp(size, alignment);
@@ -329,8 +366,38 @@ public:
         }
         else
         {
-            for (auto _ : state) {
-                state.PauseTiming();
+            if (name == "strspn")
+            {
+                std::string s;
+                std::string accept;
+                size_t accept_len = ceil(sqrt(size));
+                for (auto _ : state) {
+                    state.PauseTiming();
+                    SetUp(size, alignment);
+                    accept = generate_uniq_random_string(accept_len);
+                    for (size_t i=0 ; i < accept_len; i++)
+                    {
+                        s += accept.substr(0,i);
+                    }
+                    do
+                    {
+                        s += accept;
+                    }while ( s.length() <= size && std::next_permutation(accept.begin(), accept.end()));
+
+                    __builtin___clear_cache(&s[0], &s[0] + s.length());
+                    __builtin___clear_cache(&accept[0], &accept[0] + accept.length());
+                    state.ResumeTiming();
+
+                    benchmark::DoNotOptimize(strspn(s.c_str(), accept.c_str()));
+                    state.PauseTiming();
+                    TearDown();
+                    state.ResumeTiming();
+                }
+            }
+            else
+            {
+                for (auto _ : state) {
+                    state.PauseTiming();
                 SetUp(size, alignment);
                 __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
                 __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
@@ -339,10 +406,12 @@ public:
                 state.PauseTiming();
                 TearDown();
                 state.ResumeTiming();
+                }
             }
         }
     Bench_Result(state);
     }
+
 
     template <typename MemFunction, typename... Args>
     void strlenRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, MemFunction func, const char* name, Args... args) {
@@ -457,6 +526,7 @@ StrData strfunctionList[] = {
     REGISTER_STR_FUNCTION(strcpy),
     REGISTER_STR_FUNCTION(strcmp),
     REGISTER_STR_FUNCTION(strcat),
+    REGISTER_STR_FUNCTION(strspn),
 };
 
 struct Str_n_Data {
@@ -482,6 +552,7 @@ Strlen_Data Strlen_functionList[] = {
 };
 
 int main(int argc, char** argv) {
+    srand(time(0));
     char mode='c', alignment = 'd';
     unsigned int size_start, size_end, iter = 0;
     std::string func;

@@ -39,10 +39,14 @@
 #include "asm-opt.h"
 #include "version.h"
 
-#define BLOCKSIZE        2048
+#define BLOCKSIZE               2048
 #ifndef MAXREPEATS
-# define MAXREPEATS      10
+# define MAXREPEATS             10
 #endif
+# define NULL_BYTE              1
+#define MIN_PRINTABLE_ASCII     32
+#define MAX_PRINTABLE_ASCII     127
+#define NULL_TERM_CHAR          '\0'
 
 static void *mmap_framebuffer(size_t *fbsize)
 {
@@ -205,6 +209,11 @@ void strcat_wrapper(int64_t *dst, int64_t *src, int size)
     strcat((char *)dst, (char *)src);
 }
 
+void strspn_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strspn((char *)dst, (char *)src);
+}
+
 void memchr_wrapper(int64_t *src, int c, int size)
 {
     memchr((char*)src, c , size);
@@ -238,11 +247,22 @@ bench_info supp_funcs[]=
     {"strncmp", 0, strncmp_wrapper},
     {"strlen", 0, strlen_wrapper},
     {"strcat", 0, strcat_wrapper},
+    {"strspn", 0, strspn_wrapper},
     {"none", 0,  NULL}
 };
 
+
+void generate_uniq_random_string(char * str, size_t length) {
+    size_t i;
+    for (i = 0; i < length ; i++) {
+        str[i] = MIN_PRINTABLE_ASCII + (i % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII)) ; // printable ASCII chars from 32 to 126
+    }
+    str[i] = NULL_TERM_CHAR;
+}
+
 int main(int argc, char **argv)
 {
+    srand(0);
     int64_t *srcbuf, *dstbuf, *tmpbuf;
     void *poolbuf;
     size_t start, end, bufsize = 0;
@@ -294,14 +314,30 @@ int main(int argc, char **argv)
         //For handling string functions
         if ( strstr(bench_func[0].description, "str"))
         {
-            memset(srcbuf, 'c', bufsize);
-           *((char *)srcbuf + bufsize -1) = '\0';
-
-            if ( strstr(bench_func[0].description, "cmp") || strstr(bench_func[0].description, "cat"))
+            if(strstr(bench_func[0].description, "strspn"))
             {
-                memset(dstbuf, 'c', bufsize);
-                *((char *)srcbuf + bufsize -2) = 'C';
-                *((char *)dstbuf + bufsize -1) = '\0';
+                size_t accept_len = ceil(sqrt(bufsize));
+
+                generate_uniq_random_string((char*)srcbuf , accept_len);
+                size_t i ;
+                for (i = 0 ; i < (bufsize - NULL_BYTE); i++)
+                {
+                    *((char *)dstbuf + i) = *((char *)srcbuf + rand() % (accept_len ));
+                }
+                *((char *)dstbuf + i) = NULL_TERM_CHAR;
+
+            }
+            else
+            {
+                memset(srcbuf, 'c', bufsize);
+                *((char *)srcbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
+
+                if ( strstr(bench_func[0].description, "cmp") || strstr(bench_func[0].description, "cat"))
+                {
+                    memcpy(dstbuf, srcbuf, bufsize);
+                    *((char *)srcbuf + bufsize - 2) = NULL_TERM_CHAR;
+                    *((char *)dstbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
+                }
             }
 
         }
