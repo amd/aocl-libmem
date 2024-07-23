@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include <math.h>
 
 #define CACHE_LINE_SZ           64
 #define BOUNDARY_BYTES          8
@@ -34,6 +35,9 @@
 #define YMM_SZ                  32
 #define ZMM_SZ                  64
 #define NULL_TERM_CHAR         '\0'
+#define MIN_PRINTABLE_ASCII     32
+#define MAX_PRINTABLE_ASCII     126
+#define NULL_BYTE               1
 
 #ifdef AVX512_FEATURE_ENABLED
     #define VEC_SZ ZMM_SZ
@@ -189,6 +193,44 @@ static inline int boundary_check(uint8_t *dst, size_t size)
         }
     }
     return 0;
+}
+
+char* generate_random_string(size_t length) {
+    // Allocate memory for the random string plus the null terminator
+    char* random_string = (char*)malloc((length + NULL_BYTE) * sizeof(char));
+    if (random_string == NULL) {
+         perror("Failed to allocate memory");
+        exit(1);
+    }
+
+    // Seed the random number generator
+    srand((unsigned int)time(NULL));
+    for (size_t i = 0; i < length; i++) {
+        random_string[i] = MIN_PRINTABLE_ASCII + (rand() % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII));
+    }
+
+    // Null-terminate the string
+    random_string[length] = NULL_TERM_CHAR;
+
+    return random_string;
+}
+
+void string_setup(char *haystack, size_t size, char *needle, size_t needle_len)
+{
+    //Substrings of needle excluding the needle itself
+    haystack[0] = NULL_TERM_CHAR;
+
+    for (size_t i = 0; i < needle_len; i++) {
+        strncat(haystack, needle, i);
+    }
+
+    uint32_t hay_index = (needle_len - 1)*(needle_len)/2;
+    //Randomly copying chars from needle
+    while (hay_index < size) {
+        int index = rand() % needle_len;
+        haystack[hay_index++] =  needle[index];
+    }
+    haystack[size] = NULL_TERM_CHAR;
 }
 
 static inline void init_buffer(char* src, size_t size)
@@ -1541,232 +1583,129 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *str_alnd_addr = NULL, *find_alnd_addr = NULL;
+    uint8_t *haystack = NULL, *needle = NULL, *page_alnd_addr =NULL;
     char *find, *res;
-    size_t modified_size;
-    void *page_buff = NULL;
+    size_t needle_len = 0;
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + CACHE_LINE_SZ, NON_OVERLAP_BUFFER);
     if (buff == NULL)
     {
         perror("Failed to allocate memory");
         exit(-1);
     }
     srand(time(0));
-    str_alnd_addr = buff_tail + str1_alnmnt;
+    haystack = buff_tail + str1_alnmnt;
 
     if (size == 0)
     {
-        res = strstr((char *)str_alnd_addr, find);
-        if (res != NULL)
-            printf("ERROR:[RETURN] value mismatch for size(%lu): expected - NULL"\
-                        ", actual - %p\n", size, res);
+        //Needle is Zero
+        char null_needle = NULL_TERM_CHAR;
+        res = strstr((char *)haystack, &null_needle);
+        if (res != (char*)haystack)
+            printf("ERROR:[RETURN] value mismatch for NEEDLE size(%lu): expected -%p "\
+                        ", actual - %p\n", size, (char*)haystack, res);
+
+        //Haystack is Zero
+        char null_haystack = NULL_TERM_CHAR;
+        res = strstr(&null_haystack, &null_needle);
+        if (res != &null_haystack)
+            printf("ERROR:[RETURN] value mismatch for HAYSTACK size(%lu): expected -%p "\
+                        ", actual - %p\n", size, &null_haystack, res);
         return;
     }
+    //case1: Haystack = SUBSTRINGS(NEEDLE) without the NEEDLE
+    needle_len = ceil(sqrt(size));
+    needle = generate_random_string(needle_len);
+
+    string_setup((char *)haystack, size, (char *)needle, needle_len);
 
 
-    //case - 1 : zero length strings, expect to return NULL
-    find = " ";
-    str_alnd_addr = buff_tail + str1_alnmnt; // Reset to valid buffer location
-    *str_alnd_addr = NULL_TERM_CHAR; // Set the buffer to an empty string
-    res = strstr((char *)str_alnd_addr, find);
-    if (res != NULL) {
-        printf("ERROR:[BOUNDARY:ZERO LEN STR] Out of bound Data failure for strstr of str1_aln:%u size: %lu, find:%s\n"
-               " return_value = %p\n EXP: %sNULL\n STR: %s\n STRStart:%p", str1_alnmnt, size, find, res,test_strstr((char *)str_alnd_addr, find), str_alnd_addr,str_alnd_addr);
-    }
-
-    //case - 2 : empty needle and non-empty haystack, expect to return pointer to haystack
-    init_buffer((char*)str_alnd_addr, size);
-    prepare_boundary(str_alnd_addr, size);
-    find = "";
-    res = strstr((char *)str_alnd_addr, find);
-    if(res != test_strstr((char *)str_alnd_addr, find))
+    res = strstr((char*)haystack, (char*) needle);
+    if (res != test_strstr((char*)haystack, (char*)needle))
     {
-        printf("ERROR:[VALIDATION:EMPTY NEEDLE & NON-EMPTY HAYSTACK] failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n, EXP:%s\n STR:%s\n",str1_alnmnt, size, find, res,test_strstr((char *)str_alnd_addr, find), str_alnd_addr);
+        printf("ERROR:[VALIDATION:HAYSTACK = substrings(Needle) without needle]failure for HAYSTACK\
+        of str1_aln:%u size:%lu,\nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n", \
+        str1_alnmnt, size, res, res, needle, needle, haystack, haystack);
     }
 
-    //case - 3 : empty haystack and non-empty needle, expect to return NULL
-    find = "needle";
-    str_alnd_addr = (uint8_t *)"";
-    res = strstr((char *)str_alnd_addr,find);
-    if(res != NULL)
+    //case2: NEEDLE at the END of HAYSTACK
+    //Adding Needle at the end of haysatck
+    haystack[size - needle_len] = NULL_TERM_CHAR;
+    strcat((char*)haystack, (char*)needle);
+
+    res = strstr((char*)haystack, (char*) needle);
+    if (res != test_strstr((char*)haystack, (char*)needle))
     {
-        printf("ERROR:[BOUNDARY:EMPTY HAYSTACK & NON-EMPTY NEEDLE] Out of bound Data failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n EXP:NULL\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+        printf("ERROR:[VALIDATION:HAYSTACK = NEEDLE@END]failure for HAYSTACK\
+        of str1_aln:%u size:%lu,\nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n", \
+        str1_alnmnt, size, res, res, needle, needle, haystack, haystack);
     }
 
-    //case - 4 : needle longer than haystack, expect to return NULL
-    str_alnd_addr = buff_tail + str1_alnmnt;
-    init_buffer((char*)str_alnd_addr, size);
-    prepare_boundary(str_alnd_addr, size);
-    modified_size = size + 1;
-    uint8_t *find_alnd_addr_original = (uint8_t*)malloc(modified_size + BOUNDARY_BYTES * 2);
-    if (find_alnd_addr_original == NULL)
+    //case3: Multi-NEEDLE check
+    // Append multiple needles to the haystack (haystack[size/2]=needle)
+    for(size_t index = 0; index < needle_len ; index++)
+        haystack[size /2 + index] = needle[index];
+
+    res = strstr((char*)haystack, (char*) needle);
+    if (res != test_strstr((char*)haystack, (char*)needle))
     {
-        perror("Failed to allocate memory for find_alnd_addr");
-        free(buff);
-        exit(-1);
+        printf("ERROR:[VALIDATION:Multi-NEEDLE]failure for HAYSTACK of str1_aln:%u size:%lu,\
+            \nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n",\
+             str1_alnmnt, size, res, res, needle, needle, haystack, haystack);
     }
 
-    find_alnd_addr = find_alnd_addr_original + BOUNDARY_BYTES; // Make space for boundaries
-    init_buffer((char*)find_alnd_addr, modified_size);
-    prepare_boundary(find_alnd_addr, modified_size);
-    res = strstr((char *)str_alnd_addr,(char *)find_alnd_addr);
-    if(res != NULL)
+    //case4: NEEDLE bigger than HAYSTACK
+    res = strstr((char*)needle, (char*) haystack);
+    if (res != test_strstr((char*)needle, (char*)haystack))
     {
-        printf("ERROR:[BOUNDARY: NEEDLE > HAYSTACK] Out of bound Data failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n EXP:NULL\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
+        printf("ERROR:[VALIDATION:HAYSTACK = NEEDLE > HAYSTACK]failure for HAYSTACK of \
+        str1_aln:%u size:%lu \nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n", \
+        str1_alnmnt, needle_len, res, res, haystack, haystack, needle, needle);
     }
 
-    //case - 5 : Multiple occurrences of the needle
-
-    str_alnd_addr = buff_tail + str1_alnmnt;
-    size_t num_needles = (size < 5) ? size : 5;
-    // Initialize buffer with 'a's and null-terminate it
-    init_buffer((char *)str_alnd_addr, size);
-    prepare_boundary(str_alnd_addr, size);
-
-    // Append multiple needles to the haystack
-    find = "needle";
-    size_t needle_len = strlen(find);
-    if (size == 1) {
-        str_alnd_addr[size - 1] = 'n'; // Append "n" for size 1
-        find = "n";
-    } else if (size >= 2 && size <= 6) {
-        str_alnd_addr[size - 2] = 'n'; // Append "ne" for sizes 2 to 6
-        str_alnd_addr[size - 1] = 'e';
-        find = "ne";
-    } else {
-        for (size_t i = 0; i < num_needles; ++i) {
-            size_t pos = rand() % (size - needle_len); // Random position in the haystack
-            for (size_t j = 0; j < needle_len; ++j) {
-                str_alnd_addr[pos + j] = find[j]; // Append needle at the position
-            }
-        }
-    }
-    res = strstr((char *)str_alnd_addr, find);
-    if(res != test_strstr((char *)str_alnd_addr, find))
+    //case5: PageCross_check for size <= 4KB
+    if  (size <= PAGE_SZ)
     {
-        printf("ERROR:[VALIDATION:MULTI-NEEDLE] failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n STR:%s\n",str1_alnmnt, size, find, res, str_alnd_addr);
-    } 
-    //case - 6 : PageCross_check
-    posix_memalign(&page_buff, PAGE_SZ, size + PAGE_SZ + CACHE_LINE_SZ);
 
-    if (page_buff == NULL)
-    {
-        perror("Failed to allocate memory");
-        exit(-1);
-    }
+        void *page_buff = NULL;
+        uint32_t page_cnt = (size + NULL_BYTE + CACHE_LINE_SZ)/PAGE_SZ + \
+                        !!((size + NULL_BYTE + CACHE_LINE_SZ) % PAGE_SZ);
+        posix_memalign(&page_buff, PAGE_SZ, page_cnt * PAGE_SZ);
 
-    str_alnd_addr = (uint8_t *)page_buff + PAGE_SZ - VEC_SZ + str1_alnmnt;
-
-    init_buffer((char*)str_alnd_addr, size);
-    prepare_boundary(str_alnd_addr, size);
-    find = " ";
-    res = strstr((char *)str_alnd_addr, find);
-
-    if(res != NULL)
-    {
-        printf("ERROR:[PAGE_BOUNDARY] Out of bound Data failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%p\n EXP:NULL\n STR:%s STRst:%p\n",str1_alnmnt, size, find, res, str_alnd_addr, str_alnd_addr);
-    }
-
-    *(uint8_t**)(str_alnd_addr + size -1) = (uint8_t *)find; //pos of the needle at the end for page_check
-
-    res = strstr((char *)str_alnd_addr, find);
-    if (res != test_strstr((char *)str_alnd_addr, find))
-    {
-        printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n STR:%s\n", str1_alnmnt, size, find, res, str_alnd_addr);
-    }
-
-    //case - 7 : testing with randomly generated needles
-    str_alnd_addr = buff_tail + str1_alnmnt; // Reset to valid buffer location
-    init_buffer((char*)str_alnd_addr, size);
-    prepare_boundary(str_alnd_addr, size);
-    // Generating a random number between 0 and size
-    size_t start = rand() % size;  // Random start position of needle
-    size_t end = start + rand() % (size - start);  // Random end position of needle
-    char* needle = (char*)malloc((end - start + 1) * sizeof(char));
-    if (!needle) {
-        fprintf(stderr, "Memory allocation failed\n");
-        free(str_alnd_addr);
-        exit(1);
-    }
-    for (size_t i = 0; i < (end-start); ++i) {
-        needle[i] = str_alnd_addr[start + i];
-        if (str_alnd_addr[start + i] == NULL_TERM_CHAR) {
-            break;  // Stop copying if end of string (null terminator) is encountered
-        }
-    }
-    needle[end - start] = NULL_TERM_CHAR;
-    res = strstr((char *)str_alnd_addr, (char *)needle);
-    if(res != test_strstr((char *)str_alnd_addr,(char *)needle) )
-    {
-        printf("ERROR:[VALIDATION:RANDOM GEN NEEDLES] failure for strstr of str1_aln:%u size: %lu, find:%s\n"\
-                                    " return_value =%s\n EXP=%s\n STR:%s\n",str1_alnmnt, size, find, res, test_strstr((char *)str_alnd_addr,(char *)needle), (char *)str_alnd_addr);
-    }
-
-    //case 8: Testing with haystack which contains needle substrings
-    size_t length = 1; //needle length
-    while (length * length <= size) {
-        length++;
-    }
-    length--;
-    char* str = (char*)malloc((length + BOUNDARY_BYTES) * 2); //memory allocation for needle
-    init_buffer((char*)str, length);
-    char* haystack = (char*)malloc(size + BOUNDARY_BYTES * 2);
-    if (!haystack) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(1);
-    }
-    haystack[0] = NULL_TERM_CHAR;
-    size_t haystack_len = 0;
-    for (size_t i = 0; i < length; i++) {
-        // Append i characters of needle to haystack
-        for (size_t j = 0; j < i; j++) {
-            if (haystack_len < size) {
-                haystack[haystack_len++] = str[j];
-            }
+        if (page_buff == NULL)
+        {
+            perror("Failed to allocate memory");
+            free(needle);
+            free(buff);
+            exit(-1);
         }
 
-        if (haystack_len <= size) {
-            haystack[haystack_len++] = 'A' + rand() % 26;
+        page_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
+
+        string_setup((char *)page_alnd_addr, size, (char *)needle, needle_len);
+
+        res = strstr((char*)page_alnd_addr, (char*) needle);
+        if (res != test_strstr((char*)page_alnd_addr, (char*)needle))
+        {
+            printf("ERROR:[VALIDATION:PAGE-CROSS] failure for missing needle of \
+            str1_aln:%u size:%lu,\nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n",\
+            str1_alnmnt, size, res, res, needle, needle, page_alnd_addr, page_alnd_addr);
         }
-    }
 
-    while (haystack_len + length <= size) {
-        haystack[haystack_len++] = 'A' + rand() % 26;
-    }
+        //Adding Needle at the end of haysatck
+        page_alnd_addr[size - needle_len] = NULL_TERM_CHAR;
+        strncat((char*)page_alnd_addr, (char*)needle, needle_len);
 
-    for (size_t i = 0; i < length; i++) {
-        haystack[haystack_len++] = str[i];
+        res = strstr((char*)page_alnd_addr, (char*) needle);
+        if (res != test_strstr((char*)page_alnd_addr, (char*)needle))
+        {
+            printf("ERROR:[VALIDATION:PAGE-CROSS]failure with Needle at the end \
+            str1_aln:%u size:%lu,\nreturn_value(%p):%s\nNEEDLE(%p):%s\nHAYSTACK(%p):%s\n",\
+            str1_alnmnt, size, res, res, needle, needle, page_alnd_addr, page_alnd_addr);
+        }
+        free(page_buff);
     }
-    haystack[haystack_len] = NULL_TERM_CHAR;
-
-    res = strstr(haystack, str);
-    if (res != test_strstr(haystack, str))
-    {
-        printf("ERROR:[VALIDATION:HAYSTACK = SUBSTRINGS(NEEDLE)]failure for strstr of str1_aln:%u size:%lu, find:%s\n"
-               " return_value =%s\n STR:%s\n", str1_alnmnt, size, str, res, haystack);
-    }
-    // removing needle from the haystack
-    haystack_len -= length;
-    haystack[haystack_len] = NULL_TERM_CHAR;
-    res = strstr(haystack, str);
-    if (res != test_strstr(haystack, str))
-    {
-        printf("ERROR:[VALIDATION:HAYSTACK = SUBSTRINGS(NEEDLE) - NEEDLE] failure for strstr of str1_aln:%u size:%lu, find:%s\n"
-               " return_value =%s\n STR:%s\n", str1_alnmnt, size, str, res, haystack);
-    }
-
     free(needle);
-    free(page_buff);
-    free(haystack);
-    free(str);
-    free(find_alnd_addr_original); // Free the original allocated address
     free(buff);
 }
 

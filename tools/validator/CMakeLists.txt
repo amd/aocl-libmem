@@ -32,6 +32,7 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/tools/validator/CTestTestfile.cmake
   DESTINATION ${CMAKE_BINARY_DIR}/test)
 
 add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/libmem_validator.c)
+target_link_libraries(libmem_validator m)
 
 # Enable testing
 enable_testing()
