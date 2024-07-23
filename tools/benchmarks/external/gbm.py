@@ -58,6 +58,7 @@ class GBM:
         self.LibMemVersion=''
         self.GlibcVersion=''
         self.size_unit=[]
+        self.perf = self.MYPARSER['ARGS']['perf']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -72,25 +73,43 @@ class GBM:
         if self.memory_operation == 'u':
             self.bench_name='GooglBench_UnCached'
 
-        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
-        datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' \
+                + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
 
-        print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
-
         subprocess.run(["g++","-Wno-deprecated-declarations","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
-        self.variant="glibc"
-        self.gbm_run()
+        if (self.perf == 'b'):
+            print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
+            self.variant="glibc"
+            self.gbm_run()
+
         self.variant="amd"
         self.gbm_run()
 
         values= subprocess.run(["awk", "/^.*CACHED/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
         self.size_values= [val.split('/')[1] for val in values]
         self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        if (self.perf == 'b'):
+            self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
 
         #Converting the M/s values to G/s
         self.throughput_converter(self.amd_throughput_values)
+        if (self.perf == 'p'):
+            print("Performance of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
+            self.data_unit()
+
+            with open(self.result_dir+"/"+"perf_values.csv", "w",\
+                newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","Throughput"])
+                for size, athroughput in zip(self.size_unit, \
+                    self.amd_throughput_values):
+                    writer.writerow([size,athroughput])
+            self.print_result_perf()
+
+            return
+
         self.throughput_converter(self.glibc_throughput_values)
 
         self.gains=[]
@@ -138,6 +157,21 @@ class GBM:
 
         return
 
+    def print_result_perf(self):
+        input_file = read_csv(self.result_dir+"/"+"perf_values.csv")
+        self.size = input_file['Size'].values.tolist()
+        self.perf = input_file['Throughput'].values.tolist()
+        print("\nPERFORMANCE: "+self.bench_name)
+        print("    SIZE".ljust(8)+"     :  THROUGHPUT")
+        print("    ----------------")
+        for x in range(len(self.size)):
+                print("   ",(self.size[x]).ljust(8)+" :"+\
+                    (str(self.perf[x])).rjust(6))
+
+
+        print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
+        return True
+
     def print_result(self):
         input_file = read_csv(self.result_dir+"/"+str(self.bench_name)+\
             "throughput_values.csv")
@@ -149,8 +183,6 @@ class GBM:
         for x in range(len(self.size)):
                 print("   ",(self.size[x]).ljust(8)+" :"+\
                     (str(self.gains[x])).rjust(6))
-
-
         print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
         return True
 
@@ -160,7 +192,10 @@ class GBM:
             self.LibMemVersion = subprocess.check_output("file " + LIBMEM_BIN_PATH + \
                 "| awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = LIBMEM_BIN_PATH
-            print("GBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
+            if (self.perf == 'b'):
+                print("GBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
+            else:
+                print("GBM : Running Performance Analysis for AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
         else:
             self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
 
@@ -168,7 +203,7 @@ class GBM:
             print("GBM : Running Benchmark on GLIBC "+str(self.GlibcVersion,'utf-8').strip())
         # size zero will result in 0 throughput.
         if (self.ranges[0] == 0):
-            self.ranges[0] = 1;
+            self.ranges[0] = 1
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
             subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)

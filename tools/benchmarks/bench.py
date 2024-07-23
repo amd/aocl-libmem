@@ -111,6 +111,9 @@ def main():
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
                             type = int, default = 1000)
+    parser.add_argument("-perf", help = "performance runs for LibMem.\
+                            Default is benchmarking mode against system Libc",
+                            type = str, choices = ['p', 'b'], default = 'b')
 
     """
     parser.add_argument("-g", "--graph", help="Generates the Latency and \
