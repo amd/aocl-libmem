@@ -150,6 +150,26 @@ char *test_strstr(const char *str1, const char *str2)
     return NULL;
 }
 
+size_t test_strspn(const char *str1, const char *str2) {
+    size_t count = 0;
+    while (*str1) {
+        int found = 0;
+        for (const char* p = str2; *p; ++p) {
+            if (*p == *str1) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            break;
+        }
+        count++;
+        str1++;
+    }
+
+    return count;
+}
+
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
@@ -1687,6 +1707,142 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
     free(buff);
 }
 
+static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *s = NULL, *accept = NULL, *page_alnd_addr =NULL;
+    size_t res, expected;
+    size_t accept_len = 0;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + CACHE_LINE_SZ, NON_OVERLAP_BUFFER);
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    srand(time(0));
+    s = buff_tail + str1_alnmnt;
+
+    if (size == 0)
+    {
+        //accept is Zero
+        char null_accept = NULL_TERM_CHAR;
+        res = strspn((char *)s, &null_accept);
+        if (res != 0)
+            printf("ERROR:[RETURN] value mismatch for ACCEPT size(%lu): expected - 0 "\
+                        ", actual - %lu\n", size, res);
+
+        //S is Zero
+        char null_s = NULL_TERM_CHAR;
+        res = strspn(&null_s, &null_accept);
+        if (res != 0)
+            printf("ERROR:[RETURN] value mismatch for S size(%lu): expected - 0 "\
+                        ", actual - %lu\n", size, res);
+        return;
+    }
+    //case 1 : Accept in S
+    accept_len = ceil(sqrt(size));
+    accept = (uint8_t*)generate_random_string(accept_len);
+    string_setup((char*) s, size, (char *)accept, accept_len);
+    res = strspn((char*)s, (char*)accept);
+    expected = test_strspn((char*)s, (char*)accept);
+    if (res != expected)
+    {
+        printf("ERROR:[VALIDATION: substrings of ACCEPT in S]failure for S\
+        of str1_aln:%u size:%lu,\nreturn_value:%lu,\nACCEPT(%p):%s\nS(%p):%s\n", \
+        str1_alnmnt, size, res, accept, accept, s, s);
+    }
+    //case 2 : Replacing S with char not in accept
+    char original_char;
+    for (size_t i = 0; i < size; i++) {
+        original_char = s[size - 1 - i];
+        s[size - 1 - i] = (char)127;
+        res = strspn((char*)s, (char*)accept);
+        expected = test_strspn((char*)s, (char*)accept);
+        if (res != expected)
+        {
+            printf("ERROR:[VALIDATION: Failure at Index : %lu]failure for S\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu,\nACCEPT(%p):%s\nS(%p):%s\n", \
+            size-1-i, str1_alnmnt, size, res, accept, accept, s, s);
+        }
+        // Restore the original character
+        s[size - 1 - i] = original_char;
+    }
+
+    //case - 3 : Replacing S with Permutations of accept
+    size_t index = accept_len;
+    while (index < size) {
+        if (accept_len > 1) {
+            size_t i;
+            for (i = 0; i < accept_len - 1; i++) {
+                size_t j = i + rand() / (RAND_MAX / (accept_len - i) + 1);
+                char t = accept[j];
+                accept[j] = accept[i];
+                accept[i] = t;
+            }
+            for (size_t j = 0; j < accept_len && index < size; j++, index++) {
+                s[index] = accept[j];
+            }
+        }
+    }
+    res = strspn((char*)s, (char*)accept);
+    expected = test_strspn((char*)s, (char*)accept);
+    if (res != expected)
+    {
+        printf("ERROR:[VALIDATION: Generating S with permutations of ACCEPT]failure for S\
+        of str1_aln:%u size:%lu,\nreturn_value:%lu\nACCEPT(%p):%s\nS(%p):%s\n", \
+        str1_alnmnt, size, res, accept, accept, s, s);
+    }
+
+    //case 4 : PageCross_check for size <= 4KB
+    if  (size <= PAGE_SZ)
+    {
+        void *page_buff = NULL;
+        uint32_t page_cnt = (size + NULL_BYTE + CACHE_LINE_SZ)/PAGE_SZ + \
+                        !!((size + NULL_BYTE + CACHE_LINE_SZ) % PAGE_SZ);
+        posix_memalign(&page_buff, PAGE_SZ, page_cnt * PAGE_SZ);
+
+        if (page_buff == NULL)
+        {
+            perror("Failed to allocate memory");
+            free(accept);
+            free(buff);
+            exit(-1);
+        }
+        //Accept in page_alnd_addr
+        page_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
+        string_setup((char*) page_alnd_addr, size, (char *)accept, accept_len);
+        res = strspn((char*)page_alnd_addr, (char*)accept);
+        expected = test_strspn((char*)page_alnd_addr, (char*)accept);
+        if (res != expected)
+        {
+            printf("ERROR:[VALIDATION: substrings of ACCEPT in page_alnd_addr]failure for page_alnd_addr\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu,\nACCEPT(%p):%s\nS(%p):%s\n", \
+            str1_alnmnt, size, res, accept, accept, page_alnd_addr, page_alnd_addr);
+        }
+        //Replacing S with char not in accept
+        char orig_char;
+        for (size_t i = 0; i < size; i++) {
+            orig_char = page_alnd_addr[size - 1 - i];
+            page_alnd_addr[size - 1 - i] = (char)127;
+            res = strspn((char*)page_alnd_addr, (char*)accept);
+            expected = test_strspn((char*)page_alnd_addr, (char*)accept);
+            if (res != expected)
+            {
+                printf("ERROR:[VALIDATION: Failure at Index : %lu]failure for page_alnd_addr\
+                of str1_aln:%u size:%lu,\nreturn_value:%lu,\nACCEPT(%p):%s\nS(%p):%s\n", \
+                size-1-i, str1_alnmnt, size, res, accept, accept, page_alnd_addr, page_alnd_addr);
+            }
+            // Restore the original character
+            page_alnd_addr[size - 1 - i] = orig_char;
+        }
+        free(page_buff);
+    }
+    free(accept);
+    free(buff);
+
+}
 
 libmem_func supp_funcs[]=
 {
@@ -1703,6 +1859,7 @@ libmem_func supp_funcs[]=
     {"strlen",  strlen_validator},
     {"strcat",  strcat_validator},
     {"strstr",  strstr_validator},
+    {"strspn",  strspn_validator},
     {"none",    NULL}
 };
 
