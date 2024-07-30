@@ -63,11 +63,16 @@ uint64_t nt_stop_threshold;
 #define YMM_SZ      32
 #define ZMM_SZ      64
 
-#define AVX2_MASK    0x20
-#define AVX512_MASK  0x10000
-#define ERMS_MASK    0x200
-#define FSRM_MASK    0x10
-#define MOVDIRI_MASK  0x8000000
+/* ZEN CPU feature masks */
+#define     AVX2_MASK       (1 <<  5)
+#define     AVX512_MASK     (1 << 16)
+#define     ERMS_MASK       (1 <<  9)
+#define     FSRM_MASK       (1 <<  4)
+#define     RDSEED_MASK     (1 << 18)
+#define     RDPID_MASK      (1 << 22)
+#define     VPCLMULQDQ_MASK (1 << 10)
+#define     MOVDIRI_MASK    (1 << 27)
+
 
 #define ZEN1_L3 8*1024*1024     //8MB per CCX
 #define ZEN2_L3 16*1024*1024    //16MB per CCX
