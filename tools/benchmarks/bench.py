@@ -65,8 +65,8 @@ class Bench:
         elif(self.MYPARSER['benchmark']=='fbm'):
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
-libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp','memchr']
-libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn', 'strstr']
+libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn', 'strstr', 'memchr']
 libmem_funcs = libmem_memory + libmem_string
 
 def main():
@@ -87,8 +87,10 @@ def main():
                             type=str, choices = libmem_funcs,default="memcpy")
 
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\
-                                lengths to be verified.",
-                            type=int, default = [8, 32*1024*1024])
+                                lengths to be benchmarked.\
+                                Memory functions [8 - 32MB]\
+                                String functions [8 - 4KB]",
+                            type=int)
     parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
                             c - cached, u - un-cached, w - walk, p - page_walk\
                             GBM supports [c,u]",\
@@ -127,6 +129,12 @@ def main():
 
 
     args = ParserConfig.parser_args()
+    # Set the default range based on the func argument
+    if args['range'] is None:
+        if args['func'] in libmem_string:
+            args['range'] = [8, 4096]
+        else:
+            args['range'] = [8, 32*1024*1024]
 
     return args
 
