@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -506,3 +506,12 @@ int __memcmp_avx512_aligned(const void *mem1, const void *mem2, size_t size)
     }
     return 0;
 }
+
+/*   Below variants are added for design compatibility.
+*/
+int __memcmp_avx512_aligned_store(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx512_unaligned")));
+int __memcmp_avx512_aligned_load(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx512_unaligned")));
+
+int __memcmp_avx512_nt_store(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx512_unaligned")));
+int __memcmp_avx512_nt_load(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx512_unaligned")));
+

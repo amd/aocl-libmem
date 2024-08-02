@@ -25,8 +25,8 @@
 #include "zen_cpu_info.h"
 #include "logger.h"
 #include "threshold.h"
-#include "libmem_impls.h"
 #ifdef ENABLE_TUNABLES
+#include "libmem_impls.h"
 #include "libmem.h"
 #endif
 
@@ -166,7 +166,7 @@ static variant_index amd_libmem_resolver(void)
             else
                 var_idx = AVX512_UNALIGNED;
         }
-#endif
+#endif // end of AVX512 options
         else if (user_config.user_operation.erms) //ERMS operations
         {
             LOG_DEBUG("ERMS config\n");
@@ -191,7 +191,7 @@ static variant_index amd_libmem_resolver(void)
     }
     return var_idx;
 }
-#endif
+#endif // end of tunable options
 
 
 /* Constructor for libmem library
@@ -211,16 +211,16 @@ static __attribute__((constructor)) void libmem_init()
     {
         compute_sys_thresholds(&zen_info);
         configure_thresholds();
-        get_cpu_capabilities();
     }
+    get_cpu_capabilities();
+
 #ifdef ENABLE_TUNABLES
     variant_index impl_idx;
     impl_idx  = amd_libmem_resolver();
-
-    _memcpy_variant = libmem_impls_1[MEMCPY][impl_idx];
-    _mempcpy_variant = libmem_impls_1[MEMPCPY][impl_idx];
-    _memmove_variant = libmem_impls_1[MEMMOVE][impl_idx];
-    _memset_variant = libmem_impls_2[MEMSET][impl_idx];
-    _memcmp_variant = libmem_impls_3[MEMCMP][impl_idx];
+    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMCPY][impl_idx]);
+    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMPCPY][impl_idx]);
+    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMMOVE][impl_idx]);
+    _memset_variant = ((void* (*)(void *, int, size_t))libmem_impls[MEMSET][impl_idx]);
+    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_impls[MEMCMP][impl_idx]);
 #endif
 }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -116,7 +116,7 @@ void *__memset_avx2_unaligned(void *mem, int val, size_t size)
 }
 
 
-void *__memset_avx2_aligned(void *mem, int val, size_t size)
+void *__memset_avx2_aligned_store(void *mem, int val, size_t size)
 {
     __m256i y0;
     size_t offset = 0;
@@ -161,7 +161,13 @@ void *__memset_avx2_aligned(void *mem, int val, size_t size)
     return mem;
 }
 
-void *__memset_avx2_nt(void *mem, int val, size_t size)
+/* Memset has only store memory and the load alignments is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx2_aligned(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_aligned_store")));
+void *__memset_avx2_aligned_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_unaligned")));
+
+void *__memset_avx2_nt_store(void *mem, int val, size_t size)
 {
     __m256i y0;
     size_t offset = 0;
@@ -204,3 +210,9 @@ void *__memset_avx2_nt(void *mem, int val, size_t size)
     _mm256_storeu_si256 (mem + size - YMM_SZ + offset , y0);
     return mem;
 }
+
+/* Memset has only store memory and the non-temporal load is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx2_nt(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_nt_store")));
+void *__memset_avx2_nt_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_unaligned")));

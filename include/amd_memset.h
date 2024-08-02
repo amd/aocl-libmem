@@ -46,13 +46,21 @@ extern void * __memset_threshold(void *mem,int val, size_t size);
 //CPU Feature:AVX2 and Alignment specifc implementations.
 extern void * __memset_avx2_unaligned(void *mem,int val, size_t size);
 extern void * __memset_avx2_aligned(void *mem,int val, size_t size);
+extern void * __memset_avx2_aligned_load(void *mem,int val, size_t size);
+extern void * __memset_avx2_aligned_store(void *mem,int val, size_t size);
 extern void * __memset_avx2_nt(void *mem,int val, size_t size);
+extern void * __memset_avx2_nt_load(void *mem,int val, size_t size);
+extern void * __memset_avx2_nt_store(void *mem,int val, size_t size);
 
 #ifdef AVX512_FEATURE_ENABLED
 //CPU Feature:AVX512 and Alignment specifc implementations.
 extern void * __memset_avx512_unaligned(void *mem,int val, size_t size);
 extern void * __memset_avx512_aligned(void *mem,int val, size_t size);
+extern void * __memset_avx512_aligned_load(void *mem,int val, size_t size);
+extern void * __memset_avx512_aligned_store(void *mem,int val, size_t size);
 extern void * __memset_avx512_nt(void *mem,int val, size_t size);
+extern void * __memset_avx512_nt_load(void *mem,int val, size_t size);
+extern void * __memset_avx512_nt_store(void *mem,int val, size_t size);
 #endif
 
 //CPU Feature:ERMS and Alignment specifc implementations.

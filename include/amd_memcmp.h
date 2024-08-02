@@ -46,13 +46,21 @@ extern int __memcmp_threshold(const void *mem1,const void *mem2, size_t size);
 //CPU Feature:AVX2 and Alignment specifc implementations.
 extern int __memcmp_avx2_unaligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx2_aligned(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx2_aligned_load(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx2_aligned_store(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx2_nt(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx2_nt_load(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx2_nt_store(const void *mem1,const void *mem2, size_t size);
 
 #ifdef AVX512_FEATURE_ENABLED
 //CPU Feature:AVX512 and Alignment specifc implementations.
 extern int __memcmp_avx512_unaligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx512_aligned(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx512_aligned_load(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx512_aligned_store(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx512_nt(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx512_nt_load(const void *mem1,const void *mem2, size_t size);
+extern int __memcmp_avx512_nt_store(const void *mem1,const void *mem2, size_t size);
 #endif
 
 //CPU Feature:ERMS and Alignment specifc implementations.

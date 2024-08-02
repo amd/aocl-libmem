@@ -30,20 +30,23 @@ extern "C" {
 #endif
 
 #include "libmem_impls.h"
+
+#define CONCAT2(x,y)    x##_##y
+#define CONCAT(x,y)     CONCAT2(x,y)
+
+#define PREFIX(x)       __##x
+
 typedef enum{
-    MEMCPY = 0,
-    MEMPCPY = 1,
-    MEMMOVE = 2,
-    MEMSET = 0,
-    MEMCMP = 0
+    MEMCPY,
+    MEMPCPY,
+    MEMMOVE,
+    MEMSET,
+    MEMCMP,
+    FUNC_COUNT
 }func_index;
 
 // A maximum of 16 supported variants
 typedef enum{
-/*System feature & Threshold*/
-    SYSTEM,
-/*User Threshold with avx2, erms, non-temporal*/
-    THRESHOLD,
 /*User AVX2 operation based*/
     AVX2_UNALIGNED,
     AVX2_ALIGNED,
@@ -67,176 +70,84 @@ typedef enum{
     ERMS_MOVSW,
     ERMS_MOVSD,
     ERMS_MOVSQ,
+/*User Threshold with avx2, erms, non-temporal*/
+    THRESHOLD,
 /*uArch based*/
     ARCH_ZEN1,
     ARCH_ZEN2,
     ARCH_ZEN3,
     ARCH_ZEN4,
     ARCH_ZEN5,
-    VAR_COUNT
+/*System feature & Threshold*/
+    SYSTEM,
+    VARIANT_COUNT
 }variant_index;
 
-void * (*libmem_impls_1[][VAR_COUNT])(void *, const void *, size_t)=
-{
-    {
-        __memcpy_system,
-        __memcpy_threshold,
-        __memcpy_avx2_unaligned,
-        __memcpy_avx2_aligned,
-        __memcpy_avx2_aligned_load,
-        __memcpy_avx2_aligned_store,
-        __memcpy_avx2_nt,
-        __memcpy_avx2_nt_load,
-        __memcpy_avx2_nt_store,
-#ifdef AVX512_FEATURE_ENABLED
-        __memcpy_avx512_unaligned,
-        __memcpy_avx512_aligned,
-        __memcpy_avx512_aligned_load,
-        __memcpy_avx512_aligned_store,
-        __memcpy_avx512_nt,
-        __memcpy_avx512_nt_load,
-        __memcpy_avx512_nt_store,
-#endif
-        __memcpy_erms_b_aligned,
-        __memcpy_erms_w_aligned,
-        __memcpy_erms_d_aligned,
-        __memcpy_erms_q_aligned,
-        __memcpy_zen1,
-        __memcpy_zen2,
-        __memcpy_zen3,
-        __memcpy_zen4,
-        __memcpy_zen5
-    },
-    {
-        __mempcpy_system,
-        __mempcpy_threshold,
-        __mempcpy_avx2_unaligned,
-        __mempcpy_avx2_aligned,
-        __mempcpy_avx2_aligned_load,
-        __mempcpy_avx2_aligned_store,
-        __mempcpy_avx2_nt,
-        __mempcpy_avx2_nt_load,
-        __mempcpy_avx2_nt_store,
-#ifdef AVX512_FEATURE_ENABLED
-        __mempcpy_avx512_unaligned,
-        __mempcpy_avx512_aligned,
-        __mempcpy_avx512_aligned_load,
-        __mempcpy_avx512_aligned_store,
-        __mempcpy_avx512_nt,
-        __mempcpy_avx512_nt_load,
-        __mempcpy_avx512_nt_store,
-#endif
-        __mempcpy_erms_b_aligned,
-        __mempcpy_erms_w_aligned,
-        __mempcpy_erms_d_aligned,
-        __mempcpy_erms_q_aligned,
-        __mempcpy_zen1,
-        __mempcpy_zen2,
-        __mempcpy_zen3,
-        __mempcpy_zen4,
-        __mempcpy_zen5
-    },
-    {
-        __memmove_system,
-        __memmove_threshold,
-        __memmove_avx2_unaligned,
-        __memmove_avx2_aligned,
-        __memmove_avx2_aligned_load,
-        __memmove_avx2_aligned_store,
-        __memmove_avx2_nt,
-        __memmove_avx2_nt_load,
-        __memmove_avx2_nt_store,
-#ifdef AVX512_FEATURE_ENABLED
-        __memmove_avx512_unaligned,
-        __memmove_avx512_aligned,
-        __memmove_avx512_aligned_load,
-        __memmove_avx512_aligned_store,
-        __memmove_avx512_nt,
-        __memmove_avx512_nt_load,
-        __memmove_avx512_nt_store,
-#endif
-        __memmove_erms_b_aligned,
-        __memmove_erms_w_aligned,
-        __memmove_erms_d_aligned,
-        __memmove_erms_q_aligned,
-        __memmove_zen1,
-        __memmove_zen2,
-        __memmove_zen3,
-        __memmove_zen4,
-        __memmove_zen5
-    }
-};
+typedef void (*func_ptr)(void);
 
-void * (*libmem_impls_2[][VAR_COUNT])(void *, int, size_t)=
-{
-    {
-        __memset_system,
-        __memset_threshold,
-        __memset_avx2_unaligned,
-        __memset_avx2_aligned,
-        __memset_avx2_unaligned,
-        __memset_avx2_aligned,
-        __memset_avx2_nt,
-        __memset_avx2_unaligned,
-        __memset_avx2_nt,
-#ifdef AVX512_FEATURE_ENABLED
-        __memset_avx512_unaligned,
-        __memset_avx512_aligned,
-        __memset_avx512_unaligned,
-        __memset_avx512_aligned,
-        __memset_avx512_nt,
-        __memset_avx512_unaligned,
-        __memset_avx512_nt,
-#endif
-        __memset_erms_b_aligned,
-        __memset_erms_w_aligned,
-        __memset_erms_d_aligned,
-        __memset_erms_q_aligned,
-        __memset_zen1,
-        __memset_zen2,
-        __memset_zen3,
-        __memset_zen4,
-        __memset_zen5
-    }
-};
+#define generate_avx2_variants(func) \
+    (func_ptr) CONCAT(PREFIX(func), avx2_unaligned), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_aligned), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_aligned_load), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_aligned_store), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_nt), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_nt_load), \
+    (func_ptr) CONCAT(PREFIX(func), avx2_nt_store),
 
-int (*libmem_impls_3[][VAR_COUNT])(const void *, const void *, size_t)=
-{
-    {
-        __memcmp_system,
-        __memcmp_threshold,
-        __memcmp_avx2_unaligned,
-        __memcmp_avx2_aligned,
-        __memcmp_avx2_unaligned,
-        __memcmp_avx2_unaligned,
-        __memcmp_avx2_nt,
-        __memcmp_avx2_unaligned,
-        __memcmp_avx2_unaligned,
-#ifdef AVX512_FEATURE_ENABLED
-        __memcmp_avx512_unaligned,
-        __memcmp_avx512_aligned,
-        __memcmp_avx512_unaligned,
-        __memcmp_avx512_unaligned,
-        __memcmp_avx512_nt,
-        __memcmp_avx512_unaligned,
-        __memcmp_avx512_unaligned,
-#endif
-        __memcmp_erms_b_aligned,
-        __memcmp_erms_w_aligned,
-        __memcmp_erms_d_aligned,
-        __memcmp_erms_q_aligned,
-        __memcmp_zen1,
-        __memcmp_zen2,
-        __memcmp_zen3,
-        __memcmp_zen4,
-        __memcmp_zen5
-    }
-};
 
+#ifdef AVX512_FEATURE_ENABLED
+#define generate_avx512_variants(func) \
+    (func_ptr) CONCAT(PREFIX(func), avx512_unaligned), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_aligned), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_aligned_load), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_aligned_store), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_nt), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_nt_load), \
+    (func_ptr) CONCAT(PREFIX(func), avx512_nt_store),
+#else
+#define generate_avx512_variants(func)
+#endif //end of avx-512 variants
+
+#define generate_erms_variants(func) \
+    (func_ptr) CONCAT(PREFIX(func), erms_b_aligned), \
+    (func_ptr) CONCAT(PREFIX(func), erms_w_aligned), \
+    (func_ptr) CONCAT(PREFIX(func), erms_d_aligned), \
+    (func_ptr) CONCAT(PREFIX(func), erms_q_aligned),
+
+#define generate_threshold_variant(func) \
+    (func_ptr) CONCAT(PREFIX(func), threshold),
+
+#define generate_arch_variants(func) \
+    (func_ptr) CONCAT(PREFIX(func), zen1), \
+    (func_ptr) CONCAT(PREFIX(func), zen2), \
+    (func_ptr) CONCAT(PREFIX(func), zen3), \
+    (func_ptr) CONCAT(PREFIX(func), zen4), \
+    (func_ptr) CONCAT(PREFIX(func), zen5),
+
+#define generate_system_variant(func) \
+    (func_ptr) CONCAT(PREFIX(func), system)
+
+#define add_func_variants(func) \
+    { \
+        generate_avx2_variants(func) \
+        generate_avx512_variants(func) \
+        generate_erms_variants(func) \
+        generate_threshold_variant(func) \
+        generate_arch_variants(func) \
+        generate_system_variant(func) \
+    }
+
+func_ptr libmem_impls[FUNC_COUNT][VARIANT_COUNT] =
+{
+    add_func_variants(memcpy),
+    add_func_variants(mempcpy),
+    add_func_variants(memmove),
+    add_func_variants(memset),
+    add_func_variants(memcmp)
+};
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
-
