@@ -235,24 +235,17 @@ static inline int boundary_check(uint8_t *dst, size_t size)
     return 0;
 }
 
-char* generate_random_string(size_t length) {
-    // Allocate memory for the random string plus the null terminator
-    char* random_string = (char*)malloc((length + NULL_BYTE) * sizeof(char));
-    if (random_string == NULL) {
-         perror("Failed to allocate memory");
-        exit(1);
-    }
-
+void generate_random_string(uint8_t *buf, size_t length)
+{
     // Seed the random number generator
     srand((unsigned int)time(NULL));
     for (size_t i = 0; i < length; i++) {
-        random_string[i] = MIN_PRINTABLE_ASCII + (rand() % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII));
+        buf[i] = MIN_PRINTABLE_ASCII + (rand() % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII));
     }
 
     // Null-terminate the string
-    random_string[length] = NULL_TERM_CHAR;
+    buf[length] = NULL_TERM_CHAR;
 
-    return random_string;
 }
 
 void string_setup(char *haystack, size_t size, char *needle, size_t needle_len)
@@ -1586,15 +1579,6 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
     char *find, *res;
     size_t needle_len = 0;
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + CACHE_LINE_SZ, NON_OVERLAP_BUFFER);
-    if (buff == NULL)
-    {
-        perror("Failed to allocate memory");
-        exit(-1);
-    }
-    srand(time(0));
-    haystack = buff_tail + str1_alnmnt;
-
     if (size == 0)
     {
         //Needle is Zero
@@ -1612,9 +1596,19 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
                         ", actual - %p\n", size, &null_haystack, res);
         return;
     }
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE, NON_OVERLAP_BUFFER);
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    srand(time(0));
+    haystack = buff_tail + str1_alnmnt;
     //case1: Haystack = SUBSTRINGS(NEEDLE) without the NEEDLE
     needle_len = ceil(sqrt(size));
-    needle = (uint8_t*) generate_random_string(needle_len);
+    needle = buff_head + str2_alnmnt;
+    generate_random_string(needle, needle_len);
 
     string_setup((char *)haystack, size, (char *)needle, needle_len);
 
@@ -1673,7 +1667,6 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
         if (page_buff == NULL)
         {
             perror("Failed to allocate memory");
-            free(needle);
             free(buff);
             exit(-1);
         }
@@ -1703,7 +1696,6 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
         }
         free(page_buff);
     }
-    free(needle);
     free(buff);
 }
 
@@ -1715,14 +1707,7 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
     size_t res, expected;
     size_t accept_len = 0;
 
-    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + CACHE_LINE_SZ, NON_OVERLAP_BUFFER);
-    if (buff == NULL)
-    {
-        perror("Failed to allocate memory");
-        exit(-1);
-    }
-    srand(time(0));
-    s = buff_tail + str1_alnmnt;
+
 
     if (size == 0)
     {
@@ -1741,9 +1726,19 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
                         ", actual - %lu\n", size, res);
         return;
     }
-    //case 1 : Accept in S
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE, NON_OVERLAP_BUFFER);
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    srand(time(0));
+    s = buff_tail + str1_alnmnt;
+    //case 1 : Accept in S+
     accept_len = ceil(sqrt(size));
-    accept = (uint8_t*)generate_random_string(accept_len);
+    accept = buff_head + str2_alnmnt;
+    generate_random_string(accept, accept_len);
     string_setup((char*) s, size, (char *)accept, accept_len);
     res = strspn((char*)s, (char*)accept);
     expected = test_strspn((char*)s, (char*)accept);
@@ -1806,7 +1801,6 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
         if (page_buff == NULL)
         {
             perror("Failed to allocate memory");
-            free(accept);
             free(buff);
             exit(-1);
         }
@@ -1839,9 +1833,7 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
         }
         free(page_buff);
     }
-    free(accept);
     free(buff);
-
 }
 
 libmem_func supp_funcs[]=
