@@ -99,48 +99,54 @@ static inline void * __load_store_le_2ymm_vec(void* __restrict store_addr,
 static inline void * __load_store_le_2ymm_vec_overlap(void *store_addr,
             const void* load_addr, size_t size)
 {
-    __m256i y0, y1;
-    __m128i x0, x1;
-    uint64_t temp = 0;
+    register void *ret asm("rax");
+    ret = store_addr;
 
-    switch (_lzcnt_u32(size))
+    if (size <= 2 * DWORD_SZ)
     {
-        case 32:
-            return store_addr;
-        case 31:
-            *((uint8_t *)store_addr) = *((uint8_t *)load_addr);
-            return store_addr;
-        case 30:
-            temp = *((uint16_t *)load_addr);
+        if (size <=  2 * WORD_SZ)
+        {
+            if (size <= 1)
+            {
+                if (size)
+                    *(uint8_t*)store_addr = *(uint8_t*)load_addr;
+                return ret;
+            }
+            uint16_t temp = *((uint16_t *)load_addr);
             *((uint16_t *)(store_addr + size - WORD_SZ)) = \
-                    *((uint16_t *)(load_addr + size - WORD_SZ));
+                        *((uint16_t *)(load_addr + size - WORD_SZ));
             *((uint16_t *)store_addr) = temp;
-            return store_addr;
-        case 29:
-            temp = *((uint32_t *)load_addr);
-            *((uint32_t *)(store_addr + size - DWORD_SZ)) = \
+            return ret;
+        }
+        uint32_t temp = *((uint32_t *)load_addr);
+        *((uint32_t *)(store_addr + size - DWORD_SZ)) = \
                     *((uint32_t *)(load_addr + size - DWORD_SZ));
-            *((uint32_t *)store_addr) = temp;
-            return store_addr;
-        case 28:
-            temp = *((uint64_t *)load_addr);
+        *((uint32_t *)store_addr) = temp;
+        return ret;
+    }
+    if (size < 2 * XMM_SZ)
+    {
+        if (size <= 2 * QWORD_SZ)
+        {
+            uint64_t temp = *((uint64_t *)load_addr);
             *((uint64_t *)(store_addr + size - QWORD_SZ)) = \
                     *((uint64_t *)(load_addr + size - QWORD_SZ));
             *((uint64_t *)store_addr) = temp;
-            return store_addr;
-        case 27:
-            x0 = _mm_loadu_si128(load_addr);
-            x1 = _mm_loadu_si128(load_addr + size - XMM_SZ);
-            _mm_storeu_si128(store_addr, x0);
-            _mm_storeu_si128(store_addr + size - XMM_SZ, x1);
-            return store_addr;
-        default:
-            y0 = _mm256_loadu_si256(load_addr);
-            y1 = _mm256_loadu_si256(load_addr + size - YMM_SZ);
-            _mm256_storeu_si256(store_addr, y0);
-            _mm256_storeu_si256(store_addr + size - YMM_SZ, y1);
+            return ret;
+        }
+        __m128i x0, x1;
+        x0 = _mm_loadu_si128(load_addr);
+        x1 = _mm_loadu_si128(load_addr + size - XMM_SZ);
+        _mm_storeu_si128(store_addr, x0);
+        _mm_storeu_si128(store_addr + size - XMM_SZ, x1);
+        return ret;
     }
-    return store_addr;
+    __m256i y0, y1;
+    y0 = _mm256_loadu_si256(load_addr);
+    y1 = _mm256_loadu_si256(load_addr + size - YMM_SZ);
+    _mm256_storeu_si256(store_addr, y0);
+    _mm256_storeu_si256(store_addr + size - YMM_SZ, y1);
+    return ret;
 }
 
 /* ################## TEMPORAL HEAD_TAIL ####################
