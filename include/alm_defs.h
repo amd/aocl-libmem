@@ -26,10 +26,13 @@
 #ifndef _LIBMEM_DEFS_H_
 #define _LIBMEM_DEFS_H_
 
-#define PAGE_SZ         4096
-#define CACHELINE_SZ    64
-#define STR_TERM_CHAR   '\0'
-
+#define PAGE_SZ                 4096
+#define CACHELINE_SZ            64
+#define STR_TERM_CHAR           '\0'
+#define NULL_BYTE               1
+#define ALL_BITS_SET            ((uint64_t)-1)
+#define LOWER_BIT_SET           ((uint64_t)1)
+#define NULL_MASK               0x0
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
