@@ -44,7 +44,7 @@ add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
-set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD 99)
 
 option(ENABLE_LOGGING "Enable Logger" OFF)
 
