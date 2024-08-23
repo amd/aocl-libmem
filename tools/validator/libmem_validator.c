@@ -1624,7 +1624,7 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
     //case2: NEEDLE at the END of HAYSTACK
     //Adding Needle at the end of haysatck
     haystack[size - needle_len] = NULL_TERM_CHAR;
-    strcat((char*)haystack, (char*)needle);
+    test_strcat((char*)haystack, (char*)needle);
 
     res = strstr((char*)haystack, (char*) needle);
     if (res != test_strstr((char*)haystack, (char*)needle))
