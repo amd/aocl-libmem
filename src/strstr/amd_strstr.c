@@ -681,7 +681,258 @@ static inline char* strstr_avx2(const char* haystack, const char* needle)
 }
 
 #ifdef AVX512_FEATURE_ENABLED
-static inline char* strchr_avx512(const char *str, const char ch)
+static inline int cmp_needle_avx512(const char *str1, const char *str2, size_t size)
+{
+    size_t offset = 0;
+    __m512i z1, z2, z3, z4, z5, z6, z7, z8;
+    uint64_t  ret = 0, ret1 = 0, ret2 =0;
+    __mmask64 mask;
+
+    if (size <= ZMM_SZ)
+    {
+        if (size)
+        {
+            z7 = _mm512_set1_epi8(0xff);
+            mask = ((uint64_t)-1) >> (ZMM_SZ - size);
+            z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
+            z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
+
+            ret = _mm512_cmpneq_epu8_mask(z1,z2);
+
+            if (ret)
+                return -1;
+
+        }
+        return 0;
+    }
+
+    if (size <= 2 * ZMM_SZ)
+    {
+        z1 = _mm512_loadu_si512(str1);
+        z2 = _mm512_loadu_si512(str2);
+
+        ret =  _mm512_cmpneq_epu8_mask(z1,z2);
+        if (!ret)
+        {
+            offset = size - ZMM_SZ;
+            z3 = _mm512_loadu_si512(str1 + offset);
+            z4 = _mm512_loadu_si512(str2 + offset);
+            //Check for NULL
+            ret = _mm512_cmpneq_epu8_mask(z3, z4);
+            if(!ret)
+                return 0;
+        }
+        return -1;
+    }
+
+    if (size <= 4* ZMM_SZ)
+    {
+        z1 = _mm512_loadu_si512(str1);
+        z2 = _mm512_loadu_si512(str1 + ZMM_SZ);
+
+        z5 = _mm512_loadu_si512(str2);
+        z6 = _mm512_loadu_si512(str2 + ZMM_SZ);
+
+        ret1 = _mm512_cmpneq_epu8_mask(z1,z5) | _mm512_cmpneq_epu8_mask(z2,z6);
+        if (ret1)
+            return -1;
+
+        z3 = _mm512_loadu_si512(str1 + size - 2 * ZMM_SZ);
+        z4 = _mm512_loadu_si512(str1 + size - ZMM_SZ);
+        z7 = _mm512_loadu_si512(str2 + size - 2 * ZMM_SZ);
+        z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
+
+        ret2 =  _mm512_cmpneq_epu8_mask(z3,z7) | _mm512_cmpneq_epu8_mask(z4,z8);
+        if (ret2)
+            return -1;
+
+        return 0;
+    }
+
+    while ((size - offset) >= 4 * ZMM_SZ)
+    {
+        z1 = _mm512_loadu_si512(str1 + offset);
+        z2 = _mm512_loadu_si512(str1 + offset + 1 * ZMM_SZ);
+
+        z5 = _mm512_loadu_si512(str2 + offset);
+        z6 = _mm512_loadu_si512(str2 + offset + 1 * ZMM_SZ);
+
+        ret1 = _mm512_cmpneq_epu8_mask(z1,z5) | _mm512_cmpneq_epu8_mask(z2,z6);
+
+        if (ret1)
+            return -1;
+
+        z3 = _mm512_loadu_si512(str1 + offset + 2 * ZMM_SZ);
+        z4 = _mm512_loadu_si512(str1 + offset + 3 * ZMM_SZ);
+        z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
+        z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
+
+        ret2 = _mm512_cmpneq_epu8_mask(z3,z7)| _mm512_cmpneq_epu8_mask(z4,z8);
+
+        if (ret2)
+            return -1;
+
+        offset += 4 * ZMM_SZ;
+    }
+    uint8_t left_out = size - offset;
+    if (!left_out)
+        return 0;
+
+    switch(left_out >> 6)
+    {
+        case 3:
+            offset = size - 4 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(str1 + offset);
+            z2 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpneq_epu8_mask(z1,z2);
+            if (ret)
+                break;
+        case 2:
+            offset = size - 3 * ZMM_SZ;
+            z3 = _mm512_loadu_si512(str1 + offset);
+            z4 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpneq_epu8_mask(z3, z4);
+            if(ret)
+                break;
+        case 1:
+            offset = size - 2 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(str1 + offset);
+            z2 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpneq_epu8_mask(z1,z2);
+            if(ret)
+                break;
+        case 0:
+            offset = size - ZMM_SZ;
+            z3 = _mm512_loadu_si512(str1 + offset);
+            z4 = _mm512_loadu_si512(str2 + offset);
+            ret = _mm512_cmpneq_epu8_mask(z3, z4);
+
+            if(!ret)
+                return 0;
+    }
+    return -1;
+}
+static inline size_t _strlen_avx512(const char *str)
+{
+    size_t offset = 0;
+    __m512i z0, z1, z2, z3, z4, z5, z6, z7;
+    uint64_t ret = 0, ret1 = 0, ret2 = 0;
+    __mmask64 mask;
+    z0 = _mm512_setzero_epi32 ();
+
+    offset = (uintptr_t)str & (ZMM_SZ - 1);
+    if (offset != 0)
+    {
+        if ((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ -1) & (uintptr_t)str))
+        {
+            z7 = _mm512_set1_epi8(0xff);
+            mask = ((uint64_t)-1) >> offset;
+            z1 = _mm512_mask_loadu_epi8(z7 ,mask, str);
+        }
+        else
+        {
+            z1 = _mm512_loadu_si512(str);
+        }
+        ret = _mm512_cmpeq_epu8_mask(z1, z0);
+        if (ret)
+            return _tzcnt_u64(ret);
+        offset = ZMM_SZ - offset;
+    }
+
+    z1 = _mm512_load_si512(str + offset);
+    ret = _mm512_cmpeq_epu8_mask(z1, z0);
+
+    if (!ret)
+    {
+        offset += ZMM_SZ;
+        z2 = _mm512_load_si512(str + offset);
+        //Check for NULL
+        ret = _mm512_cmpeq_epu8_mask(z2, z0);
+        if (!ret)
+        {
+            offset += ZMM_SZ;
+            z3 = _mm512_load_si512(str + offset);
+            //Check for NULL
+            ret = _mm512_cmpeq_epu8_mask(z3, z0);
+            if (!ret)
+            {
+                offset += ZMM_SZ;
+                z4 = _mm512_load_si512(str + offset);
+                //Check for NULL
+                ret = _mm512_cmpeq_epu8_mask(z4, z0);
+            }
+        }
+    }
+    if (ret)
+        return _tzcnt_u64(ret) + offset;
+
+    offset +=  ZMM_SZ;
+    uint64_t vec_offset = ((uintptr_t)str + offset) & (4 * ZMM_SZ - 1);
+   if (vec_offset)
+    {
+        switch(vec_offset)
+        {
+            case ZMM_SZ:
+                z1 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z1, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+            case (2 * ZMM_SZ):
+                z2 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z2, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+            case (3 * ZMM_SZ):
+                z3 = _mm512_load_si512(str + offset);
+                ret = _mm512_cmpeq_epu8_mask(z3, z0);
+                if (ret)
+                    return _tzcnt_u64(ret) + offset;
+                offset += ZMM_SZ;
+        }
+    }
+
+    while (1)
+    {
+        z1 = _mm512_load_si512(str + offset);
+        z2 = _mm512_load_si512(str + offset + ZMM_SZ);
+        z3 = _mm512_load_si512(str + offset + 2 * ZMM_SZ);
+        z4 = _mm512_load_si512(str + offset + 3 * ZMM_SZ);
+
+        z5 = _mm512_min_epu8(z1,z2);
+        z6 = _mm512_min_epu8(z3,z4);
+
+        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
+        if (ret != 0)
+          break;
+
+        offset += 4 * ZMM_SZ;
+    }
+
+    if  (ret)
+    {
+        if ((ret1 = _mm512_cmpeq_epu8_mask(z5, z0)))
+        {
+            if ((ret2 = _mm512_cmpeq_epu8_mask(z1, z0)))
+            {
+                return (_tzcnt_u64(ret2) + offset);
+            }
+            return (_tzcnt_u64(ret1) + ZMM_SZ + offset);
+        }
+        else
+        {
+            if ((ret2 =_mm512_cmpeq_epu8_mask(z3, z0)))
+            {
+                return (_tzcnt_u64(ret2) + 2 * ZMM_SZ + offset);
+            }
+            return  (_tzcnt_u64(ret) + 3 * ZMM_SZ + offset);
+        }
+    }
+    return 0;
+}
+
+static inline char* find_needle_chr_avx512(const char *str, const char ch)
 {
     size_t  offset;
     __m512i z0, z1, z2, z3, z7;
@@ -754,140 +1005,119 @@ static inline char* strchr_avx512(const char *str, const char ch)
     return NULL;
 }
 
-static inline bool is_match_at_index (const char *haystack, const size_t haystack_idx, const char *needle,  size_t idx)
-{
-    for ( ; needle[idx] != STR_TERM_CHAR; idx++)
-    {
-        if (needle[idx] != haystack [haystack_idx + idx])
-            return false;
-    }
-    return true;
-}
-static inline bool substring_check (const char *haystack, const size_t haystack_idx,
-                const char *needle, const __mmask64 needle_mask, const __m512i zneedle)
-{
-  __m512i zhaystack = _mm512_loadu_si512 (haystack + haystack_idx);
-  __mmask64 match = _mm512_mask_cmpneq_epi8_mask (needle_mask, zhaystack, zneedle);
-  if (match != NULL_MASK )
-    return false;
-  else if (needle_mask == ALL_BITS_SET)
-    return is_match_at_index (haystack, haystack_idx, needle, ZMM_SZ);
-  return true;
-}
-
 static inline char * strstr_avx512 (const char *haystack, const char *needle)
 {
-  if (!needle[0])
-    return (char *)haystack;
+    size_t needle_len = 0;
+    __m512i needle_char_t0, needle_char_t1;
+    __m512i z0, z1, z2, z7;
+    __mmask64 match_mask, null_mask, null_pfx_mask;
+    uint64_t  match_idx, null_idx = 0;
+    size_t offset;
+    size_t transit_idx;
+    uint8_t check_unaligned = 1;
 
-  if (needle[1] == STR_TERM_CHAR)
-    return (char*)strchr_avx512(haystack, needle[0]);
+    if (needle[0] == STR_TERM_CHAR)
+        return (char*)haystack;
 
-  size_t repeat = transition_index(needle);
-
-  /* if repeat > haystack */
-  for (size_t chk_len = 0; chk_len < repeat; chk_len++)
-    {
-      if (haystack[chk_len] == STR_TERM_CHAR)
+    if (haystack[0] == STR_TERM_CHAR)
         return NULL;
-    }
 
-   __m512i z7, z0;
-   __mmask64 needle_load_mask;
-   z7 = _mm512_set1_epi8(0xff);
-   z0 = _mm512_setzero_epi32 ();
-   size_t offset = 0;
-   offset = (uintptr_t)needle & (ZMM_SZ - 1);
-   needle_load_mask = ALL_BITS_SET >> offset;
-   __m512i zneedle = _mm512_mask_loadu_epi8(z7 ,needle_load_mask, needle);
-   __mmask64 needle_null_mask = _mm512_cmpeq_epi8_mask(zneedle, z0) & needle_load_mask;
+    if (needle[1] == STR_TERM_CHAR)
+        return (char*)find_needle_chr_avx512(haystack, needle[0]);
 
-    if (unlikely (needle_null_mask == NULL_MASK ))
+    transit_idx = transition_index(needle);
+
+    needle_char_t0 = _mm512_set1_epi8(needle[transit_idx]);
+    needle_char_t1 = _mm512_set1_epi8(needle[transit_idx + 1]);
+
+    z0 = _mm512_setzero_si512 ();
+    offset = (uintptr_t)haystack & (ZMM_SZ - 1);
+    if (unlikely ((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ -1) & (uintptr_t)haystack)))
     {
-      zneedle = _mm512_loadu_si512 (needle);
-      needle_null_mask = _mm512_testn_epi8_mask (zneedle, zneedle);
-      needle_load_mask = needle_null_mask ^ (needle_null_mask - LOWER_BIT_SET);
-      if (needle_null_mask != NULL_MASK )
-        needle_load_mask = needle_load_mask >> 1;
-    }
-    else
-    {
-      needle_load_mask = needle_null_mask ^ (needle_null_mask - LOWER_BIT_SET);
-      needle_load_mask = needle_load_mask >> 1;
-    }
-
-    const __m512i zneedle_main_byte = _mm512_set1_epi8 (needle[repeat]);
-    const __m512i zneedle_follow_byte = _mm512_set1_epi8 (needle[repeat + 1]);
-
-    size_t haystack_idx = repeat;
-
-    offset = (uintptr_t)(haystack + haystack_idx) & (ZMM_SZ - 1);
-
-    __mmask64 haystack_load_mask = ALL_BITS_SET >> offset;
-
-    __m512i zhaystack_0 = _mm512_maskz_loadu_epi8 (haystack_load_mask, haystack + haystack_idx);
-
-    uint64_t null_mask
-        = (uint64_t) (_mm512_mask_testn_epi8_mask (haystack_load_mask, zhaystack_0, zhaystack_0));
-    uint64_t cmp_mask = null_mask ^ (null_mask - LOWER_BIT_SET);
-    cmp_mask = cmp_mask & ((uint64_t) (haystack_load_mask));
-
-    __mmask64 first_mask = _mm512_cmpeq_epi8_mask (zhaystack_0, zneedle_main_byte);
-    __mmask64 second_mask = _mm512_cmpeq_epi8_mask (zhaystack_0, zneedle_follow_byte);
-    second_mask = second_mask >> 1;
-
-    uint64_t both_mask = ((uint64_t) (second_mask & first_mask)) & cmp_mask;
-
-    while (both_mask)
-    {
-      uint64_t cnt_bit = _tzcnt_u64 (both_mask);
-      both_mask = _blsr_u64 (both_mask);
-      size_t found_index = haystack_idx + cnt_bit - repeat;
-      if (((uintptr_t) (haystack + found_index) & (PAGE_SZ - 1)) < PAGE_SZ - 1 - ZMM_SZ)
+        z7 = _mm512_set1_epi8(0xff);
+        __mmask64 haystack_load_mask = ALL_BITS_SET >> offset;
+        z1 = _mm512_mask_loadu_epi8(z7 , haystack_load_mask, haystack);
+        null_mask = (uint64_t)_mm512_cmpeq_epi8_mask(z1, z0);
+        if (null_mask)
         {
-            if (substring_check (haystack, found_index, needle,needle_load_mask, zneedle))
-                return (char *)haystack + found_index;
-        }
-      else
-        {
-            if (is_match_at_index (haystack, found_index, needle, 0))
-                return (char *)haystack + found_index;
+            null_idx = _tzcnt_u64(null_mask);
+            if (null_idx <= transit_idx)
+                return NULL;
+            match_mask = (uint64_t)_mm512_cmpeq_epi8_mask(needle_char_t0, z1);
+            check_unaligned = 0;
         }
     }
-
-    haystack = (const char *)(((uintptr_t) (haystack + haystack_idx) | (ZMM_SZ - 1)));
-    haystack_idx = 0;
-
-    __m512i zhaystack1;
-    while (null_mask == 0)
+    if (check_unaligned)
     {
-      zhaystack_0 = _mm512_loadu_si512 (haystack + haystack_idx);
-      zhaystack1 = _mm512_load_si512 (haystack + haystack_idx + 1);
-      null_mask = (uint64_t) (_mm512_testn_epi8_mask (zhaystack1, zhaystack1));
-
-      cmp_mask = null_mask ^ (null_mask - LOWER_BIT_SET);
-      first_mask = _mm512_cmpeq_epi8_mask (zhaystack_0, zneedle_main_byte);
-      second_mask = _mm512_cmpeq_epi8_mask (zhaystack1, zneedle_follow_byte);
-
-      both_mask = ((uint64_t) (second_mask & first_mask)) & cmp_mask;
-
-      while (both_mask)
+        z1 = _mm512_loadu_si512((void*)haystack);
+        null_mask = _mm512_cmpeq_epi8_mask(z1, z0);
+        if (null_mask)
         {
-          uint64_t cnt_bit = _tzcnt_u64 (both_mask);
-          both_mask = _blsr_u64 (both_mask);
-          size_t found_index = haystack_idx + cnt_bit - repeat;
-          if (((uintptr_t) (haystack + found_index) & (PAGE_SZ - 1)) < PAGE_SZ - 1 - ZMM_SZ)
-          {
-            if (substring_check (haystack, found_index, needle, needle_load_mask, zneedle))
-                return (char *)haystack + found_index;
-          }
-          else
-          {
-                if (is_match_at_index (haystack, found_index, needle, 0))
-                return (char *)haystack + found_index;
-          }
+            null_idx = _tzcnt_u64(null_mask);
+
+            if (null_idx <= transit_idx)
+                return NULL;
         }
-      haystack_idx += ZMM_SZ;
+        match_mask = _mm512_cmpeq_epi8_mask(needle_char_t0, z1);
+    }
+
+    if (match_mask)
+    {
+        needle_len = _strlen_avx512(needle);
+
+        if (null_mask)
+        {
+            match_idx = _tzcnt_u64(match_mask);
+
+            if (match_idx > null_idx)
+                return NULL;
+            match_mask &= (null_mask ^ (null_mask - 1));
+        }
+        //Loop until match_mask is clear
+        do{
+            match_idx = _tzcnt_u64(match_mask);
+            if ((*(haystack + match_idx + transit_idx + 1) == *(needle + transit_idx + 1)))
+            {
+
+                if (!(cmp_needle_avx512(((char*)(haystack + match_idx)), needle, needle_len)))
+                    return (char*)(haystack + match_idx);
+            }
+            //clears the LOWEST SET BIT
+            match_mask = _blsr_u64(match_mask);
+
+        }while (match_mask);
+
+    }
+
+    if (null_mask)
+        return NULL;
+
+    offset = ZMM_SZ - offset;
+    //Aligned case:
+    if (!needle_len)
+        needle_len = _strlen_avx512(needle);
+
+    while(!null_mask)
+    {
+        z1 = _mm512_loadu_si512((void*)haystack + offset - 1);
+        z2 = _mm512_load_si512((void*)haystack + offset);
+        match_mask = _mm512_cmpeq_epi8_mask(z1, needle_char_t0) & _mm512_cmpeq_epi8_mask(z2, needle_char_t1);
+        null_mask = (uint64_t)_mm512_cmpeq_epi8_mask(z2, z0);
+        null_pfx_mask = (null_mask ^ (null_mask - 1));
+        match_mask = match_mask & null_pfx_mask;
+        //Occurence of NEEDLE's first char
+        while (match_mask)
+        {
+            match_idx = _tzcnt_u64(match_mask);
+            if ((match_idx + offset) >= (transit_idx + 1)) {
+                match_idx += offset - transit_idx - 1;
+                if (!(cmp_needle_avx512(((char*)(haystack + match_idx)), needle, needle_len)))
+                    return (char*)(haystack + match_idx);
+            }
+            //clears the LOWEST SET BIT
+            match_mask = _blsr_u64(match_mask);
+        }
+        offset += ZMM_SZ;
     }
     return NULL;
 }
