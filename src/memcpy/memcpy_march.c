@@ -153,17 +153,17 @@ static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
             // 4-ZMM registers
             if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
             {
-                offset = __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
+                offset = __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
             }
             // 4-YMM registers with prefetch
             else if (size < __nt_start_threshold)
             {
-                offset = __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+                offset = __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
             }
             // Non-temporal 8-ZMM registers with prefetch
             else
             {
-                offset = __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+                offset = __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
             }
         }
         //Unalgined Load/Store addresses: force-align store address to ZMM size
@@ -171,11 +171,11 @@ static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
         {
             if (size < __nt_start_threshold)
             {
-                offset = __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
+                offset = __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
             }
             else
             {
-                offset = __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+                offset = __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
             }
         }
     }
