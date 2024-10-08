@@ -170,6 +170,16 @@ size_t test_strspn(const char *str1, const char *str2) {
     return count;
 }
 
+char *test_strchr(const char *s, int c) {
+    while (*s != (char)c) {
+        if (*s == '\0') {
+            return NULL;
+        }
+        s++;
+    }
+    return (char *)s;
+}
+
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
@@ -246,6 +256,12 @@ void generate_random_string(uint8_t *buf, size_t length)
     // Null-terminate the string
     buf[length] = NULL_TERM_CHAR;
 
+}
+
+// Generate a printable character
+char random_char()
+{
+    return ' ' + rand() % ('~' - ' ' + 1);
 }
 
 void string_setup(char *haystack, size_t size, char *needle, size_t needle_len)
@@ -1836,6 +1852,179 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
     free(buff);
 }
 
+static inline void strchr_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str_alnd_addr = NULL;
+    size_t index;
+    char find, not_found;
+    char* res;
+    int ret = 0;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
+
+    if (buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+
+    str_alnd_addr = buff_tail + str1_alnmnt;
+    prepare_boundary(str_alnd_addr, size);
+    srand(time(0));
+
+
+    if (size == 0)
+    {
+        *str_alnd_addr = NULL_TERM_CHAR;
+        if(strchr((char*)str_alnd_addr,'#') != NULL)
+        {
+            printf("ERROR:[VALIDATION] failure for size 0 ");
+            free(buff);
+        }
+        return;
+
+    }
+
+    //Intialize_buffer with all possible chars
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr + index) = random_char();
+    }
+    //Appending Null Charachter at the end of str
+    *(str_alnd_addr + size ) = NULL_TERM_CHAR;
+
+    //index of the char to be found
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find =  str_alnd_addr[rand() % (size - 1)];
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+
+    if ((test_strchr((char*)str_alnd_addr,(int)find)) != (char*)res)
+   {
+        printf("ERROR:[VALIDATION (MATCH)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %s, EXP= %s\n",str1_alnmnt, size, res, \
+                test_strchr((char*)str_alnd_addr,(int)find));
+    }
+
+    //Removing the char from string
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find =  str_alnd_addr[rand() % (size - 1)];
+    for (index = 0; index < size; index++)
+    {
+        if (*(str_alnd_addr + index) == find)
+        {
+            do
+            {
+                not_found = random_char();
+            } while (find == not_found);
+            *(str_alnd_addr + index) = not_found;
+        }
+    }
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+    if(res != NULL)
+    {
+        printf("ERROR:[VALIDATION (NON-MATCH)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %s, EXP= NULL\n",str1_alnmnt, size, res);
+    }
+    //Match at END case
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        *(str_alnd_addr + size - NULL_BYTE - 1) = find;
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+
+    if(test_strchr((char*)str_alnd_addr,(int)find) != (char*)res)
+    {
+            printf("ERROR:[VALIDATION (MATCH:END)] failure for str1_aln:%u size: %lu,"\
+                    " return_value = %s, EXP= %s\n",str1_alnmnt, size, res, \
+                    test_strchr((char*)str_alnd_addr,(int)find));
+    }
+
+    //Page_check
+    void *page_buff = NULL;
+    uint32_t page_cnt = PAGE_CNT(size);
+    posix_memalign(&page_buff, PAGE_SZ, page_cnt * PAGE_SZ);
+
+    if (page_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        free(buff);
+        exit(-1);
+    }
+
+    str_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
+
+    srand(time(0));
+
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr + index) = random_char();
+    }
+    *(str_alnd_addr + size ) = NULL_TERM_CHAR;
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find =  str_alnd_addr[rand() % (size - 1)];
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+
+    if ((test_strchr((char*)str_alnd_addr,(int)find)) != (char*)res)
+    {
+        printf("ERROR:[PAGE-CROSS (MATCH)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %d, EXP= %s\n",str1_alnmnt, size, res, \
+                test_strchr((char*)str_alnd_addr,(int)find));
+    }
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find =  str_alnd_addr[rand() % (size - 1)];
+    for (index = 0; index < size; index++)
+    {
+        if (*(str_alnd_addr + index) == find)
+        {
+            do
+            {
+                not_found = random_char();
+            } while (find == not_found);
+            *(str_alnd_addr + index) = not_found;
+        }
+    }
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+    if(res != NULL)
+    {
+        printf("ERROR:[PAGE-CROSS (NON-MATCH)] failure for str1_aln:%u size: %lu,"\
+                                    " return_value = %s, EXP= NULL\n",str1_alnmnt, size, res);
+    }
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        *(str_alnd_addr + size - NULL_BYTE - 1) = find;
+
+    res = strchr((char*)str_alnd_addr,(int)find);
+
+    if(test_strchr((char*)str_alnd_addr,(int)find) != (char*)res)
+    {
+        printf("ERROR:[PAGE-CROSS (MATCH:END)] failure for str1_aln:%u size: %lu,"\
+                    " return_value = %s, EXP= %s\n",str1_alnmnt, size, res, \
+                    test_strchr((char*)str_alnd_addr,(int)find));
+    }
+
+    free(page_buff);
+    free(buff);
+}
+
 libmem_func supp_funcs[]=
 {
     {"memcpy",  memcpy_validator},
@@ -1852,6 +2041,7 @@ libmem_func supp_funcs[]=
     {"strcat",  strcat_validator},
     {"strstr",  strstr_validator},
     {"strspn",  strspn_validator},
+    {"strchr",  strchr_validator},
     {"none",    NULL}
 };
 
