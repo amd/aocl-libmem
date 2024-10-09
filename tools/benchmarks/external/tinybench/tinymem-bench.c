@@ -235,6 +235,7 @@ int strspn_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strspn((char *)dst, (char *)src);
 }
+
 int strstr_wrapper(int64_t *dst, int64_t *src, int size)
 {
     return strstr((char *)dst, (char *)src);
@@ -244,6 +245,12 @@ int memchr_wrapper(int64_t *dst, int64_t *src, int size)
 {
     return memchr(src, 'x' , size);
 }
+
+int strchr_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    return strchr((char *)src,'!');
+}
+
 
 
 void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
@@ -275,6 +282,7 @@ bench_info supp_funcs[]=
     {"strcat", 0, strcat_wrapper},
     {"strspn", 0, strspn_wrapper},
     {"strstr", 0, strstr_wrapper},
+    {"strchr", 0, strchr_wrapper},
     {"none", 0,  NULL}
 };
 

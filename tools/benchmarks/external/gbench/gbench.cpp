@@ -67,6 +67,52 @@ state.counters["Size(Bytes)"]=benchmark::Counter(static_cast<double>(state.range
 #define REGISTER_STR_FUNCTION(name) \
     { #name, (void *(*)(char *,const char *))name }
 
+#define REGISTER_STR_N_FUNCTION(name) \
+    { #name, (void *(*)(char *,const char *, size_t))name }
+
+//Functions with diff signatrues
+struct MemData {
+    const char *functionName;
+    void *(*functionPtr)(void *dest, const void *src, size_t count);
+};
+
+struct Misc_MemData {
+    const char *functionName;
+    void *(*functionPtr)(void*src, int value, size_t size);
+};
+
+const char* my_strchr(const char* s, int c) {
+    return strchr(s, c);
+}
+struct Misc_StrData {
+    const char *functionName;
+    const char* (*functionPtr)(char *src, int value);
+};
+
+struct StrData {
+    const char *functionName;
+    void *(*functionPtr)(char *dest, const char *src);
+};
+
+char* my_strstr(char* haystack, const char* needle) {
+    return strstr(haystack, needle);
+}
+
+struct substr{
+    char* functionName;
+    char* (*functionPtr)(char*, const char*);
+};
+
+struct Str_n_Data {
+    const char *functionName;
+    void *(*functionPtr)(char *dest, const char *src, size_t n);
+};
+
+struct Strlen_Data {
+    const char *functionName;
+    void *(*functionPtr)(const char *src);
+};
+
 class MemoryCopyFixture {
 public:
     void SetUp(size_t size, char alignment) {
@@ -543,6 +589,32 @@ public:
         }
     Bench_Result(state);
     }
+    template <typename MemFunction, typename... Args>
+    void strchrRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
+        int size = state.range(0);
+        if  (mode == CACHED)
+        {
+            SetUp(size, alignment);
+            for (auto _ : state) {
+                benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
+            }
+            TearDown();
+        }
+        else
+        {
+            for (auto _ : state) {
+                state.PauseTiming();
+                SetUp(size, alignment);
+                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
+                state.PauseTiming();
+                TearDown();
+                state.ResumeTiming();
+            }
+        }
+    Bench_Result(state);
+    }
 
 protected:
     char* src;
@@ -575,11 +647,11 @@ void runsubstrBenchmark(benchmark::State& state, MemoryMode mode, char alignment
     fixture.substrRunBenchmark(state, mode, alignment, func, name, args...);
 }
 
-
-struct MemData {
-    const char *functionName;
-    void *(*functionPtr)(void *dest, const void *src, size_t count);
-};
+template <typename MemFunction, typename... Args>
+void runMiscStringBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
+    StringFixture fixture;
+    fixture.strchrRunBenchmark(state, mode, alignment, func, name, args...);
+}
 
 MemData functionList[] = {
     REGISTER_MEM_FUNCTION(memcpy),
@@ -588,20 +660,13 @@ MemData functionList[] = {
     REGISTER_MEM_FUNCTION(memcmp),
 };
 
-//Functions with diff signatrues
-struct Misc_MemData {
-    const char *functionName;
-    void *(*functionPtr)(void*src, int value, size_t size);
-};
-
 Misc_MemData Misc_Mem_functionList[] = {
     REGISTER_MISC_MEM_FUNCTION(memset),
     REGISTER_MISC_MEM_FUNCTION(memchr),
 };
 
-struct StrData {
-    const char *functionName;
-    void *(*functionPtr)(char *dest, const char *src);
+Misc_StrData MiscStrfunctionList[] = {
+    {"strchr", (const char *(*)(char *, int)) my_strchr},
 };
 
 StrData strfunctionList[] = {
@@ -610,38 +675,14 @@ StrData strfunctionList[] = {
     REGISTER_STR_FUNCTION(strcat),
     REGISTER_STR_FUNCTION(strspn),
 };
-#define REGISTER_SUB_FUNCTION(name) \
-    { #name, (char *(*)(char *, const char *))name }
-
-char* my_strstr(char* haystack, const char* needle) {
-    return strstr(haystack, needle);
-}
-
-struct substr{
-    char* functionName;
-    char* (*functionPtr)(char*, const char*);
-};
 
 substr subfunctionList[] = {
     {"strstr", (char *(*)(char *, const char *)) my_strstr},
 };
 
-struct Str_n_Data {
-    const char *functionName;
-    void *(*functionPtr)(char *dest, const char *src, size_t n);
-};
-
-#define REGISTER_STR_N_FUNCTION(name) \
-    { #name, (void *(*)(char *,const char *, size_t))name }
-
 Str_n_Data str_n_functionList[] = {
     REGISTER_STR_N_FUNCTION(strncpy),
     REGISTER_STR_N_FUNCTION(strncmp),
-};
-
-struct Strlen_Data {
-    const char *functionName;
-    void *(*functionPtr)(const char *src);
 };
 
 Strlen_Data Strlen_functionList[] = {
@@ -680,53 +721,60 @@ int main(int argc, char** argv) {
         operation = CACHED;
 
     ::benchmark::Initialize(&argc, argv);
-
     auto memoryBenchmark = [&](benchmark::State& state) {
         for (const auto &MemData : functionList) {
-    if (func == MemData.functionName) {
-        runMemoryBenchmark(state, operation, alignment, MemData.functionPtr, MemData.functionName);
+            if (func == MemData.functionName) {
+                runMemoryBenchmark(state, operation, alignment, MemData.functionPtr, MemData.functionName);
+            }
         }
-    }
     };
 
     auto Misc_memoryBenchmark = [&](benchmark::State& state) {
         for (const auto &Misc_MemData : Misc_Mem_functionList) {
-    if (func == Misc_MemData.functionName) {
-        runMiscMemoryBenchmark(state, operation, alignment, Misc_MemData.functionPtr, Misc_MemData.functionName);
+            if (func == Misc_MemData.functionName) {
+                runMiscMemoryBenchmark(state, operation, alignment, Misc_MemData.functionPtr, Misc_MemData.functionName);
+            }
         }
-    }
     };
 
     auto stringBenchmark = [&](benchmark::State& state) {
         for (const auto &strData : strfunctionList) {
-    if (func == strData.functionName) {
-        runStringBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            if (func == strData.functionName) {
+                runStringBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            }
         }
-    }
     };
 
     auto string_n_Benchmark = [&](benchmark::State& state) {
         for (const auto &strData : str_n_functionList) {
-    if (func == strData.functionName) {
-        runString_n_Benchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            if (func == strData.functionName) {
+                runString_n_Benchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            }
         }
-    }
+    };
+
+    auto misc_string_Benchmark = [&](benchmark::State& state) {
+        for (const auto &strData : MiscStrfunctionList) {
+            if (func == strData.functionName) {
+                runMiscStringBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            }
+        }
     };
 
     auto strlenBenchmark = [&](benchmark::State& state) {
         for (const auto &strData : Strlen_functionList) {
-    if (func == strData.functionName) {
-        runstrlenBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            if (func == strData.functionName) {
+                runstrlenBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            }
         }
-    }
     };
 
     auto substrBenchmark = [&](benchmark::State& state) {
         for (const auto &strData : subfunctionList) {
-    if (func == strData.functionName) {
-        runsubstrBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            if (func == strData.functionName) {
+                runsubstrBenchmark(state, operation, alignment, strData.functionPtr, strData.functionName);
+            }
         }
-    }
     };
     //Register Benchmark
     std::string _Mode;
@@ -751,10 +799,10 @@ int main(int argc, char** argv) {
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), string_n_Benchmark)->RangeMultiplier(2)->Range(size_start, size_end);
             else if(func.compare(0, 4, "strl") == 0)
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-
             else if(func.compare(0, 6, "strstr") == 0)
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-
+            else if(func.compare(0, 6, "strchr") == 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), misc_string_Benchmark)->RangeMultiplier(2)->Range(size_start, size_end);
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
         }
@@ -778,7 +826,8 @@ int main(int argc, char** argv) {
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
             else if(func.compare(0, 6, "strstr") == 0)
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-
+            else if(func.compare(0, 6, "strchr") == 0)
+                benchmark::RegisterBenchmark((func + _Mode).c_str(), misc_string_Benchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
             else
                 benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
 
