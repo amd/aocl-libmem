@@ -35,7 +35,11 @@
 #define NULL_MASK               0x0
 #define CACHE_LINE_OFFSET       (1 << 5)
 #define AVX2_VEC_4_OFFSET       (1 << 6)
+#define AVX512_VEC_4_OFFSET     (1 << 7)
 #define AVX2_VEC_4_SZ           (1 << 7)
+#define AVX512_VEC_4_SZ         (1 << 8)
+#define AVX512_VEC_OFFSET       (1 << 6)
+#define ALL_BITS_SET_64         0xFFFFFFFFFFFFFFFF
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)

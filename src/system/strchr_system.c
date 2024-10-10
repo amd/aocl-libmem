@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,17 +22,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
-#include "amd_strncpy.h"
-#include "amd_strcmp.h"
-#include "amd_strncmp.h"
-#include "amd_strcat.h"
-#include "amd_strstr.h"
-#include "amd_strlen.h"
-#include "amd_strchr.h"
+#include "logger.h"
+#include <dlfcn.h>
+#include <stddef.h>
+#include <gnu/lib-names.h>
+char* __attribute__((flatten)) __strchr_system(const char * str, int c)
+{
+    LOG_INFO("\n");
+    char* (*system_strchr)(const char *, int);
+    void *handle = NULL;
+    handle = dlopen(LIBC_SO, RTLD_LAZY);
+    if (handle)
+    {
+        system_strchr = dlsym(handle, "strchr");
+        dlclose(handle);
+        if (system_strchr != NULL)
+            return system_strchr(str, c);
+    }
+    return NULL;
+}
