@@ -185,7 +185,7 @@ static inline int _strncmp_avx2(const char *str1, const char *str2, size_t size)
 
         y_cmp1 = _mm256_cmpeq_epi8(y1, y5);
         y_cmp2 = _mm256_cmpeq_epi8(y2, y6);
-        y_null = _mm256_cmpgt_epi8(_mm256_min_epi8(y1,y2), y0);
+        y_null = _mm256_cmpgt_epi8(_mm256_min_epu8(y1,y2), y0);
 
         ret1 = _mm256_movemask_epi8(_mm256_and_si256(_mm256_and_si256(y_cmp1, y_cmp2), y_null)) + 1;
 
@@ -202,7 +202,7 @@ static inline int _strncmp_avx2(const char *str1, const char *str2, size_t size)
         }
         y_cmp1 = _mm256_cmpeq_epi8(y3, y7);
         y_cmp2 = _mm256_cmpeq_epi8(y4, y8);
-        y_null = _mm256_cmpgt_epi8(_mm256_min_epi8(y3, y4), y0);
+        y_null = _mm256_cmpgt_epi8(_mm256_min_epu8(y3, y4), y0);
         ret2 = _mm256_movemask_epi8(_mm256_and_si256(_mm256_and_si256(y_cmp1, y_cmp2), y_null)) + 1;
 
         if(ret2)
@@ -234,7 +234,7 @@ static inline int _strncmp_avx2(const char *str1, const char *str2, size_t size)
 
         y_cmp1 = _mm256_cmpeq_epi8(y1, y5);
         y_cmp2 = _mm256_cmpeq_epi8(y2, y6);
-        y_null = _mm256_cmpgt_epi8(_mm256_min_epi8(y1,y2), y0);
+        y_null = _mm256_cmpgt_epi8(_mm256_min_epu8(y1,y2), y0);
 
         ret1 = _mm256_movemask_epi8(_mm256_and_si256(_mm256_and_si256(y_cmp1, y_cmp2), y_null)) + 1;
 
@@ -251,7 +251,7 @@ static inline int _strncmp_avx2(const char *str1, const char *str2, size_t size)
         }
         y_cmp1 = _mm256_cmpeq_epi8(y3, y7);
         y_cmp2 = _mm256_cmpeq_epi8(y4, y8);
-        y_null = _mm256_cmpgt_epi8(_mm256_min_epi8(y3, y4), y0);
+        y_null = _mm256_cmpgt_epi8(_mm256_min_epu8(y3, y4), y0);
         ret2 = _mm256_movemask_epi8(_mm256_and_si256(_mm256_and_si256(y_cmp1, y_cmp2), y_null)) + 1;
 
         if(ret2)
@@ -380,7 +380,7 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
 
-        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
+        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
         if (ret1)
         {
             ret = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
@@ -398,7 +398,7 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
         z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
 
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
-        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
+        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
         if (ret2)
         {
             offset = - 2 * ZMM_SZ;
@@ -423,7 +423,7 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
         z6 = _mm512_loadu_si512(str2 + offset + 1 * ZMM_SZ);
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
-        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
+        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
 
         if (ret1)
         {
@@ -442,7 +442,7 @@ static inline int _strncmp_avx512(const char *str1, const char *str2, size_t siz
         z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
         z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
-        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epi8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
+        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
 
         if (ret2)
         {

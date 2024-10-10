@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -40,6 +40,7 @@ unsigned int edx;
 } cpuid_registers;
 
 typedef struct{
+uint64_t l1d_per_core;
 uint64_t l2_per_core;
 uint64_t l3_per_ccx;
 uint64_t l3_per_ccd;
@@ -66,14 +67,19 @@ uint64_t nt_stop_threshold;
 #define AVX512_MASK  0x10000
 #define ERMS_MASK    0x200
 #define FSRM_MASK    0x10
+#define MOVDIRI_MASK  0x8000000
 
 #define ZEN1_L3 8*1024*1024     //8MB per CCX
 #define ZEN2_L3 16*1024*1024    //16MB per CCX
 #define ZEN3_L3 32*1024*1024    //32MB per CCX
 #define ZEN4_L3 32*1024*1024    //32MB per CCX
+#define ZEN5_L3 32*1024*1024    //32MB per CCX
 
 #define ZEN3_L2 512*1024        //512MB per CORE
 #define ZEN4_L2 1*1024*1024     //1MB per CORE
+#define ZEN5_L2 1*1024*1024     //1MB per CORE
+
+#define ENABLED 1
 
 typedef enum
 {
@@ -94,6 +100,7 @@ bool fsrm;
 bool erms;
 bool avx2;
 bool avx512;
+bool movdiri;
 } cpu_features;
 
 typedef struct {

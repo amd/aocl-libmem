@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,18 +30,17 @@
 
 static inline void *memset_le_2ymm(void *mem, int val, size_t size)
 {
-    __m256i y0;
-    __m128i x0;
-
+    if (size >= YMM_SZ)
+    {
+        __m256i y0;
+        y0 = _mm256_set1_epi8(val);
+        _mm256_storeu_si256(mem, y0);
+        _mm256_storeu_si256(mem + size - YMM_SZ, y0);
+        return mem;
+    }
     if (size >= XMM_SZ)
     {
-        if (size >= YMM_SZ)
-        {
-            y0 = _mm256_set1_epi8(val);
-            _mm256_storeu_si256(mem, y0);
-            _mm256_storeu_si256(mem + size - YMM_SZ, y0);
-            return mem;
-        }
+        __m128i x0;
         x0 = _mm_set1_epi8(val);
         _mm_storeu_si128(mem, x0);
         _mm_storeu_si128(mem + size - XMM_SZ, x0);
@@ -49,27 +48,23 @@ static inline void *memset_le_2ymm(void *mem, int val, size_t size)
     }
     if (size > QWORD_SZ)
     {
-        uint64_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
-        shft_val = shft_val | (shft_val << 16);
-        shft_val = shft_val | (shft_val << 32);
-
+        uint64_t shft_val = (uint64_t)_mm_set1_pi8(val);
         *((uint64_t*)mem) = shft_val;
         *((uint64_t*)(mem + size - QWORD_SZ)) = shft_val;
         return mem;
     }
-    if (size > DWORD_SZ)
-    {
-        uint32_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
-        shft_val = shft_val | (shft_val << 16);
-        *((uint32_t*)mem) = shft_val;
-        *((uint32_t*)(mem + size - DWORD_SZ)) = shft_val;
-        return mem;
-    }
     if (size >= WORD_SZ)
     {
-        uint16_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
-        *((uint16_t*)mem) = shft_val;
-        *((uint16_t*)(mem + size - WORD_SZ)) = shft_val;
+        uint32_t shft_val = ((uint8_t)val << 8) | (uint8_t)val;
+        if (size >= DWORD_SZ)
+        {
+            shft_val = shft_val | (shft_val << 16);
+            *((uint32_t*)mem) = shft_val;
+            *((uint32_t*)(mem + size - DWORD_SZ)) = shft_val;
+            return mem;
+        }
+        *((uint16_t*)mem) = (uint16_t)shft_val;
+        *((uint16_t*)(mem + size - WORD_SZ)) = (uint16_t)shft_val;
         return mem;
     }
     if (size == 1)
@@ -121,7 +116,7 @@ void *__memset_avx2_unaligned(void *mem, int val, size_t size)
 }
 
 
-void *__memset_avx2_aligned(void *mem, int val, size_t size)
+void *__memset_avx2_aligned_store(void *mem, int val, size_t size)
 {
     __m256i y0;
     size_t offset = 0;
@@ -166,7 +161,13 @@ void *__memset_avx2_aligned(void *mem, int val, size_t size)
     return mem;
 }
 
-void *__memset_avx2_nt(void *mem, int val, size_t size)
+/* Memset has only store memory and the load alignments is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx2_aligned(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_aligned_store")));
+void *__memset_avx2_aligned_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_unaligned")));
+
+void *__memset_avx2_nt_store(void *mem, int val, size_t size)
 {
     __m256i y0;
     size_t offset = 0;
@@ -209,3 +210,9 @@ void *__memset_avx2_nt(void *mem, int val, size_t size)
     _mm256_storeu_si256 (mem + size - YMM_SZ + offset , y0);
     return mem;
 }
+
+/* Memset has only store memory and the non-temporal load is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx2_nt(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_nt_store")));
+void *__memset_avx2_nt_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx2_unaligned")));

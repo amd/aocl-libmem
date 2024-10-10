@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -530,5 +530,13 @@ int __memcmp_avx2_aligned(const void *mem1, const void *mem2, size_t size)
        ret = _tzcnt_u32(ret) + size - 1 * YMM_SZ;
        return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
     }
-    return 0; 	
+    return 0;
 }
+
+/*   Below variants are added for design compatibility.
+*/
+int __memcmp_avx2_aligned_store(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx2_unaligned")));
+int __memcmp_avx2_aligned_load(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx2_unaligned")));
+
+int __memcmp_avx2_nt_store(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx2_unaligned")));
+int __memcmp_avx2_nt_load(const void *mem1, const void *mem2, size_t size) __attribute__((alias("__memcmp_avx2_unaligned")));

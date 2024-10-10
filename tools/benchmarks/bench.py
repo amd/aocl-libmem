@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -37,8 +37,6 @@ import datetime
 from statistics import mean
 import sys
 
-sys.path.insert(0, '../tools/benchmarks/internal')
-from lbm import LBM
 sys.path.insert(0, '../tools/benchmarks/external')
 import GetParser as ParserConfig
 from gbm import GBM
@@ -67,11 +65,9 @@ class Bench:
         elif(self.MYPARSER['benchmark']=='fbm'):
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
-        elif(self.MYPARSER['benchmark']=='lbm'):
-            LBM_execute = LBM(ARGS=self.ARGS, class_obj=self)
-            LBM_execute() #Status:Success/Failure
-
-libmem_funcs = ['memcpy', 'memmove', 'memset', 'memcmp', 'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen']
+libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn', 'strstr', 'memchr']
+libmem_funcs = libmem_memory + libmem_string
 
 def main():
     """
@@ -81,27 +77,30 @@ def main():
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
     parser = argparse.ArgumentParser(prog='bench', description='This\
-            program will perform the benchmarking:TBM PBM GBM FBM LBM')
+            program will perform the benchmarking:TBM GBM FBM ')
     parser = ParserConfig.add_parser('This\
                             program will perform the benchmarking ')
     parser.add_argument("benchmark", help="select the \
             benchmarking tool for LibMem",
-                         type=str,choices = ["tbm", "gbm","fbm","lbm"], default="lbm")
-    parser.add_argument("func", help="LibMem function whose performance needs to be analyzed",
+                         type=str,choices = ["tbm", "gbm","fbm"], default="gbm")
+    parser.add_argument("func", help="LibMem supported functions",
                             type=str, choices = libmem_funcs,default="memcpy")
 
     parser.add_argument("-r", "--range", nargs = 2, help="range of data\
-                                lengths to be verified.",
-                            type=int, default = [8, 32*1024*1024])
+                                lengths to be benchmarked.\
+                                Memory functions [8 - 32MB]\
+                                String functions [8 - 4KB]",
+                            type=int)
     parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
                             c - cached, u - un-cached, w - walk, p - page_walk\
-                            GBM supports [c,u] & LBM supports [c,u,w,p]",\
+                            GBM supports [c,u]",\
                             type = str, choices = ['c', 'u', 'w', 'p'], \
                             default = 'm')
-    parser.add_argument("-a", "--align", nargs = 2, help = "alignemnt of source\
-                                and destination addresses. Default alignment\
-                                is 64B for both source and destination.(ONLY LBM)",
-                            type = int, default = (64, 64))
+    parser.add_argument("-a", "--align", help = "alignemnt of source\
+                                and destination addresses: p - page_aligned,\
+                                v - vector_aligned, u - unaligned, c - cache_aligned and d - default alignment\
+                                is random.[p,v,u and c are Experimental options]",\
+                                type = str, choices = ['p', 'v', 'u', 'c', 'd'],  default = 'd')
     parser.add_argument("-mem_alloc", help = "specify the memory allocator\
                                 for FleetBench",type = str,choices=['tcmalloc','glibc'], \
                                 default= ['glibc'])
@@ -114,6 +113,9 @@ def main():
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
                             type = int, default = 1000)
+    parser.add_argument("-perf", help = "performance runs for LibMem.\
+                            Default is benchmarking mode against system Libc",
+                            type = str, choices = ['p', 'b'], default = 'b')
 
     """
     parser.add_argument("-g", "--graph", help="Generates the Latency and \
@@ -127,6 +129,12 @@ def main():
 
 
     args = ParserConfig.parser_args()
+    # Set the default range based on the func argument
+    if args['range'] is None:
+        if args['func'] in libmem_string:
+            args['range'] = [8, 4096]
+        else:
+            args['range'] = [8, 32*1024*1024]
 
     return args
 

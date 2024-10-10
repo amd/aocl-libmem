@@ -24,14 +24,6 @@
 
 set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
 
-if (ENABLE_TUNABLES)
-    set(SOURCE_FILES ${SRC_PATH}/memset_avx2.c ${SRC_PATH}/memset_erms.c  ${SRC_PATH}/memset_system.c ${SRC_PATH}/memset_threshold.c ${SRC_PATH}/memset_march.c)
-    if (DEFINED AVX512_FEATURE_AVAILABLE)
-        set(SOURCE_FILES ${SOURCE_FILES} ${SRC_PATH}/memset_avx512.c)
-    endif ()
-
-else ()
-    set(SOURCE_FILES ${SRC_PATH}/amd_memset.c)
-endif ()
+set(SOURCE_FILES ${SRC_PATH}/amd_memchr.c)
 
 target_sources(libmem_objlib PRIVATE ${SOURCE_FILES})

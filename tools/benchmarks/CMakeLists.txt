@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -24,8 +24,6 @@
 
 
 # bench framework
-
-add_subdirectory(internal)
 add_subdirectory(external)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Benchmark_Framework.md

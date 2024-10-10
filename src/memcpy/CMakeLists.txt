@@ -1,4 +1,4 @@
-# Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -33,4 +33,4 @@ else ()
     set(SOURCE_FILES ${SRC_PATH}/amd_memcpy.c)
 endif ()
 
-target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
+target_sources(libmem_objlib PRIVATE ${SOURCE_FILES})

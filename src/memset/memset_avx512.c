@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -91,7 +91,7 @@ void *__memset_avx512_unaligned(void *mem, int val, size_t size)
 }
 
 
-void *__memset_avx512_aligned(void *mem, int val, size_t size)
+void *__memset_avx512_aligned_store(void *mem, int val, size_t size)
 {
     __m512i z0;
     size_t offset = 0;
@@ -135,8 +135,13 @@ void *__memset_avx512_aligned(void *mem, int val, size_t size)
     _mm512_storeu_si512(mem + size - ZMM_SZ + offset , z0);
     return mem;
 }
+/* Memset has only store memory and the load alignments is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx512_aligned(void *mem, int val, size_t size) __attribute__((alias("__memset_avx512_aligned_store")));
+void *__memset_avx512_aligned_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx512_unaligned")));
 
-void *__memset_avx512_nt(void *mem, int val, size_t size)
+void *__memset_avx512_nt_store(void *mem, int val, size_t size)
 {
     __m512i z0;
     size_t offset = 0;
@@ -179,3 +184,9 @@ void *__memset_avx512_nt(void *mem, int val, size_t size)
     _mm512_storeu_si512(mem + size - ZMM_SZ + offset , z0);
     return mem;
 }
+
+/* Memset has only store memory and the non-temporal load is not applicable.
+   Below variants are added for design compatibility.
+*/
+void *__memset_avx512_nt(void *mem, int val, size_t size) __attribute__((alias("__memset_avx512_nt_store")));
+void *__memset_avx512_nt_load(void *mem, int val, size_t size) __attribute__((alias("__memset_avx512_unaligned")));

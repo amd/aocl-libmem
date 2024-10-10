@@ -1,4 +1,4 @@
-# Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -23,7 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -mavx2 -O3 -mbmi -mcmodel=small -mlzcnt -Wno-implicit-fallthrough)
+add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -mavx2 -O3 -mbmi -mcmodel=small -mlzcnt -Wno-implicit-fallthrough -mno-vzeroupper)
 
 if (AVX512_FEATURE_AVAILABLE)
     add_compile_options(-mavx512f -mavx512bw)
@@ -49,17 +49,19 @@ add_definitions(-DENABLE_TUNABLES)
 set(SOURCE_FILES ${SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/env_parser.c  ${CMAKE_CURRENT_SOURCE_DIR}/libmem_iface.c)
 endif ()
 
+#common object lib
+add_library(libmem_objlib OBJECT ${SOURCE_FILES})
+target_include_directories(libmem_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+set_property(TARGET libmem_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
+
 # shared lib
 set(CMAKE_SHARED_LINKER_FLAGS "-flto -fpic")
-add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+add_library(${PROJECT_NAME} SHARED)
+target_link_libraries(${PROJECT_NAME} libmem_objlib)
+
 # static lib
-add_library("${PROJECT_NAME}_static" STATIC ${SOURCE_FILES})
-
-target_sources(${PROJECT_NAME} PRIVATE ${SOURCE_FILES})
-
-# include the header files
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_include_directories("${PROJECT_NAME}_static" PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_library("${PROJECT_NAME}_static" STATIC)
+target_link_libraries("${PROJECT_NAME}_static" libmem_objlib)
 
 # renaming static binary
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
@@ -72,6 +74,7 @@ add_subdirectory(mempcpy)
 add_subdirectory(memmove)
 add_subdirectory(memset)
 add_subdirectory(memcmp)
+add_subdirectory(memchr)
 
 # String Functions
 add_subdirectory(strcpy)
@@ -79,6 +82,8 @@ add_subdirectory(strncpy)
 add_subdirectory(strcmp)
 add_subdirectory(strncmp)
 add_subdirectory(strlen)
+add_subdirectory(strcat)
+add_subdirectory(strstr)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR} CACHE PATH "..." FORCE)

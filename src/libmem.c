@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -25,8 +25,8 @@
 #include "zen_cpu_info.h"
 #include "logger.h"
 #include "threshold.h"
-#include "libmem_impls.h"
 #ifdef ENABLE_TUNABLES
+#include "libmem_impls.h"
 #include "libmem.h"
 #endif
 
@@ -34,6 +34,7 @@ cpu_info zen_info;
 config active_operation_cfg = SYS_CFG;
 config active_threshold_cfg = SYS_CFG;
 extern user_cfg user_config;
+
 
 static void get_cpu_capabilities()
 {
@@ -45,23 +46,28 @@ static void get_cpu_capabilities()
 
     if (cpuid_regs.ebx & AVX512_MASK)
     {
-        zen_info.zen_cpu_features.avx512 = 1;
-        LOG_INFO("AVX512 Enabled\n");
+        zen_info.zen_cpu_features.avx512 = ENABLED;
+        LOG_INFO("CPU feature AVX512 Enabled\n");
     }
     if (cpuid_regs.ebx & AVX2_MASK)
     {
-        zen_info.zen_cpu_features.avx2 = 1;
-        LOG_INFO("AVX2 Enabled\n");
+        zen_info.zen_cpu_features.avx2 = ENABLED;
+        LOG_INFO("CPU feature AVX2 Enabled\n");
     }
     if (cpuid_regs.ebx & ERMS_MASK)
     {
-        zen_info.zen_cpu_features.erms = 1;
-        LOG_INFO("ERMS Enabled\n");
+        zen_info.zen_cpu_features.erms = ENABLED;
+        LOG_INFO("CPU feature ERMS Enabled\n");
     }
     if (cpuid_regs.edx & FSRM_MASK)
     {
-        zen_info.zen_cpu_features.fsrm = 1;
-        LOG_INFO("FSRM Enabled\n");
+        zen_info.zen_cpu_features.fsrm = ENABLED;
+        LOG_INFO("CPU feature FSRM Enabled\n");
+    }
+    if (cpuid_regs.ecx & MOVDIRI_MASK)
+    {
+        zen_info.zen_cpu_features.movdiri = ENABLED;
+        LOG_INFO("CPU feature MOVDIRI Enabled\n");
     }
 }
 
@@ -73,14 +79,34 @@ static variant_index amd_libmem_resolver(void)
 {
     variant_index var_idx = SYSTEM;
     //GCC 12.2 doesnt support znver4 flags at the time of release
-    if (__builtin_cpu_supports("avx512f"))//"znver4"
-        var_idx = ARC_ZEN4;
+    if (zen_info.zen_cpu_features.avx512 == ENABLED)//"znver4" and above
+    {
+        if (zen_info.zen_cpu_features.movdiri == ENABLED)//"znver5"
+        {
+            var_idx = ARCH_ZEN5;
+            LOG_INFO("Detected CPU uArch: Zen5\n");
+        }
+        else
+        {
+            var_idx = ARCH_ZEN4;
+            LOG_INFO("Detected CPU uArch: Zen4\n");
+        }
+    }
     else if (__builtin_cpu_is("znver3"))
-        var_idx = ARC_ZEN3;
+    {
+        var_idx = ARCH_ZEN3;
+        LOG_INFO("Detected CPU uArch: Zen3\n");
+    }
     else if (__builtin_cpu_is("znver2"))
-        var_idx = ARC_ZEN2;
+    {
+        var_idx = ARCH_ZEN2;
+        LOG_INFO("Detected CPU uArch: Zen2\n");
+    }
     else if (__builtin_cpu_is("znver1"))
-        var_idx = ARC_ZEN1;
+    {
+        var_idx = ARCH_ZEN1;
+        LOG_INFO("Detected CPU uArch: Zen1\n");
+    }
     else
     {
         //System operation Config
@@ -140,7 +166,7 @@ static variant_index amd_libmem_resolver(void)
             else
                 var_idx = AVX512_UNALIGNED;
         }
-#endif
+#endif // end of AVX512 options
         else if (user_config.user_operation.erms) //ERMS operations
         {
             LOG_DEBUG("ERMS config\n");
@@ -165,7 +191,7 @@ static variant_index amd_libmem_resolver(void)
     }
     return var_idx;
 }
-#endif
+#endif // end of tunable options
 
 
 /* Constructor for libmem library
@@ -185,16 +211,16 @@ static __attribute__((constructor)) void libmem_init()
     {
         compute_sys_thresholds(&zen_info);
         configure_thresholds();
-        get_cpu_capabilities();
     }
+    get_cpu_capabilities();
+
 #ifdef ENABLE_TUNABLES
     variant_index impl_idx;
     impl_idx  = amd_libmem_resolver();
-
-    _memcpy_variant = libmem_impls_1[MEMCPY][impl_idx];
-    _mempcpy_variant = libmem_impls_1[MEMPCPY][impl_idx];
-    _memmove_variant = libmem_impls_1[MEMMOVE][impl_idx];
-    _memset_variant = libmem_impls_2[MEMSET][impl_idx];
-    _memcmp_variant = libmem_impls_3[MEMCMP][impl_idx];
+    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMCPY][impl_idx]);
+    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMPCPY][impl_idx]);
+    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMMOVE][impl_idx]);
+    _memset_variant = ((void* (*)(void *, int, size_t))libmem_impls[MEMSET][impl_idx]);
+    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_impls[MEMCMP][impl_idx]);
 #endif
 }

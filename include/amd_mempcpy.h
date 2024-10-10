@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@ extern void * __mempcpy_zen1(void *dest,const void *src, size_t size);
 extern void * __mempcpy_zen2(void *dest,const void *src, size_t size);
 extern void * __mempcpy_zen3(void *dest,const void *src, size_t size);
 extern void * __mempcpy_zen4(void *dest,const void *src, size_t size);
+extern void * __mempcpy_zen5(void *dest,const void *src, size_t size);
 
 //System solution which takes in system config and  threshold values.
 extern void * __mempcpy_system(void *dest,const void *src, size_t size);

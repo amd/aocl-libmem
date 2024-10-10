@@ -1,4 +1,4 @@
-# Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,7 +22,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.22)
 
 # avoid build in root directory
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
@@ -30,7 +30,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 # set the project name and version
-set(LIBMEM_VERSION_STRING 4.2.0)
+set(LIBMEM_VERSION_STRING 5.0)
 
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
                         "Library of AMD optimized string/memory functions")
@@ -44,6 +44,7 @@ add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
 set(DEFAULT_BUILD_TYPE "Release")
 
+set(CMAKE_C_STANDARD 99)
 
 option(ENABLE_LOGGING "Enable Logger" OFF)
 

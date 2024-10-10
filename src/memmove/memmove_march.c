@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -33,16 +33,21 @@ extern cpu_info zen_info;
 static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
 {
     __m256i y4, y5, y6, y7;
+    register void *ret asm("rax");
+    ret = dst;
+
+    if (likely(size <= 2 * YMM_SZ))
+        return __load_store_le_2ymm_vec_overlap(dst, src, size);
 
     if (size <= 4 * YMM_SZ)
     {
         __load_store_le_4ymm_vec(dst, src, size);
-        return dst;
+        return ret;
     }
     if (size <= 8 * YMM_SZ)
     {
         __load_store_le_8ymm_vec(dst, src, size);
-        return dst;
+        return ret;
     }
     if (((dst + size) < src) || ((src + size) < dst))
     {
@@ -70,7 +75,7 @@ static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
             else
                __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
         }
-        return dst;
+        return ret;
     }
 
     // Handle overlapping memory blocks
@@ -100,7 +105,7 @@ static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
         _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y6);
         _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y7);
     }
-    return dst;
+    return ret;
 }
 
 #ifdef AVX512_FEATURE_ENABLED
@@ -257,4 +262,7 @@ void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
 #endif
 
 }
+
+void * __memmove_zen5 (void * __restrict dst, const void * __restrict src,
+                     size_t size) __attribute__((alias("__memmove_zen4")));
 

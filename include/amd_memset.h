@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@ extern void * __memset_zen1(void *mem,int val, size_t size);
 extern void * __memset_zen2(void *mem,int val, size_t size);
 extern void * __memset_zen3(void *mem,int val, size_t size);
 extern void * __memset_zen4(void *mem,int val, size_t size);
+extern void * __memset_zen5(void *mem,int val, size_t size);
 
 //System solution which takes in system config and  threshold values.
 extern void * __memset_system(void *mem,int val, size_t size);
@@ -45,13 +46,21 @@ extern void * __memset_threshold(void *mem,int val, size_t size);
 //CPU Feature:AVX2 and Alignment specifc implementations.
 extern void * __memset_avx2_unaligned(void *mem,int val, size_t size);
 extern void * __memset_avx2_aligned(void *mem,int val, size_t size);
+extern void * __memset_avx2_aligned_load(void *mem,int val, size_t size);
+extern void * __memset_avx2_aligned_store(void *mem,int val, size_t size);
 extern void * __memset_avx2_nt(void *mem,int val, size_t size);
+extern void * __memset_avx2_nt_load(void *mem,int val, size_t size);
+extern void * __memset_avx2_nt_store(void *mem,int val, size_t size);
 
 #ifdef AVX512_FEATURE_ENABLED
 //CPU Feature:AVX512 and Alignment specifc implementations.
 extern void * __memset_avx512_unaligned(void *mem,int val, size_t size);
 extern void * __memset_avx512_aligned(void *mem,int val, size_t size);
+extern void * __memset_avx512_aligned_load(void *mem,int val, size_t size);
+extern void * __memset_avx512_aligned_store(void *mem,int val, size_t size);
 extern void * __memset_avx512_nt(void *mem,int val, size_t size);
+extern void * __memset_avx512_nt_load(void *mem,int val, size_t size);
+extern void * __memset_avx512_nt_store(void *mem,int val, size_t size);
 #endif
 
 //CPU Feature:ERMS and Alignment specifc implementations.

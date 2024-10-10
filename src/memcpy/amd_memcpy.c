@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -26,125 +26,182 @@
 #include "threshold.h"
 #include "../base_impls/load_store_impls.h"
 #include "zen_cpu_info.h"
+#include "alm_defs.h"
 
 extern cpu_info zen_info;
 
-static inline void *_memcpy_avx2(void *dst, const void *src, size_t size)
+static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict src, size_t size)
 {
-    size_t offset = 0, dst_align = 0;
+    register void *ret asm("rax");
+    ret = dst;
+
+    if (likely(size <= 2 * YMM_SZ))
+        return __load_store_le_2ymm_vec(dst, src, (uint8_t)size);
 
     if (size <= 4 * YMM_SZ) //128B
     {
         __load_store_le_4ymm_vec(dst, src, size);
-        return dst;
+        return ret;
     }
-    __load_store_le_8ymm_vec(dst, src, size);
     if (size <= 8 * YMM_SZ) //256B
     {
-        return dst;
+        __load_store_le_8ymm_vec(dst, src, size);
+        return ret;
     }
-
-    offset = 4 * YMM_SZ;
-    size -= 4 * YMM_SZ;
-    dst_align = ((size_t)dst & (YMM_SZ - 1));
-
-    //Aligned Load and Store addresses
-    if ((((size_t)src & (YMM_SZ - 1)) | dst_align) == 0)
+    if (size <= zen_info.zen_cache_info.l1d_per_core)
     {
-        if (size < __nt_start_threshold)
-           __aligned_load_and_store_4ymm_vec_loop(dst, src, size, offset);
-	    else
-           __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size, offset);
+        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size & ~(4 * YMM_SZ - 1), 0);
+        size_t offset = size & (4 * YMM_SZ - 1);
+        if (offset)
+        {
+             __m256i y0, y1, y2, y3;
+            switch ((offset >> 5))
+            {
+                case 3:
+                    y3 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
+                    _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y3);
+                case 2:
+                    y2 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
+                    _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y2);
+                case 1:
+                    y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
+                    _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
+                default:
+                    y0 = _mm256_loadu_si256(src + size - 1 * YMM_SZ);
+                    _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y0);
+            }
+        }
+        return ret;
     }
+    // Load-Store first 4 VECs
+    __load_store_le_4ymm_vec(dst, src, 4 * YMM_SZ);
+
+    // Compute alignment of destination address
+    uint8_t dst_align = ((size_t)dst & (YMM_SZ - 1));
+
+    // Matching alignments of load & store addresses;
+    if (unlikely((((size_t)src & (YMM_SZ - 1)) == dst_align)))
+    {
+        // Adjust alignment to 4 VEC alignment
+        dst_align = 4 * YMM_SZ - dst_align;
+        if (size < __nt_start_threshold)
+        {
+           __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
+        }
+	    else
+        {
+           __aligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
+        }
+    }
+    // Mismatching alignments of load & store addresses;
     else
     {
-        offset -= dst_align;
+        dst_align = 4 * YMM_SZ - dst_align;
         if (size < __nt_start_threshold)
-           __unaligned_load_and_store_4ymm_vec_loop(dst, src, size, offset);
+        {
+           __unaligned_load_aligned_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, dst_align);
+        }
 	    else
-           __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size, offset);
+        {
+           __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
+        }
     }
-    return dst;
+
+    // Load-Store Last 4 VECs
+    __load_store_le_4ymm_vec(dst + size - 4 * YMM_SZ, src + size - 4 * YMM_SZ, 4 * YMM_SZ);
+
+    return ret;
 }
 
 #ifdef AVX512_FEATURE_ENABLED
 static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
 {
-    size_t offset = 0, dst_align = 0;
+    register void *ret asm("rax");
+    ret = dst;
 
-    if (size <= 2 * ZMM_SZ) //128B
+    if (likely(size <= 2 * ZMM_SZ)) //128B
     {
-        __load_store_le_2zmm_vec(dst, src, size);
-        return dst;
+        if ((size < ZMM_SZ))
+        {
+            return __load_store_ble_zmm_vec(dst, src, (uint8_t)size);
+        }
+        __load_store_le_2zmm_vec(dst, src, (uint8_t)size);
+        return ret;
     }
-
-    if (size <= 4 * ZMM_SZ) //256B
-    {
-        __load_store_le_4zmm_vec(dst, src, size);
-        return dst;
-    }
-
-    __load_store_le_8zmm_vec(dst, src, size);
 
     if (size <= 8 * ZMM_SZ) //512B
-        return dst;
-
-    offset += 4 * ZMM_SZ;
-    size -= 4 * ZMM_SZ;
-    dst_align = ((size_t)dst & (ZMM_SZ - 1));
-
-    //Aligned Load and Store addresses
-    if ((((size_t)src & (ZMM_SZ - 1)) | dst_align) == 0)
     {
-        // 4-ZMM registers
-        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+        __load_store_le_8ymm_vec(dst, src, (uint16_t)size);
+        if (size <= 4 * ZMM_SZ) //256B
         {
-            __aligned_load_and_store_4zmm_vec_loop(dst, src, size, offset);
+            return ret;
         }
-        // 4-YMM registers with prefetch
-        else if (size < __nt_start_threshold)
-        {
-            __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size, offset);
-        }
-        // Non-temporal 8-ZMM registers with prefetch
-        else
-        {
-            __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size, offset);
-        }
+        __load_store_le_8ymm_vec(dst + 4 * YMM_SZ, src + 4 * YMM_SZ, (uint16_t)size - 8 * YMM_SZ);
+        return ret;
     }
-    //Unalgined Load/Store addresses: force-align store address to ZMM size
-    else
+    __load_store_le_8zmm_vec(dst, src, 8 * ZMM_SZ);
+
+    size_t offset = 8 * ZMM_SZ;
+
+    if (size > 16 * ZMM_SZ)
     {
+        uint8_t dst_align = ((size_t)dst & (ZMM_SZ - 1));
         offset -= dst_align;
-        if (size < __nt_start_threshold)
+
+        //Aligned Load and Store addresses
+        if ((((size_t)src & (ZMM_SZ - 1)) == dst_align))
         {
-            __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size, offset);
+            // 4-ZMM registers
+            if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+            {
+                offset = __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
+            }
+            // 4-YMM registers with prefetch
+            else if (size < __nt_start_threshold)
+            {
+                offset = __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
+            }
+            // Non-temporal 8-ZMM registers with prefetch
+            else
+            {
+                offset = __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
+            }
         }
+        //Unalgined Load/Store addresses: force-align store address to ZMM size
         else
         {
-            __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size, offset);
+            if (size < __nt_start_threshold)
+            {
+                offset = __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
+            }
+            else
+            {
+                offset = __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
+            }
         }
     }
-    return dst;
+    uint16_t rem_data = size - offset;
+    uint8_t rem_vecs = ((rem_data & 0x3C0) >> 6) + !!(rem_data & (0x3F));
+    if (rem_vecs > 4)
+            __load_store_le_8zmm_vec(dst + size - 8 * ZMM_SZ, src + size - 8 * ZMM_SZ, 8 * ZMM_SZ);
+    else if (rem_vecs > 2)
+            __load_store_le_4zmm_vec(dst + size - 4 * ZMM_SZ, src + size - 4 * ZMM_SZ, 4 * ZMM_SZ);
+    else if (rem_vecs == 2)
+            __load_store_le_2zmm_vec(dst + size - 2 * ZMM_SZ, src + size - 2 * ZMM_SZ, 2 * ZMM_SZ);
+    else
+            __load_store_zmm_vec(dst + size - ZMM_SZ, src + size -  ZMM_SZ, 0);
+    
+    return ret;
 }
 #endif
 
 void * __attribute__((flatten)) amd_memcpy(void * __restrict dst,
-                        const void * __restrict src, size_t size)
+                  const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-
 #ifdef AVX512_FEATURE_ENABLED
-    if (size <= ZMM_SZ)
-    {
-        return __load_store_ble_zmm_vec(dst, src, size);
-    }
     return _memcpy_avx512(dst, src, size);
 #else
-    if (size <= 2 * YMM_SZ)
-    {
-        return __load_store_le_2ymm_vec(dst, src, size);
-    }
     return _memcpy_avx2(dst, src, size);
 #endif
 }

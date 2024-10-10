@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,9 +22,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# libmem bench framework
 
-add_executable(libmem_bench_fw ${CMAKE_CURRENT_SOURCE_DIR}/libmem_bench_fw.c)
+#cmake for strcat
+set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
+set(SOURCE_FILES ${SRC_PATH}/amd_strcat.c)
 
-#copy source files to build/test directory
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lbm.py DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/internal/)
+target_sources(libmem_objlib PRIVATE ${SOURCE_FILES})
