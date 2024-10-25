@@ -1,6 +1,6 @@
 (C) 2022-24 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 4.2.1
+AMD Memory/String Library - AOCL-LibMem Release Notes 5.0.1
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
@@ -17,11 +17,6 @@ b) This library also provides tunables for the user to choose specific
 implementation of the function as per the application requirements.
 
 
-Highlights of AMD AOCL-LibMem version 4.2.1
+Highlights of AMD AOCL-LibMem version 5.0.1
 --------------------------------------------
- * Added support for aligned benchmarks in GBM
-    -Page_aligned
-    -Vector_aligned
-    -Cache_aligned
-    -Unaligned
-    -Default alignment
+ * Optimized strlen-AVX2
