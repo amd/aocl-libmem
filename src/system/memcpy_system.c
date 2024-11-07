@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,37 +22,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ALMEM_DYN_DISPATCH
-
+#include "logger.h"
+#include <dlfcn.h>
 #include <stddef.h>
-#include "libmem_iface.h"
+#include <gnu/lib-names.h>
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+void * __attribute__((flatten)) __memcpy_system(void * __restrict dst,
+                        const void * __restrict src, size_t size)
+{
+    LOG_INFO("\n");
+    void * (*system_memcpy)(void *, const void *, size_t);
+    void *handle = NULL;
+    handle = dlopen(LIBC_SO, RTLD_LAZY);
 
-#ifdef ALMEM_TUNABLES //TODO enable dynamic dispatching for below functions
-
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
-
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
-
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
-// memset mapping
-LIBMEM_FN_MAP(memset);
-WEAK_ALIAS(memset, MK_FN_NAME(memset));
-
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
-// memcmp mapping
-LIBMEM_FN_MAP(memcmp);
-WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
-
-#endif
-#endif
+    if (handle)
+    {
+        system_memcpy = dlsym(handle, "memcpy");
+        dlclose(handle);
+        if (system_memcpy != NULL)
+            return system_memcpy(dst,src, size);
+    }
+    return NULL;
+}

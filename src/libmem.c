@@ -25,7 +25,7 @@
 #include "zen_cpu_info.h"
 #include "logger.h"
 #include "threshold.h"
-#ifdef ENABLE_TUNABLES
+#ifdef ALMEM_DYN_DISPATCH
 #include "libmem_impls.h"
 #include "libmem.h"
 #endif
@@ -35,6 +35,21 @@ config active_operation_cfg = SYS_CFG;
 config active_threshold_cfg = SYS_CFG;
 extern user_cfg user_config;
 
+static bool is_amd()
+{
+    cpuid_registers cpuid_regs;
+
+    cpuid_regs.eax= 0x0;
+    cpuid_regs.ecx = 0;
+    __get_cpu_features(&cpuid_regs);
+    if ((cpuid_regs.ebx ^ 0x68747541) |
+            (cpuid_regs.edx ^ 0x69746E65) |
+                 (cpuid_regs.ecx ^ 0x444D4163))
+    {
+        return false;
+    }
+    return true;
+}
 
 static void get_cpu_capabilities()
 {
@@ -69,50 +84,81 @@ static void get_cpu_capabilities()
         zen_info.zen_cpu_features.movdiri = ENABLED;
         LOG_INFO("CPU feature MOVDIRI Enabled\n");
     }
+    if (cpuid_regs.ecx & VPCLMULQDQ_MASK)
+    {
+        zen_info.zen_cpu_features.vpclmul = ENABLED;
+        LOG_INFO("CPU feature VPCLMULQDQ Enabled\n");
+    }
+    if (cpuid_regs.ecx & RDPID_MASK)
+    {
+        zen_info.zen_cpu_features.rdpid = ENABLED;
+        LOG_INFO("CPU feature RDPID Enabled\n");
+    }
+    if (cpuid_regs.ecx & RDSEED_MASK)
+    {
+        zen_info.zen_cpu_features.rdseed = ENABLED;
+        LOG_INFO("CPU feature RDSEED Enabled\n");
+    }
+
 }
 
-#ifdef ENABLE_TUNABLES
-/* Resolver to identify the implementation variant
- * returns: variant index
+#ifdef ALMEM_DYN_DISPATCH
+/* Resolver to identify the zen cpu version
+ * returns: cpu version index
  */
-static variant_index amd_libmem_resolver(void)
+static variant_index libmem_cpu_resolver(void)
 {
-    variant_index var_idx = SYSTEM;
-    //GCC 12.2 doesnt support znver4 flags at the time of release
-    if (zen_info.zen_cpu_features.avx512 == ENABLED)//"znver4" and above
+    variant_index cpu_ver_idx = SYSTEM;
+    // Zen4 and above cpu detection
+    if (zen_info.zen_cpu_features.avx512 == ENABLED)
     {
-        if (zen_info.zen_cpu_features.movdiri == ENABLED)//"znver5"
+        if (zen_info.zen_cpu_features.movdiri == ENABLED)// Zen5
         {
-            var_idx = ARCH_ZEN5;
+            cpu_ver_idx = ARCH_ZEN5;
             LOG_INFO("Detected CPU uArch: Zen5\n");
         }
         else
         {
-            var_idx = ARCH_ZEN4;
+            cpu_ver_idx = ARCH_ZEN4;
             LOG_INFO("Detected CPU uArch: Zen4\n");
         }
     }
-    else if (__builtin_cpu_is("znver3"))
+    // Zen3 and below cpu detection
+    else if (zen_info.zen_cpu_features.avx2 == ENABLED)
     {
-        var_idx = ARCH_ZEN3;
-        LOG_INFO("Detected CPU uArch: Zen3\n");
+        if (zen_info.zen_cpu_features.vpclmul == ENABLED) // Zen3
+        {
+            cpu_ver_idx = ARCH_ZEN3;
+            LOG_INFO("Detected CPU uArch: Zen3\n");
+        }
+        else if (zen_info.zen_cpu_features.rdpid == ENABLED) // Zen2
+        {
+            cpu_ver_idx = ARCH_ZEN2;
+            LOG_INFO("Detected CPU uArch: Zen2\n");
+        }
+        else if (zen_info.zen_cpu_features.rdseed == ENABLED) // Zen1
+        {
+            cpu_ver_idx = ARCH_ZEN1;
+            LOG_INFO("Detected CPU uArch: Zen1\n");
+        }
+        else
+        {
+            //System operation Config
+            LOG_INFO("System Operation CFG\n");
+            cpu_ver_idx = SYSTEM;
+        }
     }
-    else if (__builtin_cpu_is("znver2"))
-    {
-        var_idx = ARCH_ZEN2;
-        LOG_INFO("Detected CPU uArch: Zen2\n");
-    }
-    else if (__builtin_cpu_is("znver1"))
-    {
-        var_idx = ARCH_ZEN1;
-        LOG_INFO("Detected CPU uArch: Zen1\n");
-    }
-    else
-    {
-        //System operation Config
-        LOG_INFO("System Operation CFG\n");
-        var_idx = SYSTEM;
-    }
+    return cpu_ver_idx;
+}
+#endif // end of cpu resolver
+
+#ifdef ALMEM_TUNABLES
+/* Resolver to identify the tunable config
+ * returns: tunable varaint index
+ */
+static variant_index libmem_tunable_resolver(void)
+{
+    variant_index tunable_var_idx = SYSTEM;
 
     if (active_operation_cfg == USR_CFG) //User Operation Config
     {
@@ -123,75 +169,73 @@ static variant_index amd_libmem_resolver(void)
             if (user_config.src_aln == n_align)
             {
                 if (user_config.dst_aln == n_align)
-                    var_idx = AVX2_NON_TEMPORAL;
+                    tunable_var_idx = AVX2_NON_TEMPORAL;
                 else
-                    var_idx = AVX2_NON_TEMPORAL_LOAD;
+                    tunable_var_idx = AVX2_NON_TEMPORAL_LOAD;
             }
             else if (user_config.dst_aln == n_align)
-                var_idx = AVX2_NON_TEMPORAL_STORE;
+                tunable_var_idx = AVX2_NON_TEMPORAL_STORE;
             else if (user_config.src_aln == y_align)
             {
                 if (user_config.dst_aln == y_align)
-                    var_idx = AVX2_ALIGNED;
+                    tunable_var_idx = AVX2_ALIGNED;
                 else
-                    var_idx = AVX2_ALIGNED_LOAD;
+                    tunable_var_idx = AVX2_ALIGNED_LOAD;
             }
             else if (user_config.dst_aln == y_align)
-                var_idx = AVX2_ALIGNED_STORE;
+                tunable_var_idx = AVX2_ALIGNED_STORE;
             else
-                var_idx = AVX2_UNALIGNED;
+                tunable_var_idx = AVX2_UNALIGNED;
         }
-#ifdef AVX512_FEATURE_ENABLED
         else if (user_config.user_operation.avx512) //AVX512 operations
         {
             LOG_DEBUG("AVX512 config\n");
             if (user_config.src_aln == n_align)
             {
                 if (user_config.dst_aln == n_align)
-                    var_idx = AVX512_NON_TEMPORAL;
+                    tunable_var_idx = AVX512_NON_TEMPORAL;
                 else
-                    var_idx = AVX512_NON_TEMPORAL_LOAD;
+                    tunable_var_idx = AVX512_NON_TEMPORAL_LOAD;
             }
             else if (user_config.dst_aln == n_align)
-                var_idx = AVX512_NON_TEMPORAL_STORE;
+                tunable_var_idx = AVX512_NON_TEMPORAL_STORE;
             else if (user_config.src_aln == y_align)
             {
                 if (user_config.dst_aln == y_align)
-                    var_idx = AVX512_ALIGNED;
+                    tunable_var_idx = AVX512_ALIGNED;
                 else
-                    var_idx = AVX512_ALIGNED_LOAD;
+                    tunable_var_idx = AVX512_ALIGNED_LOAD;
             }
             else if (user_config.dst_aln == y_align)
-                var_idx = AVX512_ALIGNED_STORE;
+                tunable_var_idx = AVX512_ALIGNED_STORE;
             else
-                var_idx = AVX512_UNALIGNED;
+                tunable_var_idx = AVX512_UNALIGNED;
         }
-#endif // end of AVX512 options
         else if (user_config.user_operation.erms) //ERMS operations
         {
             LOG_DEBUG("ERMS config\n");
-            var_idx = ERMS_MOVSB;
+            tunable_var_idx = ERMS_MOVSB;
             if (user_config.src_aln == user_config.dst_aln)
             {
                 if (user_config.src_aln == q_align \
                     || user_config.src_aln == x_align \
                     || user_config.src_aln == y_align)
-                    var_idx = ERMS_MOVSQ;
+                    tunable_var_idx = ERMS_MOVSQ;
                 else if (user_config.src_aln == d_align)
-                    var_idx = ERMS_MOVSD;
+                    tunable_var_idx = ERMS_MOVSD;
                 else if (user_config.src_aln == w_align)
-                    var_idx = ERMS_MOVSW;
+                    tunable_var_idx = ERMS_MOVSW;
             }
         }
     }
     else if (active_threshold_cfg == USR_CFG) // User Threshold Config
     {
         LOG_INFO("User Threshold CFG.\n");
-        var_idx = THRESHOLD;
+        tunable_var_idx = THRESHOLD;
     }
-    return var_idx;
+    return tunable_var_idx;
 }
-#endif // end of tunable options
+#endif // end of tunable resolver
 
 
 /* Constructor for libmem library
@@ -200,27 +244,39 @@ static variant_index amd_libmem_resolver(void)
 static __attribute__((constructor)) void libmem_init()
 {
     LOG_INFO("aocl-libmem Version: %s\n", LIBMEM_BUILD_VERSION);
-#ifdef ENABLE_TUNABLES
-    parse_env_operation_cfg();
-    if (active_operation_cfg == SYS_CFG)
-        parse_env_threshold_cfg();
-    if (active_threshold_cfg == USR_CFG)
-        configure_thresholds();
-#endif
-    if (active_operation_cfg == SYS_CFG && active_threshold_cfg == SYS_CFG)
+    bool is_amd_cpu = is_amd();
+    if (is_amd_cpu == true)
     {
-        compute_sys_thresholds(&zen_info);
-        configure_thresholds();
-    }
-    get_cpu_capabilities();
-
-#ifdef ENABLE_TUNABLES
-    variant_index impl_idx;
-    impl_idx  = amd_libmem_resolver();
-    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMCPY][impl_idx]);
-    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMPCPY][impl_idx]);
-    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMMOVE][impl_idx]);
-    _memset_variant = ((void* (*)(void *, int, size_t))libmem_impls[MEMSET][impl_idx]);
-    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_impls[MEMCMP][impl_idx]);
+        LOG_INFO("Is AMD CPU\n");
+#ifdef ALMEM_TUNABLES
+        parse_env_operation_cfg();
+        if (active_operation_cfg == SYS_CFG)
+            parse_env_threshold_cfg();
 #endif
+        if (active_operation_cfg == SYS_CFG && active_threshold_cfg == SYS_CFG)
+            compute_sys_thresholds(&zen_info);
+
+        configure_thresholds();
+        get_cpu_capabilities();
+    }
+
+#ifdef ALMEM_DYN_DISPATCH
+    variant_index cpu_ver_idx = SYSTEM;
+    if (is_amd_cpu == true)
+        cpu_ver_idx  = libmem_cpu_resolver();
+
+    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMCPY][cpu_ver_idx]);
+#endif //end of dynamic dispatching
+#ifdef ALMEM_TUNABLES
+    variant_index tunable_var_idx = libmem_tunable_resolver();
+    //if tunables are not valid go ahead with detected cpu implementation
+    if (tunable_var_idx == SYSTEM)
+        tunable_var_idx = cpu_ver_idx;
+
+    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMCPY][tunable_var_idx]);
+    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMPCPY][tunable_var_idx]);
+    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_impls[MEMMOVE][tunable_var_idx]);
+    _memset_variant = ((void* (*)(void *, int, size_t))libmem_impls[MEMSET][tunable_var_idx]);
+    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_impls[MEMCMP][tunable_var_idx]);
+#endif //end of tunables
 }

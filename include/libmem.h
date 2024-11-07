@@ -30,11 +30,10 @@ extern "C" {
 #endif
 
 #include "libmem_impls.h"
+#define __ALMEM_CONCAT2(x,y)    x##_##y
+#define __ALMEM_CONCAT(x,y)     __ALMEM_CONCAT2(x,y)
 
-#define CONCAT2(x,y)    x##_##y
-#define CONCAT(x,y)     CONCAT2(x,y)
-
-#define PREFIX(x)       __##x
+#define __ALMEM_PREFIX(x)       __##x
 
 typedef enum{
     MEMCPY,
@@ -47,6 +46,7 @@ typedef enum{
 
 // A maximum of 16 supported variants
 typedef enum{
+#ifdef ALMEM_TUNABLES
 /*User AVX2 operation based*/
     AVX2_UNALIGNED,
     AVX2_ALIGNED,
@@ -55,7 +55,6 @@ typedef enum{
     AVX2_NON_TEMPORAL,
     AVX2_NON_TEMPORAL_LOAD,
     AVX2_NON_TEMPORAL_STORE,
-#ifdef AVX512_FEATURE_ENABLED
 /*User AVX512 operation based*/
     AVX512_UNALIGNED,
     AVX512_ALIGNED,
@@ -64,7 +63,6 @@ typedef enum{
     AVX512_NON_TEMPORAL,
     AVX512_NON_TEMPORAL_LOAD,
     AVX512_NON_TEMPORAL_STORE,
-#endif
 /*User ERMS operation based*/
     ERMS_MOVSB,
     ERMS_MOVSW,
@@ -72,6 +70,7 @@ typedef enum{
     ERMS_MOVSQ,
 /*User Threshold with avx2, erms, non-temporal*/
     THRESHOLD,
+#endif //end of tunables
 /*uArch based*/
     ARCH_ZEN1,
     ARCH_ZEN2,
@@ -85,47 +84,50 @@ typedef enum{
 
 typedef void (*func_ptr)(void);
 
+#ifdef ALMEM_TUNABLES
 #define generate_avx2_variants(func) \
-    (func_ptr) CONCAT(PREFIX(func), avx2_unaligned), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_aligned), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_aligned_load), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_aligned_store), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_nt), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_nt_load), \
-    (func_ptr) CONCAT(PREFIX(func), avx2_nt_store),
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_unaligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_aligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_aligned_load), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_aligned_store), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_nt), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_nt_load), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx2_nt_store),
 
 
-#ifdef AVX512_FEATURE_ENABLED
 #define generate_avx512_variants(func) \
-    (func_ptr) CONCAT(PREFIX(func), avx512_unaligned), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_aligned), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_aligned_load), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_aligned_store), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_nt), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_nt_load), \
-    (func_ptr) CONCAT(PREFIX(func), avx512_nt_store),
-#else
-#define generate_avx512_variants(func)
-#endif //end of avx-512 variants
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_unaligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_aligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_aligned_load), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_aligned_store), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_nt), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_nt_load), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), avx512_nt_store),
 
 #define generate_erms_variants(func) \
-    (func_ptr) CONCAT(PREFIX(func), erms_b_aligned), \
-    (func_ptr) CONCAT(PREFIX(func), erms_w_aligned), \
-    (func_ptr) CONCAT(PREFIX(func), erms_d_aligned), \
-    (func_ptr) CONCAT(PREFIX(func), erms_q_aligned),
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), erms_b_aligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), erms_w_aligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), erms_d_aligned), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), erms_q_aligned),
 
 #define generate_threshold_variant(func) \
-    (func_ptr) CONCAT(PREFIX(func), threshold),
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), threshold),
+#else
+#define generate_avx2_variants(func)
+#define generate_avx512_variants(func)
+#define generate_erms_variants(func)
+#define generate_threshold_variant(func)
+#endif //end of tunable variants
 
 #define generate_arch_variants(func) \
-    (func_ptr) CONCAT(PREFIX(func), zen1), \
-    (func_ptr) CONCAT(PREFIX(func), zen2), \
-    (func_ptr) CONCAT(PREFIX(func), zen3), \
-    (func_ptr) CONCAT(PREFIX(func), zen4), \
-    (func_ptr) CONCAT(PREFIX(func), zen5),
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen1), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen2), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen3), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen4), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5),
 
 #define generate_system_variant(func) \
-    (func_ptr) CONCAT(PREFIX(func), system)
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), system)
 
 #define add_func_variants(func) \
     { \
@@ -140,10 +142,12 @@ typedef void (*func_ptr)(void);
 func_ptr libmem_impls[FUNC_COUNT][VARIANT_COUNT] =
 {
     add_func_variants(memcpy),
+#ifdef ALMEM_TUNABLES
     add_func_variants(mempcpy),
     add_func_variants(memmove),
     add_func_variants(memset),
     add_func_variants(memcmp)
+#endif
 };
 
 #ifdef __cplusplus

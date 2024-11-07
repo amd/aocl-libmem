@@ -30,6 +30,7 @@
 extern "C" {
 #endif
 
+extern void * memcpy(void *, const void *, size_t);
 //Micro architecture specifc implementations.
 extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
 extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
@@ -40,6 +41,7 @@ extern void * __memcpy_zen5(void *dest,const void *src, size_t size);
 //System solution which takes in system config and  threshold values.
 extern void * __memcpy_system(void *dest,const void *src, size_t size);
 
+#ifdef ALMEM_TUNABLES
 //Generic solution which takes in user threshold values.
 extern void * __memcpy_threshold(void *dest,const void *src, size_t size);
 
@@ -52,7 +54,6 @@ extern void * __memcpy_avx2_nt(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx2_nt_load(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx2_nt_store(void *dest,const void *src, size_t size);
 
-#ifdef AVX512_FEATURE_ENABLED
 //CPU Feature:AVX512 and Alignment specifc implementations.
 extern void * __memcpy_avx512_unaligned(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx512_aligned(void *dest,const void *src, size_t size);
@@ -61,13 +62,13 @@ extern void * __memcpy_avx512_aligned_store(void *dest,const void *src, size_t s
 extern void * __memcpy_avx512_nt(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx512_nt_load(void *dest,const void *src, size_t size);
 extern void * __memcpy_avx512_nt_store(void *dest,const void *src, size_t size);
-#endif
 
 //CPU Feature:ERMS and Alignment specifc implementations.
 extern void * __memcpy_erms_b_aligned(void *dest,const void *src, size_t size);
 extern void * __memcpy_erms_w_aligned(void *dest,const void *src, size_t size);
 extern void * __memcpy_erms_d_aligned(void *dest,const void *src, size_t size);
 extern void * __memcpy_erms_q_aligned(void *dest,const void *src, size_t size);
+#endif
 
 extern void *(*_memcpy_variant)(void *, const void *, size_t);
 

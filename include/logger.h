@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 
-#ifdef ENABLE_LOGGER
+#ifdef ALMEM_LOGGER
 
 #include <stdio.h>
 #include <stdlib.h>

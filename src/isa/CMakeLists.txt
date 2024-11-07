@@ -1,4 +1,4 @@
-# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,15 +22,24 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
+set(ISA_SUPP_FUNCS memcpy)
 
-if (ALMEM_TUNABLES)
-    set(SOURCE_FILES ${SRC_PATH}/mempcpy_avx2.c ${SRC_PATH}/mempcpy_erms.c ${SRC_PATH}/mempcpy_system.c ${SRC_PATH}/mempcpy_threshold.c ${SRC_PATH}/mempcpy_march.c)
-    if (DEFINED AVX512_FEATURE_AVAILABLE)
-        set(SOURCE_FILES ${SOURCE_FILES} ${SRC_PATH}/mempcpy_avx512.c)
-    endif ()
+set(ISA_SRC_FILES "")
+
+foreach(func ${ISA_SUPP_FUNCS})
+list(APPEND ISA_SRC_FILES
+    ${ALMEM_ISA}/${func}_${ALMEM_ISA}.c
+    )
+endforeach()
+
+add_library(isa_objlib OBJECT ${ISA_SRC_FILES})
+target_include_directories(isa_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+set(_MODULE_CC_FLAGS -mbmi -mlzcnt)
+if (${ALMEM_ISA} MATCHES "avx512")
+    list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
 else ()
-    set(SOURCE_FILES ${SRC_PATH}/amd_mempcpy.c)
+    list(APPEND _MODULE_CC_FLAGS -mavx2)
 endif ()
 
-target_sources(libmem_objlib PRIVATE ${SOURCE_FILES})
+set_target_properties(isa_objlib PROPERTIES POSITION_INDEPENDENT_CODE "ON" COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")

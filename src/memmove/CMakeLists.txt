@@ -24,7 +24,7 @@
 
 set(SRC_PATH  ${CMAKE_CURRENT_SOURCE_DIR})
 
-if (ENABLE_TUNABLES)
+if (ALMEM_TUNABLES)
     set(SOURCE_FILES  ${SRC_PATH}/memmove_avx2.c  ${SRC_PATH}/memmove_erms.c  ${SRC_PATH}/memmove_system.c ${SRC_PATH}/memmove_threshold.c  ${SRC_PATH}/memmove_march.c)
     if (DEFINED AVX512_FEATURE_AVAILABLE)
         set(SOURCE_FILES ${SOURCE_FILES} ${SRC_PATH}/memmove_avx512.c)

@@ -23,6 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef __AVX512F__
 #ifndef _LIBMEM_LOAD_STORE_AVX512_IMPLS_H_
 #define _LIBMEM_LOAD_STORE_AVX512_IMPLS_H_
 
@@ -240,6 +241,12 @@ static inline size_t __aligned_load_and_store_4zmm_vec_loop(void *store_addr,
     VEC_4X_LOAD_STORE_LOOP(AVX512, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
 }
 
+static inline size_t __aligned_load_and_store_4zmm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX512, PFTCH_TWO_CL_ONE_STEP, ALIGNED, ALIGNED)
+}
+
 static inline size_t __aligned_load_and_store_4zmm_vec_loop_bkwd\
     (void *store_addr, const void *load_addr, size_t size, size_t offset)
 {
@@ -379,3 +386,5 @@ static inline size_t __unaligned_load_nt_store_8zmm_vec_loop_pftch(void *store_a
 #endif
 
 #endif //HEADER
+
+#endif //end of AVX512

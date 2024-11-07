@@ -9,23 +9,28 @@
 ## Build and Install Procedure:
 ```sh
     #Configure for GCC build
-        # Default Native Build
+        # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=gcc -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx2 -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=avx512 -S <source_dir> -B <build_dir>
-        # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=gcc -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
+        # Compiling with Dynamic CPU Dispatcher
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>
+        # Compiling AVX2 binary
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ISA=avx2 -S <source_dir> -B <build_dir>
+        # Compiling AVX512 binary
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ISA=avx512 -S <source_dir> -B <build_dir>
+        # Compiling with Tunable Parameters
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_TUNABLES=Y -S <source_dir> -B <build_dir>
     #Configure for AOCC(Clang) build
-        # Default Native Build
+        # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=clang -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX2 binary on AVX512 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx2 -S <source_dir> -B <build_dir>
-        # Cross Compiling AVX512 binary on AVX2 machine
-        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=avx512 -S <source_dir> -B <build_dir>
-        # Enabling Tunable Parameters
-        $ cmake -D CMAKE_C_COMPILER=clang -D ENABLE_TUNABLES=Y -S <source_dir> -B <build_dir>
+        # Compiling with Dynamic CPU Dispatcher
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>
+        # Compiling AVX2 binary
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ISA=avx2 -S <source_dir> -B <build_dir>
+        # Compiling AVX512 binary
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ISA=avx512 -S <source_dir> -B <build_dir>
+        # Compiling with Tunable Parameters
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_TUNABLES=Y -S <source_dir> -B <build_dir>
+    Note: 'ALMEM_ISA' has precedence over 'ALMEM_DYN_DISPATCH' and 'ALMEM_TUNABLES' options.
     # Build
     $ cmake --build <build_dir>
 
@@ -40,7 +45,7 @@ Both shared library: 'libaocl-libmem.so' and static library: 'libaocl-libmem.a' 
 ## Debug Build:
  To enable logging build the source as below
 ```sh
-    $ cmake -D ENABLE_LOGGING=Y -S <source_dir> -B <build_dir>
+    $ cmake -D ALMEM_LOGGING=Y -S <source_dir> -B <build_dir>
 ```
  Logs will be stored in the`"/tmp/libmem.log"` file.
 

@@ -81,7 +81,7 @@ void configure_thresholds()
             zen_info.zen_thresholds.nt_stop_threshold;
     }
 
-#ifdef ENABLE_TUNABLES
+#ifdef ALMEM_TUNABLES
 
     else if (active_threshold_cfg == USR_CFG)
     {

@@ -43,17 +43,17 @@
 #define PFTCH_ZERO_CL
 
 #define PFTCH_ONE_CL       \
-  _mm_prefetch(load_addr + offset +  CACHE_LINE_SZ, _MM_HINT_T2);
+  _mm_prefetch(load_addr + offset +  CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
 #define PFTCH_TWO_CL_ONE_STEP       \
-  _mm_prefetch(load_addr + offset + CACHE_LINE_SZ, _MM_HINT_T2);   \
-  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_T2);
+  _mm_prefetch(load_addr + offset + CACHE_LINE_SZ, _MM_HINT_NTA);   \
+  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
 #define PFTCH_TWO_CL_TWO_STEP       \
-  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_T2); \
-  _mm_prefetch(load_addr + offset + 4 * CACHE_LINE_SZ, _MM_HINT_T2);
+  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 4 * CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
 #define VEC_1X_LOAD_STORE(vec, load_type, store_type)                    \
@@ -195,9 +195,6 @@
 
 #include "load_store_sse2_impls.h"
 #include "load_store_avx2_impls.h"
-
-#ifdef  AVX512_FEATURE_ENABLED
 #include "load_store_avx512_impls.h"
-#endif
 
 #endif //HEADER

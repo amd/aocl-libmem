@@ -55,6 +55,10 @@
 #define     L2_CACHE_CORE   2
 #define     L3_CACHE_CCX    3
 
+#define     REQ_TYPE_CPU_VENDOR 4
+#define     NON_AMD_CPU     0
+#define     AMD_CPU         1
+
 void __get_cpu_id(cpuid_registers *cpuid_regs)
 {
     asm volatile
@@ -143,6 +147,18 @@ int main(int argc, char **argv)
 
         return ((((cpuid_regs.ebx>>22) & 0x3ff) + 1) * \
                   (((cpuid_regs.ebx & 0xfff) + 1) * (cpuid_regs.ecx + 1))) >> shifter;
+
+        case REQ_TYPE_CPU_VENDOR:
+        cpuid_regs.eax= 0x0;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        if ((cpuid_regs.ebx ^ 0x68747541) |
+            (cpuid_regs.edx ^ 0x69746E65) |
+                 (cpuid_regs.ecx ^ 0x444D4163))
+        {
+            return NON_AMD_CPU;
+        }
+        return AMD_CPU;
     }
     return -1;
 }

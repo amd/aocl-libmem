@@ -106,6 +106,9 @@ bool erms;
 bool avx2;
 bool avx512;
 bool movdiri;
+bool vpclmul;
+bool rdpid;
+bool rdseed;
 } cpu_features;
 
 typedef struct {

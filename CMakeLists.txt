@@ -42,26 +42,45 @@ set(LIBMEM_BUILD_VERSION_STR
 
 add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
-set(DEFAULT_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 
-option(ALMEM_DISP "CPU Dispatching" OFF)
+option(ALMEM_DYN_DISPATCH "CPU Dispatching" OFF)
 
-option(ALMEM_ARCH "ISA_ARCH_TYPE" OFF)
+option(ALMEM_ISA "ISA_TYPE" OFF)
 
-option(ENABLE_LOGGING "Enable Logger" OFF)
+option(ALMEM_LOGGING "Enable Logger" OFF)
 
-option(ENABLE_TUNABLES "Enable user input" OFF)
+option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
 
-option(ENABLE_GCOV "Enable Code Coverage" OFF)
+option(ALMEM_GCOV "Enable Code Coverage" OFF)
 
-if (ENABLE_LOGGING)
-add_definitions(-DENABLE_LOGGER)
+if (ALMEM_LOGGING)
+add_definitions(-DALMEM_LOGGER)
 # uncomment the below for debug logs, LOG_LEVEL=DEBUG.
 #add_definitions(-DLOG_LEVEL=4)
 endif ()
+
+if (ENABLE_TUNABLES) #retaining for backward compatibility
+    set(ALMEM_TUNABLES ON)
+endif()
+
+if (ALMEM_ISA) #ISA has precedence over DYN_DISPATCH
+    if (ALMEM_DYN_DISPATCH)
+        message(WARNING "ISA has precedence over DYN_DISPATCH; Disabling Dynamic CPU dispatching...")
+        set(ALMEM_DYN_DISPATCH OFF)
+    endif ()
+    if (ALMEM_TUNABLES)
+        message(WARNING "ISA has precedence over TUNABLES; Disabling TUNABLES option...")
+        set(ALMEM_TUNABLES OFF)
+    endif()
+endif()
+
+if (ALMEM_TUNABLES)
+    set(ALMEM_DYN_DISPATCH ON)
+endif()
 
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
