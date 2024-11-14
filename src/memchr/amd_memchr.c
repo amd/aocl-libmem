@@ -85,11 +85,11 @@ static inline void *memchr_le_2ymm(void *mem, int val, uint8_t size)
         x2 = _mm_loadu_si64(mem + size - QWORD_SZ);
         x3 = _mm_cmpeq_epi8(x0, x1);
         x4 = _mm_cmpeq_epi8(x0, x2);
-        ret = _mm_movemask_epi8(_mm_or_si128(x3, x4)) & 0xffff;
+        ret = _mm_movemask_epi8(_mm_or_si128(x3, x4)) & 0xff;
 
         if (ret)
         {
-            ret1 = _mm_movemask_epi8(x3) & 0xffff;
+            ret1 = _mm_movemask_epi8(x3) & 0xff;
 
             if (ret1)
                 return mem + _tzcnt_u32(ret1);
