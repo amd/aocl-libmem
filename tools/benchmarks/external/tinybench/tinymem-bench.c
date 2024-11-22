@@ -36,7 +36,6 @@
 
 
 #include "util.h"
-#include "asm-opt.h"
 #include "version.h"
 
 #define BLOCKSIZE               2048
@@ -47,6 +46,29 @@
 #define MIN_PRINTABLE_ASCII     32
 #define MAX_PRINTABLE_ASCII     127
 #define NULL_TERM_CHAR          '\0'
+
+#ifndef __ASM_OPT_H__
+#define __ASM_OPT_H__
+
+typedef struct
+{
+    const char *description;
+    int use_tmpbuf;
+    int (*f)(int64_t *, int64_t *, int);
+} bench_info;
+
+bench_info *get_asm_benchmarks(void);
+bench_info *get_asm_framebuffer_benchmarks(void);
+
+#endif
+
+int test_strcmp(const char* str1, const char* str2) {
+    while (*str1 && (*str1 == *str2)) {
+        str1++;
+        str2++;
+    }
+    return *(unsigned char*)str1 - *(unsigned char*)str2;
+}
 
 static void *mmap_framebuffer(size_t *fbsize)
 {
@@ -79,7 +101,7 @@ static double bandwidth_bench_helper(int64_t *dstbuf, int64_t *srcbuf,
                                      int size, int blocksize,
                                      const char *indent_prefix,
                                      int use_tmpbuf,
-                                     void (*f)(int64_t *, int64_t *, int),
+                                     int (*f)(int64_t *, int64_t *, int),
                                      const char *description)
 {
     int i, j, loopcount, innerloopcount, n;
@@ -111,10 +133,10 @@ static double bandwidth_bench_helper(int64_t *dstbuf, int64_t *srcbuf,
             }
             else
             {
-                if(strcmp(description,"strcat") !=0 )
+               if(test_strcmp(description,"strcat") !=0 )
                 {   for (i = 0; i < innerloopcount; i++)
                     {
-                        f(dstbuf, srcbuf, size);
+                        (void)f(dstbuf, srcbuf, size);
                     }
                 }
                 else
@@ -159,68 +181,68 @@ static double bandwidth_bench_helper(int64_t *dstbuf, int64_t *srcbuf,
     return maxspeed;
 }
 
-void memcpy_wrapper(int64_t *dst, int64_t *src, int size)
+int memcpy_wrapper(int64_t *dst, int64_t *src, int size)
 {
     memcpy(dst, src, size);
 }
 
-void memset_wrapper(int64_t *dst, int64_t *src, int size)
+int memset_wrapper(int64_t *dst, int64_t *src, int size)
 {
     memset(dst, src[0], size);
 }
 
-void memmove_wrapper(int64_t *dst, int64_t *src, int size)
+int memmove_wrapper(int64_t *dst, int64_t *src, int size)
 {
     memmove(dst, src, size);
 }
 
-void memcmp_wrapper(int64_t *dst, int64_t *src, int size)
+int memcmp_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    memcmp(dst, src, size);
+    return memcmp(dst, src, size);
 }
 
-void strcpy_wrapper(int64_t *dst, int64_t *src, int size)
+int strcpy_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strcpy((char *)dst, (char *) src);
 }
 
-void strncpy_wrapper(int64_t *dst, int64_t *src, int size)
+int strncpy_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strncpy((char *)dst, (char *) src, size);
 }
 
-void strcmp_wrapper(int64_t *dst, int64_t *src, int size)
+int strcmp_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    strcmp((char *)dst, (char *) src);
+    return strcmp((char *)dst, (char *) src);
 }
 
-void strncmp_wrapper(int64_t *dst, int64_t *src, int size)
+int strncmp_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    strncmp((char *)dst, (char *) src, size);
+    return strncmp((char *)dst, (char *) src, size);
 }
 
-void strlen_wrapper(int64_t *dst, int64_t *src, int size)
+int strlen_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    strlen((char *)src);
+    return strlen((char *)src);
 }
 
-void strcat_wrapper(int64_t *dst, int64_t *src, int size)
+int strcat_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strcat((char *)dst, (char *)src);
 }
 
-void strspn_wrapper(int64_t *dst, int64_t *src, int size)
+int strspn_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strspn((char *)dst, (char *)src);
 }
-void strstr_wrapper(int64_t *dst, int64_t *src, int size)
+int strstr_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    strstr((char *)dst, (char *)src);
+    return strstr((char *)dst, (char *)src);
 }
 
-void memchr_wrapper(int64_t *src, int c, int size)
+int memchr_wrapper(int64_t *dst, int64_t *src, int size)
 {
-    memchr((char*)src, c , size);
+    return memchr(src, 'x' , size);
 }
 
 
@@ -309,7 +331,7 @@ int main(int argc, char **argv)
 
     for (idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
     {
-        if (!strcmp(supp_funcs[idx].description, argv[1]))
+        if (!test_strcmp(supp_funcs[idx].description, argv[1]))
         {
            break;
         }
@@ -319,7 +341,7 @@ int main(int argc, char **argv)
     bench_func[0].use_tmpbuf = supp_funcs[idx].use_tmpbuf;
     bench_func[0].f = supp_funcs[idx].f;
 
-    for(bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
+    for (bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
     {
         //Bigger dst buffer for strcat operation
         if (test_strstr(bench_func[0].description,"strcat"))
@@ -338,11 +360,11 @@ int main(int argc, char **argv)
         }
 
         printf("SIZE: %zu B \n",bufsize);
-
+        memset(srcbuf, 'c', bufsize);
         //For handling string functions
-        if ( test_strstr(bench_func[0].description, "str"))
+        if (test_strstr(bench_func[0].description, "str") || test_strstr(bench_func[0].description, "memchr"))
         {
-            if(test_strstr(bench_func[0].description, "strspn"))
+            if (test_strstr(bench_func[0].description, "strspn"))
             {
                 size_t accept_len = ceil(sqrt(bufsize));
 
@@ -350,26 +372,21 @@ int main(int argc, char **argv)
                 size_t i ;
                 for (i = 0 ; i < (bufsize - NULL_BYTE); i++)
                 {
-                    *((char *)dstbuf + i) = *((char *)srcbuf + rand() % (accept_len ));
+                    *((char *)dstbuf + i) = *((char *)srcbuf + rand() % (accept_len));
                 }
                 *((char *)dstbuf + i) = NULL_TERM_CHAR;
-
             }
             else
             {
-                memset(srcbuf, 'c', bufsize);
                 *((char *)srcbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
-
-                if (test_strstr(bench_func[0].description, "cmp") || test_strstr(bench_func[0].description, "cat") || test_strstr(bench_func[0].description, "strstr") )
+                if (test_strstr(bench_func[0].description, "cmp") || test_strstr(bench_func[0].description, "cat") || test_strstr(bench_func[0].description, "strstr"))
                 {
                     memcpy(dstbuf, srcbuf, bufsize);
                     *((char *)srcbuf + bufsize - 2) = NULL_TERM_CHAR;
                     *((char *)dstbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
                 }
             }
-
         }
-
         bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
 
         free(poolbuf);
