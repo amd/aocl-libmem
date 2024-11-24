@@ -22,37 +22,53 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ALMEM_DYN_DISPATCH
+#include "logger.h"
+#include "threshold.h"
+#include "../../../base_impls/load_store_impls.h"
+#include "zen_cpu_info.h"
+#include "alm_defs.h"
 
-#include <stddef.h>
-#include "libmem_iface.h"
+extern cpu_info zen_info;
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+static inline void *_mempcpy_avx2(void * __restrict dst, const void * __restrict src, size_t size)
+{
+    size_t offset, dst_align;
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
+    if (size <= 2 * YMM_SZ)
+    {
+       return size + __load_store_le_2ymm_vec(dst, src, size);
+    }
 
-#ifdef ALMEM_TUNABLES //TODO enable dynamic dispatching for below functions
+    if (size <= 4 * YMM_SZ) //128B
+    {
+        __load_store_le_4ymm_vec(dst, src, size);
+        return dst + size;
+    }
 
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
+    __load_store_le_8ymm_vec(dst, src, size);
+    if (size <= 8 * YMM_SZ) //256B
+    {
+        return dst + size;
+    }
 
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
-// memset mapping
-LIBMEM_FN_MAP(memset);
-WEAK_ALIAS(memset, MK_FN_NAME(memset));
+    dst_align = ((size_t)dst & (YMM_SZ - 1));
 
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
-// memcmp mapping
-LIBMEM_FN_MAP(memcmp);
-WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
+    offset = 4 * YMM_SZ - dst_align ;
 
-#endif
-#endif
+    //Aligned Load and Store addresses
+    if (((size_t)src & (YMM_SZ - 1)) == dst_align)
+    {
+        if (size < __nt_start_threshold)
+           __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        else
+           __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, offset);
+    }
+    else
+    {
+        if (size < __nt_start_threshold)
+           __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+        else
+           __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
+    }
+    return dst + size;
+}

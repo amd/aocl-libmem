@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -24,7 +24,7 @@
  */
 #include "logger.h"
 #include "zen_cpu_info.h"
-#include "../base_impls/load_store_impls.h"
+#include "../../base_impls/load_store_impls.h"
 
 static inline void * __mempcpy_ble_8zmm(void *dst, const void *src, size_t size)
 {

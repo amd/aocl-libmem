@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,56 +22,26 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include "logger.h"
 #include "threshold.h"
+#include "../../base_impls/load_store_impls.h"
 #include "zen_cpu_info.h"
-#include "../base_impls/load_store_impls.h"
+#include "alm_defs.h"
 
 extern cpu_info zen_info;
 
-static inline void *_mempcpy_avx2(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) __mempcpy_zen4(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
 {
-    size_t offset = 0, dst_align = 0;
+    LOG_INFO("\n");
 
-    if (size <= 4 * YMM_SZ) //128B
+    size_t offset, dst_align;
+
+    if (size <= ZMM_SZ)
     {
-        __load_store_le_4ymm_vec(dst, src, size);
-        return dst + size;
+        return __load_store_ble_zmm_vec(dst, src, size) + size;
     }
-    __load_store_le_8ymm_vec(dst, src, size);
-    if (size <= 8 * YMM_SZ) //256B
-    {
-        return dst + size;
-    }
-
-    offset = 4 * YMM_SZ;
-
-    dst_align = ((size_t)dst & (YMM_SZ - 1));
-
-    //Aligned Load and Store addresses
-    if ((((size_t)src & (YMM_SZ - 1)) | dst_align) == 0)
-    {
-        if (size < __nt_start_threshold)
-           __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
-        else
-           __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, offset);
-    }
-    else
-    {
-        offset -= dst_align;
-        if (size < __nt_start_threshold)
-           __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
-        else
-           __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
-    }
-
-    return dst + size;
-}
-
-#ifdef AVX512_FEATURE_ENABLED
-static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
-{
-   size_t offset = 0, dst_align = 0;
 
     if (size <= 2 * ZMM_SZ) //128B
     {
@@ -90,8 +60,9 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
     if (size <= 8 * ZMM_SZ) //512B
         return dst + size;
 
-    offset += 4 * ZMM_SZ;
     dst_align = ((size_t)dst & (ZMM_SZ - 1));
+
+    offset = 4 * ZMM_SZ - dst_align;
 
     //Aligned SRC & DST addresses
     if ((((size_t)src & (ZMM_SZ - 1)) | dst_align) == 0)
@@ -102,11 +73,11 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
             __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
         // 4-YMM registers with SW - prefetch
-        else if (size < __nt_start_threshold)//NT-Threshold
+        else if (size < zen_info.zen_cache_info.l3_per_ccx)//L3 Cache Size
         {
             __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
-        // Non-temporal 8-ZMM registers with prefetch
+        // Non-temporal 8-ZMM registers with SW - prefetch
         else
         {
             __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
@@ -115,8 +86,7 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
     // Unalgined SRC/DST addresses: force-align store
     else
     {
-        offset -= dst_align;
-        if (size < __nt_start_threshold)//NT-Threshold
+        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
         {
             __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
@@ -127,30 +97,8 @@ static inline void *_mempcpy_avx512(void *dst, const void *src, size_t size)
     }
     return dst + size;
 }
-#endif
 
-
-void * __attribute__((flatten)) __mempcpy_system(void * __restrict dst,
-                             const void * __restrict src, size_t size)
-{
-    LOG_INFO("\n");
-#ifdef AVX512_FEATURE_ENABLED
-    if (size == 0)
-        return dst;
-    if (size <= ZMM_SZ)
-    {
-       __m512i z0;
-        z0 = _mm512_loadu_si512(src);
-       __mmask64 mask = ((uint64_t)-1) >> (64 - size);
-        _mm512_mask_storeu_epi8(dst, mask, z0);
-        return dst + size;
-    }
-    return _mempcpy_avx512(dst, src, size);
-#else
-    if (size <= 2 * YMM_SZ)
-    {
-        return size + __load_store_le_2ymm_vec(dst, src, size);
-    }
-    return _mempcpy_avx2(dst, src, size);
+#ifndef ALMEM_DYN_DISPATCH
+void *mempcpy(void *, const void *, size_t) __attribute__((weak,
+                        alias("__mempcpy_zen4"), visibility("default")));
 #endif
-}

@@ -24,7 +24,7 @@
  */
 #include "logger.h"
 #include "zen_cpu_info.h"
-#include "../base_impls/load_store_impls.h"
+#include "../../base_impls/load_store_impls.h"
 
 static inline void * __mempcpy_ble_8ymm(void *dst, const void *src, size_t size)
 {

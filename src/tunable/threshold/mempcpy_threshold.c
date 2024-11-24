@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,6 +28,8 @@
 #include "amd_mempcpy.h"
 #include "logger.h"
 #include "threshold.h"
+#include "zen_cpu_info.h"
+extern cpu_info zen_info;
 
 void * __mempcpy_threshold(void *dst, const void *src, size_t size)
 {
@@ -35,16 +37,15 @@ void * __mempcpy_threshold(void *dst, const void *src, size_t size)
     if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
         return __mempcpy_erms_b_aligned(dst, src, size);
     else if (size > __nt_start_threshold && size < __nt_stop_threshold)
-#ifdef AVX512_FEATURE_ENABLED
-        return __mempcpy_avx512_nt_store(dst, src, size);
-#else
+    {
+        if (zen_info.zen_cpu_features.avx512 == ENABLED)
+            return __mempcpy_avx512_nt_store(dst, src, size);
         return __mempcpy_avx2_nt_store(dst, src, size);
-#endif
+    }
     else
-#ifdef AVX512_FEATURE_ENABLED
-        return __mempcpy_avx512_unaligned(dst, src, size);
-#else
+    {
+        if (zen_info.zen_cpu_features.avx512 == ENABLED)
+            return __mempcpy_avx512_unaligned(dst, src, size);
         return __mempcpy_avx2_unaligned(dst, src, size);
-#endif
+    }
 }
-
