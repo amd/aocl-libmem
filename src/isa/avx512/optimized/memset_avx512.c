@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,37 +22,63 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
-#include <stdint.h>
-#include "../base_impls/memset_erms_impls.h"
 #include "logger.h"
+#include "threshold.h"
+#include "zen_cpu_info.h"
+#include "alm_defs.h"
+#include <immintrin.h>
+#include <stddef.h>
 
-// memset with byte ; no rep move api for intrinsic
-void * __memset_erms_b_aligned(void *mem, int val, size_t size)
+extern cpu_info zen_info;
+
+static inline void *_memset_avx512(void *mem, int val, size_t size)
 {
-    LOG_INFO("\n");
-    return __erms_stosb(mem, val, size);
-}
+    __m512i z0;
+    size_t offset;
+    __mmask64 mask;
 
-// memset with word ; no rep move api for intrinsic
-void * __memset_erms_w_aligned(void *mem, int val, size_t size)
-{
-    LOG_INFO("\n");
-    return __erms_stosw(mem, val, size);
-}
+    z0 = _mm512_set1_epi8(val);
+    if (size <= ZMM_SZ)
+    {
+        if (size)
+        {
+            mask = ((uint64_t)-1) >> (ZMM_SZ - size);
+            _mm512_mask_storeu_epi8(mem, mask, z0);
+        }
+        return mem;
+    }
 
-// No STOSD instruction. Handiling this variant with STOSW.
-// memset with double ; no rep move api for intrinsic
-void * __memset_erms_d_aligned(void *mem, int val, size_t size)
-{
-    LOG_INFO("\n");
-    return __erms_stosw(mem, val, size);
-}
+    _mm512_storeu_si512(mem , z0);
+    _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
 
-// memset with quad word ; no rep move api for intrinsic
-void * __memset_erms_q_aligned(void *mem, int val, size_t size)
-{
-    LOG_INFO("\n");
-    return __erms_stosq(mem, val, size);
-}
+    if (size <= 2 * ZMM_SZ)
+        return mem;
 
+    _mm512_storeu_si512(mem + ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+
+    if (size <= 4 * ZMM_SZ)
+        return mem;
+
+    _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
+
+    if (size <= 8 * ZMM_SZ)
+        return mem;
+
+    size -= 4 * ZMM_SZ;
+    offset = 4 * ZMM_SZ - ((uintptr_t)mem & (ZMM_SZ - 1));
+
+    while (offset < size)
+    {
+        _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 2 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
+        offset += 4 * ZMM_SZ;
+    }
+
+    return mem;
+}

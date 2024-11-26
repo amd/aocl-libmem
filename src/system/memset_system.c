@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,28 +22,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
 #include "logger.h"
-#include "amd_memset.h"
-#include "threshold.h"
+#include <dlfcn.h>
+#include <stddef.h>
+#include <gnu/lib-names.h>
 
-extern cpu_info zen_info;
-
-void * __memset_threshold(void *mem, int val, size_t size)
+void * __attribute__((flatten)) __memset_system(void * mem, int val, size_t size)
 {
-	LOG_DEBUG("\n");
-	if (size > __repstore_start_threshold && size < __repstore_stop_threshold)
-		return __memset_erms_b_aligned(mem, val, size);
-	else if (size > __nt_start_threshold && size < __nt_stop_threshold)
-#ifdef AVX512_FEATURE_ENABLED
-		return __memset_avx512_nt(mem, val, size);
-#else
-		return __memset_avx2_nt(mem, val, size);
-#endif
-	else
-#ifdef AVX512_FEATURE_ENABLED
-		return __memset_avx512_unaligned(mem, val, size);
-#else
-		return __memset_avx2_unaligned(mem, val, size);
-#endif
+    LOG_INFO("\n");
+    void * (*system_memset)(void *, int, size_t);
+    void *handle = NULL;
+    handle = dlopen(LIBC_SO, RTLD_LAZY);
+
+    if (handle)
+    {
+        system_memset = dlsym(handle, "memset");
+        dlclose(handle);
+        if (system_memset != NULL)
+            return system_memset(mem, val, size);
+    }
+    return NULL;
 }

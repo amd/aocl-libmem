@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,25 +22,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
-#include "logger.h"
-#include "amd_memset.h"
-#include "threshold.h"
 
-extern cpu_info zen_info;
+#include "../../isa/avx2/optimized/memset_avx2.c"
 
-void * __memset_system(void *mem, int val, size_t size)
+void * __attribute__((flatten)) __memset_zen3(void *mem, int val, size_t size)
 {
-	LOG_DEBUG("\n");
-#ifdef AVX512_FEATURE_ENABLED
-	return __memset_avx512_unaligned(mem, val, size);
-#else
-	if (zen_info.zen_cpu_features.erms &&(size > __repstore_start_threshold\
-                         && size < __repstore_stop_threshold))
-		return __memset_erms_b_aligned(mem, val, size);
-	else if (size > __nt_start_threshold && size < __nt_stop_threshold)
-		return __memset_avx2_nt(mem, val, size);
-	else
-		return __memset_avx2_unaligned(mem, val, size);
-#endif
+    LOG_INFO("\n");
+    return _memset_avx2(mem, val, size);
 }
+
+#ifndef ALMEM_DYN_DISPATCH
+void *memset(void *, int, size_t) __attribute__((weak,
+                        alias("__memset_zen3"), visibility("default")));
+#endif

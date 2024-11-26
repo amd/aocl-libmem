@@ -22,7 +22,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-set(TUNABLE_SUPP_FUNCS memcpy mempcpy memmove)
+set(TUNABLE_SUPP_FUNCS memcpy mempcpy memmove memset)
 
 add_library(tunable_objlib INTERFACE)
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,37 +22,37 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ALMEM_DYN_DISPATCH
-
 #include <stddef.h>
-#include "libmem_iface.h"
+#include <stdint.h>
+#include "../../base_impls/memset_erms_impls.h"
+#include "logger.h"
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+// memset with byte ; no rep move api for intrinsic
+void * __memset_erms_b_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosb(mem, val, size);
+}
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
+// memset with word ; no rep move api for intrinsic
+void * __memset_erms_w_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosw(mem, val, size);
+}
 
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
+// No STOSD instruction. Handiling this variant with STOSW.
+// memset with double ; no rep move api for intrinsic
+void * __memset_erms_d_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosw(mem, val, size);
+}
 
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
-// memset mapping
-LIBMEM_FN_MAP(memset);
-WEAK_ALIAS(memset, MK_FN_NAME(memset));
+// memset with quad word ; no rep move api for intrinsic
+void * __memset_erms_q_aligned(void *mem, int val, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_stosq(mem, val, size);
+}
 
-#ifdef ALMEM_TUNABLES //TODO enable dynamic dispatching for below functions
-
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
-// memcmp mapping
-LIBMEM_FN_MAP(memcmp);
-WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
-
-#endif
-#endif
