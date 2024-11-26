@@ -143,8 +143,8 @@ func_ptr libmem_impls[FUNC_COUNT][VARIANT_COUNT] =
 {
     add_func_variants(memcpy),
     add_func_variants(mempcpy),
-#ifdef ALMEM_TUNABLES
     add_func_variants(memmove),
+#ifdef ALMEM_TUNABLES
     add_func_variants(memset),
     add_func_variants(memcmp)
 #endif

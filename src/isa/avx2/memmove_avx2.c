@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,37 +22,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ALMEM_DYN_DISPATCH
 
-#include <stddef.h>
-#include "libmem_iface.h"
+#include "./optimized/memmove_avx2.c"
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+void * __attribute__((flatten)) __memmove_avx2(void * __restrict dst,
+                             const void * __restrict src, size_t size)
+{
+    LOG_INFO("\n");
+    return _memmove_avx2(dst, src, size);
+}
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
-
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
-
-#ifdef ALMEM_TUNABLES //TODO enable dynamic dispatching for below functions
-
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
-// memset mapping
-LIBMEM_FN_MAP(memset);
-WEAK_ALIAS(memset, MK_FN_NAME(memset));
-
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
-// memcmp mapping
-LIBMEM_FN_MAP(memcmp);
-WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
-
-#endif
-#endif
+void *memmove(void *, const void *, size_t) __attribute__((weak,
+                        alias("__memmove_avx2"), visibility("default")));

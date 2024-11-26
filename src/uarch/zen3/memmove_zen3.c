@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,27 +22,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
-#include "amd_memmove.h"
-#include "logger.h"
-#include "threshold.h"
 
-void * __memmove_threshold(void *dst, const void *src, size_t size)
+#include "../../isa/avx2/optimized/memmove_avx2.c"
+
+void * __attribute__((flatten)) __memmove_zen3(void * __restrict dst,
+                             const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-    if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
-        return __memmove_erms_b_aligned(dst, src, size);
-    else if (size > __nt_start_threshold && size < __nt_stop_threshold)
-#ifdef AVX512_FEATURE_ENABLED
-        return __memmove_avx512_nt_store(dst, src, size);
-#else
-        return __memmove_avx2_nt_store(dst, src, size);
-#endif
-    else
-#ifdef AVX512_FEATURE_ENABLED
-        return __memmove_avx512_unaligned(dst, src, size);
-#else
-        return __memmove_avx2_unaligned(dst, src, size);
-#endif
+    return _memmove_avx2(dst, src, size);
 }
 
+#ifndef ALMEM_DYN_DISPATCH
+void *memmove(void *, const void *, size_t) __attribute__((weak,
+                        alias("__memmove_zen3"), visibility("default")));
+#endif

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,96 +22,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include "logger.h"
 #include "threshold.h"
-#include "../base_impls/load_store_impls.h"
+#include "../../base_impls/load_store_impls.h"
 #include "zen_cpu_info.h"
+#include "alm_defs.h"
 
 extern cpu_info zen_info;
 
-static inline void *_memmove_avx2(void *dst, const void *src, size_t size)
+void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
+                        const void * __restrict src, size_t size)
 {
-    __m256i y4, y5, y6, y7;
-    register void *ret asm("rax");
-    ret = dst;
+    LOG_INFO("\n");
 
-    if (likely(size <= 2 * YMM_SZ))
-        return __load_store_le_2ymm_vec_overlap(dst, src, size);
-
-    if (size <= 4 * YMM_SZ)
-    {
-        __load_store_le_4ymm_vec(dst, src, size);
-        return ret;
-    }
-    if (size <= 8 * YMM_SZ)
-    {
-        __load_store_le_8ymm_vec(dst, src, size);
-        return ret;
-    }
-    if (((dst + size) < src) || ((src + size) < dst))
-    {
-        size_t offset = 0;
-        uint32_t dst_align = ((size_t)dst & (YMM_SZ - 1));
-
-        __load_store_le_8ymm_vec(dst, src, size);
-
-        offset = 4 * YMM_SZ;
-
-        //Aligned Load and Store addresses
-        if (!((uintptr_t)src ^ dst_align))
-        {
-            if (size < __nt_start_threshold)
-               __aligned_load_and_store_4ymm_vec_loop(dst, src, size - offset, offset - dst_align);
-            else
-               __aligned_load_nt_store_4ymm_vec_loop_pftch(dst, src, size - offset - dst_align, offset - dst_align);
-        }
-        else
-        {
-            offset -= dst_align;
-
-            if (size < __nt_start_threshold)
-               __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
-            else
-               __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, offset);
-        }
-        return ret;
-    }
-
-    // Handle overlapping memory blocks
-    if ((dst < (src + size)) && (src < dst)) //Backward Copy
-    {
-        y7 = _mm256_loadu_si256(src + 3 * YMM_SZ);
-        y6 = _mm256_loadu_si256(src + 2 * YMM_SZ);
-        y5 = _mm256_loadu_si256(src + 1 * YMM_SZ);
-        y4 = _mm256_loadu_si256(src + 0 * YMM_SZ);
-        __unaligned_load_and_store_4ymm_vec_loop_bkwd(dst, src, size, 4 * YMM_SZ);
-        //copy first 4VECs to avoid override
-        _mm256_storeu_si256(dst +  3 * YMM_SZ, y7);
-        _mm256_storeu_si256(dst +  2 * YMM_SZ, y6);
-        _mm256_storeu_si256(dst +  1 * YMM_SZ, y5);
-        _mm256_storeu_si256(dst +  0 * YMM_SZ, y4);
-    }
-    else //Forward Copy
-    {
-        y4 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
-        y5 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
-        y6 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
-        y7 = _mm256_loadu_si256(src + size - 1 * YMM_SZ);
-        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, 0);
-        //copy last 4VECs to avoid override
-        _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y4);
-        _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y5);
-        _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y6);
-        _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y7);
-    }
-    return ret;
-}
-
-#ifdef AVX512_FEATURE_ENABLED
-static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
-{
     __m512i z4, z5, z6, z7, z8;
     size_t offset = 0;
+
+    if (size <= ZMM_SZ)
+        return __load_store_ble_zmm_vec(dst, src, size);
 
     if (size <= 2 * ZMM_SZ)
     {
@@ -133,32 +62,30 @@ static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
         uint32_t dst_align = ((uintptr_t)dst & (ZMM_SZ - 1));
 
         __load_store_le_8zmm_vec(dst, src, size);
-        offset = 4 * ZMM_SZ;
+        offset = 4 * ZMM_SZ - dst_align;
 
         //Aligned Load and Store addresses
-        if (!((uintptr_t)src ^ dst_align))
+        if (((uintptr_t)src & (ZMM_SZ - 1)) == dst_align)
         {
             // 4-ZMM registers
             if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
             {
-                __aligned_load_and_store_8ymm_vec_loop(dst, src, size - offset, offset);
+                __aligned_load_and_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
             }
             // 4-YMM registers with prefetch
             else if (size < __nt_start_threshold)
             {
-                __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - offset, offset);
+                __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
             }
             // Non-temporal 4-ZMM registers with prefetch
             else
             {
-                __aligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - offset, offset);
+                __aligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
             }
         }
         //Unalgined Load/Store addresses: force-align store address to ZMM size
         else
         {
-            offset -= dst_align;
-
             if (size < __nt_start_threshold)
             {
                 __unaligned_load_aligned_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
@@ -210,21 +137,8 @@ static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
     }
     return dst;
 }
-#endif
 
-void * __attribute__((flatten)) amd_memmove(void * __restrict dst,
-                        const void * __restrict src, size_t size)
-{
-    LOG_INFO("\n");
-#ifdef AVX512_FEATURE_ENABLED
-    if (size <= ZMM_SZ)
-        return __load_store_ble_zmm_vec(dst, src, size);
-
-    return _memmove_avx512(dst, src, size);
-#else
-    return _memmove_avx2(dst, src, size);
-#endif
-}
-
+#ifndef ALMEM_DYN_DISPATCH
 void *memmove(void *, const void *, size_t) __attribute__((weak,
-                    alias("amd_memmove"), visibility("default")));
+                        alias("__memmove_zen4"), visibility("default")));
+#endif
