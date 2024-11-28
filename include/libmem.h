@@ -40,13 +40,13 @@ typedef enum{
     MEMPCPY,
     MEMMOVE,
     MEMSET,
-    MEMCMP,
-    FUNC_COUNT
+    MEMCMP, //end of Tunable supported funcs
+    FUNC_COUNT,
+    TUN_FUNC_COUNT = MEMCMP + 1 
 }func_index;
 
-// A maximum of 16 supported variants
-typedef enum{
 #ifdef ALMEM_TUNABLES
+typedef enum{
 /*User AVX2 operation based*/
     AVX2_UNALIGNED,
     AVX2_ALIGNED,
@@ -68,9 +68,15 @@ typedef enum{
     ERMS_MOVSW,
     ERMS_MOVSD,
     ERMS_MOVSQ,
-/*User Threshold with avx2, erms, non-temporal*/
+/*User Threshold with vec-temporal, erms, vec-non-temporal*/
     THRESHOLD,
+    TUN_VARIANT_COUNT,
+    UNKNOWN
+} tunable_variant_idx;
 #endif //end of tunables
+
+
+typedef enum{
 /*uArch based*/
     ARCH_ZEN1,
     ARCH_ZEN2,
@@ -79,8 +85,8 @@ typedef enum{
     ARCH_ZEN5,
 /*System feature & Threshold*/
     SYSTEM,
-    VARIANT_COUNT
-}variant_index;
+    CPU_VARIANT_COUNT
+} cpu_variant_idx;
 
 typedef void (*func_ptr)(void);
 
@@ -112,11 +118,26 @@ typedef void (*func_ptr)(void);
 
 #define generate_threshold_variant(func) \
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), threshold),
-#else
-#define generate_avx2_variants(func)
-#define generate_avx512_variants(func)
-#define generate_erms_variants(func)
-#define generate_threshold_variant(func)
+
+#define add_tun_func_variants(func) \
+    { \
+        generate_avx2_variants(func) \
+        generate_avx512_variants(func) \
+        generate_erms_variants(func) \
+        generate_threshold_variant(func) \
+    }
+
+// Tunable Dispatching Table
+func_ptr libmem_tun_impls[TUN_FUNC_COUNT][TUN_VARIANT_COUNT] =
+{
+    add_tun_func_variants(memcpy),
+    add_tun_func_variants(mempcpy),
+    add_tun_func_variants(memmove),
+    add_tun_func_variants(memset),
+    add_tun_func_variants(memcmp)
+};
+
+
 #endif //end of tunable variants
 
 #define generate_arch_variants(func) \
@@ -129,24 +150,23 @@ typedef void (*func_ptr)(void);
 #define generate_system_variant(func) \
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), system)
 
-#define add_func_variants(func) \
+#define add_cpu_func_variants(func) \
     { \
-        generate_avx2_variants(func) \
-        generate_avx512_variants(func) \
-        generate_erms_variants(func) \
-        generate_threshold_variant(func) \
         generate_arch_variants(func) \
         generate_system_variant(func) \
     }
 
-func_ptr libmem_impls[FUNC_COUNT][VARIANT_COUNT] =
+
+// CPU Dispatching Table
+func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
 {
-    add_func_variants(memcpy),
-    add_func_variants(mempcpy),
-    add_func_variants(memmove),
-    add_func_variants(memset),
-    add_func_variants(memcmp)
+    add_cpu_func_variants(memcpy),
+    add_cpu_func_variants(mempcpy),
+    add_cpu_func_variants(memmove),
+    add_cpu_func_variants(memset),
+    add_cpu_func_variants(memcmp),
 };
+
 
 #ifdef __cplusplus
 }
