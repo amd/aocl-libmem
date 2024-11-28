@@ -75,7 +75,8 @@ The following three test categories are supported:
                   "iter"                                 (Runs Iterator test cases on all the functions)
                   "shift"                                (Runs Shift test cases on all the functions)
                   "align"                                (Runs Alignment test cases on all the functions)
-                  "function_MODE"                        (Runs the specified MODE:iter,shift or align on the input function)
+                  "threshold"                            (Runs threshold specific test cases based on L2 and threshold_nt values)
+                  "function_MODE"                        (Runs the specified MODE:iter,shift,align, and threshold on the input function)
 
     jobs:        Optional paramter for maximum no. of concurrent processes to be used. [0...$(nproc)]
 
@@ -110,11 +111,15 @@ Storing only failure logs
 ```sh
    $ ctest -R "memcpy|memmove|strcpy_iter"
 ```
-7. Using Exclude regex
+7. Running threshold checks
+```sh
+   $ ctest -R "memcpy_threshold"
+```
+8. Using Exclude regex
 ```sh
    $ ctest -R "memcpy|strcpy" -E "iter|shift"   //Runs memcpy_align and strcpy_align ;ignores iter and shift test cases.
 ```
-8. Test log repots with timestamp
+9. Test log repots with timestamp
 ```sh
    $ ctest -R "memcpy_shift" -O ctest_results_$(date +%Y_%m_%d_%H%M%S).log
 ```
