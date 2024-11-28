@@ -23,21 +23,38 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stddef.h>
-#include <immintrin.h>
-#include "amd_memcmp.h"
 #include "logger.h"
-#include "threshold.h"
-
-int __memcmp_threshold(const void * mem1, const void *mem2, size_t size)
+#include <stdint.h>
+#include "../../base_impls/load_compare_erms_impls.h"
+// memcmp with byte rep move instruciton:REP CMPSB
+int __memcmp_erms_b_aligned(const void * mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
+    return __erms_cmpsb(mem1, mem2, size);
+}
 
-    if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
-        return __memcmp_erms_b_aligned(mem1, mem2, size);
-#ifdef AVX512_FEATURE_ENABLED
-    return __memcmp_avx512_unaligned(mem1, mem2, size);
+// memcmp with word rep move instruciton:REP CMPSW
+int __memcmp_erms_w_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsw(mem1, mem2, size);
+}
+
+// memcmp with double word rep move instruciton:REP CMPSD
+int __memcmp_erms_d_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+#ifdef ALMEM_CMPSD_CLANG_WORKAROUND //Work around for rep-cmpsd in Clang.
+    return __erms_cmpsw(mem1, mem2, size);
 #else
-    return __memcmp_avx2_unaligned(mem1, mem2, size);
+    return __erms_cmpsd(mem1, mem2, size);
 #endif
+}
+
+// memcmp with quad word rep move instruciton:REP CMPSQ
+int __memcmp_erms_q_aligned(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
+    return __erms_cmpsq(mem1, mem2, size);
 }
 

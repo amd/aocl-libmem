@@ -257,7 +257,6 @@ int __memcmp_avx2_unaligned(const void *mem1, const void *mem2, size_t size)
        return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
     }
     return 0;
-   
 }
 
 int __memcmp_avx2_nt(const void *mem1, const void *mem2, size_t size)
@@ -397,7 +396,6 @@ int __memcmp_avx2_nt(const void *mem1, const void *mem2, size_t size)
 
 int __memcmp_avx2_aligned(const void *mem1, const void *mem2, size_t size)
 {
-    
     __m256i y0, y1, y2, y3, y4, y5, y6, y7;
     size_t offset = 0, len = size;
     int ret = 0;

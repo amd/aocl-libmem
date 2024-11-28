@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,27 +22,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stddef.h>
-#include <immintrin.h>
-#include "amd_memcmp.h"
-#include "logger.h"
-#include "threshold.h"
-#include "zen_cpu_info.h"
 
-extern cpu_info zen_info;
+#include "../../isa/avx2/optimized/memcmp_avx2.c"
 
-int __memcmp_system(const void * mem1, const void *mem2, size_t size)
+int __attribute__((flatten)) __memcmp_zen2(const void *mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
-    if (zen_info.zen_cpu_features.erms && size > __repmov_start_threshold\
-                                     && size < __repmov_stop_threshold)
-    {
-        return __memcmp_erms_b_aligned(mem1, mem2, size);
-    }
-#ifdef AVX512_FEATURE_ENABLED
-    return __memcmp_avx512_unaligned(mem1, mem2, size);
-#else
-    return __memcmp_avx2_unaligned(mem1, mem2, size);
-#endif
+    return _memcmp_avx2(mem1, mem2, size);
 }
 
+#ifndef ALMEM_DYN_DISPATCH
+int memcmp(const void *, const void *, size_t) __attribute__((weak,
+                        alias("__memcmp_zen2"), visibility("default")));
+#endif

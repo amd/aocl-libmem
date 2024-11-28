@@ -22,34 +22,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifdef ALMEM_DYN_DISPATCH
-
 #include <stddef.h>
-#include "libmem_iface.h"
+#include <immintrin.h>
+#include "amd_memcmp.h"
+#include "logger.h"
+#include "threshold.h"
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
-// memcpy mapping
-LIBMEM_FN_MAP(memcpy);
-WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
+extern cpu_info zen_info;
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
-// mempcpy mapping
-LIBMEM_FN_MAP(mempcpy);
-WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
+int __memcmp_threshold(const void * mem1, const void *mem2, size_t size)
+{
+    LOG_INFO("\n");
 
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
-// memmove mapping
-LIBMEM_FN_MAP(memmove);
-WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
+    if (size > __repmov_start_threshold && size < __repmov_stop_threshold)
+        return __memcmp_erms_b_aligned(mem1, mem2, size);
 
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
-// memset mapping
-LIBMEM_FN_MAP(memset);
-WEAK_ALIAS(memset, MK_FN_NAME(memset));
+    if (zen_info.zen_cpu_features.avx512 == ENABLED)
+        return __memcmp_avx512_unaligned(mem1, mem2, size);
+    return __memcmp_avx2_unaligned(mem1, mem2, size);
+}
 
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
-// memcmp mapping
-LIBMEM_FN_MAP(memcmp);
-WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
-
-#endif
