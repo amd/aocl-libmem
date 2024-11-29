@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,12 +22,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
-#include "amd_strncpy.h"
-#include "amd_strcmp.h"
+
+#include "../../isa/avx2/optimized/strcmp_avx2.c"
+
+int __attribute__((flatten)) __strcmp_zen3(const char *str1, const char *str2)
+{
+    LOG_INFO("\n");
+    return _strcmp_avx2(str1, str2);
+}
+
+#ifndef ALMEM_DYN_DISPATCH
+int strcmp(const char *, const char *) __attribute__((weak,
+                        alias("__strcmp_zen3"), visibility("default")));
+#endif

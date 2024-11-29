@@ -57,14 +57,19 @@ __attribute__((visibility("default")))void * (*_memchr_variant)(void *, int , si
 LIBMEM_FN_MAP(memchr);
 WEAK_ALIAS(memchr, MK_FN_NAME(memchr));
 
-__attribute__((visibility("default")))char * (*_strcpy_variant)(void *, const void *);
+__attribute__((visibility("default")))char * (*_strcpy_variant)(char *, const char *);
 // strcpy mapping
 LIBMEM_FN_MAP(strcpy);
 WEAK_ALIAS(strcpy, MK_FN_NAME(strcpy));
 
-__attribute__((visibility("default")))char * (*_strncpy_variant)(void *, const void *, size_t);
+__attribute__((visibility("default")))char * (*_strncpy_variant)(char *, const char *, size_t);
 // strncpy mapping
 LIBMEM_FN_MAP(strncpy);
 WEAK_ALIAS(strncpy, MK_FN_NAME(strncpy));
+
+__attribute__((visibility("default")))int (*_strcmp_variant)(const char *, const char *);
+// strcmp mapping
+LIBMEM_FN_MAP(strcmp);
+WEAK_ALIAS(strcmp, MK_FN_NAME(strcmp));
 
 #endif

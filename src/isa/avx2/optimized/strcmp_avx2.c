@@ -24,10 +24,10 @@
  */
 #include <stddef.h>
 #include "logger.h"
-#include "threshold.h"
 #include <stdint.h>
 #include <immintrin.h>
 #include "alm_defs.h"
+#include "zen_cpu_info.h"
 
 #define PAGE_SZ         4096
 #define CACHELINE_SZ    64
@@ -132,7 +132,8 @@ static inline uint8_t _strcmp_ble_ymm(const char *str1, const char *str2, uint8_
     return YMM_SZ;
 }
 
-static inline int _strcmp_avx2(const char *str1, const char *str2)
+
+static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const char *str2)
 {
     size_t offset1 = 0, offset2 = 0, offset = 0, cmp_idx =0;
     __m256i y0, y1, y2, y3, y4, y_cmp, y_null;
@@ -263,146 +264,3 @@ static inline int _strcmp_avx2(const char *str1, const char *str2)
     cmp_idx = _tzcnt_u32(ret) + offset;
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }
-
-#ifdef AVX512_FEATURE_ENABLED
-static inline int _strcmp_avx512(const char *str1, const char *str2)
-{
-    size_t offset1 = 0, offset2 = 0, offset = 0;
-    __m512i z0, z1, z2, z3, z4, z7;
-    uint64_t  cmp_idx = 0, ret = 0;
-    __mmask64 mask;
-
-    z0 = _mm512_setzero_epi32 ();
-
-    offset1 = (uintptr_t)str1 & (ZMM_SZ - 1); //str1 alignment
-    offset2 = (uintptr_t)str2 & (ZMM_SZ - 1); //str2 alignment
-    //Both str2 and str1 are aligned
-
-    if (offset1 == offset2)
-    {
-        offset = offset1;
-        if (offset !=0)
-        {
-            z7 = _mm512_set1_epi8(0xff);
-            mask = ((uint64_t)-1) >> offset;
-            z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
-            z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
-
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-            if (ret)
-            {
-                cmp_idx = _tzcnt_u64(ret);
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-            offset = ZMM_SZ - offset;
-        }
-        while (1)
-        {
-            z1 = _mm512_load_si512(str1 + offset);
-            z2 = _mm512_load_si512(str2 + offset);
-            //Check for NULL
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if (!ret)
-            {
-                offset += ZMM_SZ;
-                z3 = _mm512_load_si512(str1 + offset);
-                z4 = _mm512_load_si512(str2 + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                if (!ret)
-                {
-                    offset += ZMM_SZ;
-                    z1 = _mm512_load_si512(str1 + offset);
-                    z2 = _mm512_load_si512(str2 + offset);
-                    //Check for NULL
-                    ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                    if (!ret)
-                    {
-                        offset += ZMM_SZ;
-                        z3 = _mm512_load_si512(str1 + offset);
-                        z4 = _mm512_load_si512(str2 + offset);
-                        //Check for NULL
-                        ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                    }
-                }
-            }
-            if (ret)
-                break;
-            offset += ZMM_SZ;
-        }
-    }
-    //mismatching alignments
-    else
-    {
-        size_t mix_offset = 0;
-        z7 = _mm512_set1_epi8(0xff);
-        mix_offset = (offset1 >= offset2);
-        offset = (mix_offset)*offset1 | (!mix_offset)*offset2;
-        mask = ((uint64_t)-1) >> offset;
-
-        z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
-        z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
-
-        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-        if (ret)
-        {
-            cmp_idx = _tzcnt_u64(ret);
-            return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-        }
-        offset = ZMM_SZ - offset;
-        while(1)
-        {
-            z1 = _mm512_loadu_si512(str1 + offset);
-            z2 = _mm512_loadu_si512(str2 + offset);
-            //Check for NULL
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if (!ret)
-            {
-                offset += ZMM_SZ;
-                z3 = _mm512_loadu_si512(str1 + offset);
-                z4 = _mm512_loadu_si512(str2 + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                if (!ret)
-                {
-                    offset += ZMM_SZ;
-                    z1 = _mm512_loadu_si512(str1 + offset);
-                    z2 = _mm512_loadu_si512(str2 + offset);
-                    //Check for NULL
-                    ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                    if (!ret)
-                    {
-                        offset += ZMM_SZ;
-                        z3 = _mm512_loadu_si512(str1 + offset);
-                        z4 = _mm512_loadu_si512(str2 + offset);
-                        //Check for NULL
-                        ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                    }
-                }
-            }
-            if (ret)
-                break;
-            offset += ZMM_SZ;
-        }
-    }
-    cmp_idx = _tzcnt_u64(ret) + offset;
-    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-}
-#endif
-
-int __attribute__((flatten)) amd_strcmp(char * __restrict mem1,
-                                           const char * __restrict mem2)
-{
-    LOG_INFO("\n");
-
-#ifdef AVX512_FEATURE_ENABLED
-    return _strcmp_avx512(mem1, mem2);
-#else
-    return _strcmp_avx2(mem1, mem2);
-#endif
-}
-
-int strcmp(const char *, const char *) __attribute__((weak, alias("amd_strcmp"),
-                                                        visibility("default")));

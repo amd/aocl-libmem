@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,12 +22,31 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
-#include "amd_strncpy.h"
-#include "amd_strcmp.h"
+#ifndef _STRCMP_H_
+#define _STRCMP_H_
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern int strcmp(const char *, const char *);
+
+//Micro architecture specifc implementations.
+extern int __strcmp_zen1(const char *,const char *);
+extern int __strcmp_zen2(const char *,const char *);
+extern int __strcmp_zen3(const char *,const char *);
+extern int __strcmp_zen4(const char *,const char *);
+extern int __strcmp_zen5(const char *,const char *);
+
+//System solution which takes in system config.
+extern int __strcmp_system(const char *,const char *);
+
+extern int(*_strcmp_variant)(const char *, const char *);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
