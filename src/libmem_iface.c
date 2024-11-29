@@ -72,4 +72,9 @@ __attribute__((visibility("default")))int (*_strcmp_variant)(const char *, const
 LIBMEM_FN_MAP(strcmp);
 WEAK_ALIAS(strcmp, MK_FN_NAME(strcmp));
 
+__attribute__((visibility("default")))int (*_strncmp_variant)(const char *, const char *, size_t);
+// strncmp mapping
+LIBMEM_FN_MAP(strncmp);
+WEAK_ALIAS(strncmp, MK_FN_NAME(strncmp));
+
 #endif
