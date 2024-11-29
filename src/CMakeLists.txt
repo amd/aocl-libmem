@@ -122,7 +122,7 @@ set(SOURCE_FILES cache_info.c cpu_features.c threshold.c libmem.c)
 set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 
 # String Functions
-set(SUPP_STR_FUNCS strcpy)
+set(SUPP_STR_FUNCS strcpy strncpy)
 
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
@@ -195,7 +195,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
 
 # String Functions
-add_subdirectory(strncpy)
 add_subdirectory(strcmp)
 add_subdirectory(strncmp)
 add_subdirectory(strlen)

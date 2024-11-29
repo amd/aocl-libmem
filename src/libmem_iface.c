@@ -62,4 +62,9 @@ __attribute__((visibility("default")))char * (*_strcpy_variant)(void *, const vo
 LIBMEM_FN_MAP(strcpy);
 WEAK_ALIAS(strcpy, MK_FN_NAME(strcpy));
 
+__attribute__((visibility("default")))char * (*_strncpy_variant)(void *, const void *, size_t);
+// strncpy mapping
+LIBMEM_FN_MAP(strncpy);
+WEAK_ALIAS(strncpy, MK_FN_NAME(strncpy));
+
 #endif

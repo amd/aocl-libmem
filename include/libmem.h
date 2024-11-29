@@ -43,6 +43,7 @@ typedef enum{
     MEMCMP, //end of Tunable supported funcs
     MEMCHR,
     STRCPY,
+    STRNCPY,
     FUNC_COUNT,
     TUN_FUNC_COUNT = MEMCMP + 1
 }func_index;

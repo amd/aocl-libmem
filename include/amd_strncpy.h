@@ -22,11 +22,30 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
-#include "amd_strncpy.h"
+#ifndef _STRNCPY_H_
+#define _STRNCPY_H_
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern char * strncpy(char *, const char *, size_t);
+
+//Micro architecture specifc implementations.
+extern char * __strncpy_zen1(char *,const char *, size_t);
+extern char * __strncpy_zen2(char *,const char *, size_t);
+extern char * __strncpy_zen3(char *,const char *, size_t);
+extern char * __strncpy_zen4(char *,const char *, size_t);
+extern char * __strncpy_zen5(char *,const char *, size_t);
+
+//System solution which takes in system config and  threshold values.
+extern char * __strncpy_system(char *,const char *, size_t);
+
+extern char *(*_strncpy_variant)(char *, const char *, size_t);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

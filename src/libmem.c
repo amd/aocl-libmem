@@ -272,6 +272,7 @@ static __attribute__((constructor)) void libmem_init()
     _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_cpu_impls[MEMCMP][cpu_var_idx]);
     _memchr_variant = ((void* (*)(const void *, int, size_t))libmem_cpu_impls[MEMCHR][cpu_var_idx]);
     _strcpy_variant = ((char* (*)(char *, const char *))libmem_cpu_impls[STRCPY][cpu_var_idx]);
+    _strncpy_variant = ((char* (*)(char *, const char *, size_t))libmem_cpu_impls[STRNCPY][cpu_var_idx]);
 #endif //end of dynamic dispatching
 #ifdef ALMEM_TUNABLES
     tunable_variant_idx tun_var_idx = libmem_tunable_resolver();
