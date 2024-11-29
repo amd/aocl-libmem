@@ -52,4 +52,9 @@ __attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const
 LIBMEM_FN_MAP(memcmp);
 WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
 
+__attribute__((visibility("default")))void * (*_memchr_variant)(void *, int , size_t);
+// memchr mapping
+LIBMEM_FN_MAP(memchr);
+WEAK_ALIAS(memchr, MK_FN_NAME(memchr));
+
 #endif

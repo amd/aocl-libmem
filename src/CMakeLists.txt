@@ -118,7 +118,11 @@ endif()
 # Add source files
 set(SOURCE_FILES cache_info.c cpu_features.c threshold.c libmem.c)
 
-set(DYN_DISP_SUPP_FUNCS memcpy mempcpy memmove memset memcmp)
+# Memory Functions
+set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
+
+# Dynamic Dispatching Supported Functions
+set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS})
 
 if (ALMEM_LOGGING)
     list(APPEND SOURCE_FILES logger.c)
@@ -186,8 +190,6 @@ set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
-# Memory Functions
-add_subdirectory(memchr)
 
 # String Functions
 add_subdirectory(strcpy)
