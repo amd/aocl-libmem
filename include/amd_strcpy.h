@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,10 +22,31 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
+#ifndef _STRCPY_H_
+#define _STRCPY_H_
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern char * strcpy(char *, const char *);
+
+//Micro architecture specifc implementations.
+extern char * __strcpy_zen1(char *,const char *);
+extern char * __strcpy_zen2(char *,const char *);
+extern char * __strcpy_zen3(char *,const char *);
+extern char * __strcpy_zen4(char *,const char *);
+extern char * __strcpy_zen5(char *,const char *);
+
+//System solution which takes in system config.
+extern char * __strcpy_system(char *,const char *);
+
+extern char *(*_strcpy_variant)(char *, const char *);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

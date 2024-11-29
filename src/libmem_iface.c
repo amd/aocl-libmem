@@ -57,4 +57,9 @@ __attribute__((visibility("default")))void * (*_memchr_variant)(void *, int , si
 LIBMEM_FN_MAP(memchr);
 WEAK_ALIAS(memchr, MK_FN_NAME(memchr));
 
+__attribute__((visibility("default")))char * (*_strcpy_variant)(void *, const void *);
+// strcpy mapping
+LIBMEM_FN_MAP(strcpy);
+WEAK_ALIAS(strcpy, MK_FN_NAME(strcpy));
+
 #endif

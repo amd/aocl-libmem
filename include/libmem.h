@@ -42,8 +42,9 @@ typedef enum{
     MEMSET,
     MEMCMP, //end of Tunable supported funcs
     MEMCHR,
+    STRCPY,
     FUNC_COUNT,
-    TUN_FUNC_COUNT = MEMCMP + 1 
+    TUN_FUNC_COUNT = MEMCMP + 1
 }func_index;
 
 #ifdef ALMEM_TUNABLES
@@ -167,6 +168,7 @@ func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
     add_cpu_func_variants(memset),
     add_cpu_func_variants(memcmp),
     add_cpu_func_variants(memchr),
+    add_cpu_func_variants(strcpy),
 };
 
 
