@@ -32,7 +32,7 @@ char * __attribute__((flatten)) __strcpy_system(char * __restrict dst,
 {
     LOG_INFO("\n");
     char * (*system_strcpy)(char *, const char *);
-    char *handle = NULL;
+    void *handle = NULL;
     handle = dlopen(LIBC_SO, RTLD_LAZY);
 
     if (handle)

@@ -32,7 +32,7 @@ int __attribute__((flatten)) __strncmp_system(const char * __restrict str1,
 {
     LOG_INFO("\n");
     int (*system_strncmp)(const char *, const char *, size_t);
-    char *handle = NULL;
+    void *handle = NULL;
     handle = dlopen(LIBC_SO, RTLD_LAZY);
     if (handle)
     {
