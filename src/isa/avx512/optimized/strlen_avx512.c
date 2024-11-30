@@ -24,99 +24,12 @@
  */
 #include <stddef.h>
 #include "logger.h"
-#include "threshold.h"
 #include <stdint.h>
 #include <immintrin.h>
 #include "alm_defs.h"
+#include <zen_cpu_info.h>
 
-static inline size_t _strlen_avx2(const char *str)
-{
-    size_t offset;
-    __m256i y0, y1, y2, y3, y4, y5, y6;
-    int32_t  ret, ret1, ret2;
-
-    y0 = _mm256_setzero_si256();
-
-    if (unlikely(((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)str))))
-    {
-        offset = (uintptr_t)str & (YMM_SZ - 1);
-        y1 = _mm256_loadu_si256((void *)str - offset);
-        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
-        ret = ret >> offset;
-        if (ret)
-            return _tzcnt_u32(ret);
-    }
-    else
-    {
-        y1 = _mm256_loadu_si256((void *)str);
-        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
-        if (ret)
-            return _tzcnt_u32(ret);
-    }
-
-    // cache-line alignment
-    if (!((uintptr_t)str & CACHE_LINE_OFFSET))
-    {
-        offset = ((uintptr_t)str & -(CACHE_LINE_OFFSET)) + YMM_SZ;
-        y1 = _mm256_load_si256((void *)offset);
-        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
-        if (ret)
-            return _tzcnt_u32(ret) + offset - (uintptr_t)str;
-    }
-
-    // 4-vec alignment
-    if (!((uintptr_t)str & AVX2_VEC_4_OFFSET))
-    {
-        offset = ((uintptr_t)str & -(AVX2_VEC_4_OFFSET)) + (2 * YMM_SZ);
-        y1 = _mm256_load_si256((void*)offset);
-        y2 = _mm256_load_si256((void*)offset + YMM_SZ);
-        y3 = _mm256_cmpeq_epi8(y1, y0);
-        y4 = _mm256_cmpeq_epi8(y2, y0);
-        ret = _mm256_movemask_epi8(_mm256_or_si256(y3, y4));
-        if (ret)
-        {
-            ret1 = _mm256_movemask_epi8(y3);
-            if (ret1)
-                return _tzcnt_u32(ret1) + offset - (uintptr_t)str;
-            return _tzcnt_u32(ret) + offset + YMM_SZ - (uintptr_t)str;
-        }
-    }
-
-    offset = (uintptr_t)str & -(AVX2_VEC_4_SZ);
-    do
-    {
-        offset += AVX2_VEC_4_SZ;
-        y1 = _mm256_load_si256((void*)offset);
-        y2 = _mm256_load_si256((void*)offset + YMM_SZ);
-        y3 = _mm256_load_si256((void*)offset + 2 * YMM_SZ);
-        y4 = _mm256_load_si256((void*)offset + 3 * YMM_SZ);
-
-        y5 = _mm256_min_epu8(y1, y2);
-        y6 = _mm256_min_epu8(y3, y4);
-
-        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0));
-    } while(!ret);
-
-    if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
-    {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
-        {
-            return (_tzcnt_u32(ret2) + offset - (uintptr_t)str);
-        }
-        return (_tzcnt_u32(ret1) + YMM_SZ + offset  - (uintptr_t)str);
-    }
-    else
-    {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
-        {
-            return (_tzcnt_u32(ret2) + 2 * YMM_SZ + offset - (uintptr_t)str);
-        }
-        return (_tzcnt_u32(ret) + 3 * YMM_SZ + offset - (uintptr_t)str);
-    }
-}
-
-#ifdef AVX512_FEATURE_ENABLED
-static inline size_t _strlen_avx512(const char *str)
+static inline size_t __attribute__((flatten)) _strlen_avx512(const char *str)
 {
     size_t offset = 0;
     __m512i z0, z1, z2, z3, z4, z5, z6, z7;
@@ -235,18 +148,3 @@ static inline size_t _strlen_avx512(const char *str)
     }
     return 0;
 }
-#endif
-
-size_t __attribute__((flatten)) amd_strlen(const char * __restrict str)
-{
-    LOG_INFO("\n");
-
-#ifdef AVX512_FEATURE_ENABLED
-    return _strlen_avx512(str);
-#else
-    return _strlen_avx2(str);
-#endif
-}
-
-size_t strlen(const char *) __attribute__((weak, alias("amd_strlen"),
-                                                        visibility("default")));

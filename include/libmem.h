@@ -48,6 +48,7 @@ typedef enum{
     STRNCMP,
     STRCAT,
     STRSTR,
+    STRLEN,
     FUNC_COUNT,
     TUN_FUNC_COUNT = MEMCMP + 1
 }func_index;
@@ -179,6 +180,7 @@ func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
     add_cpu_func_variants(strncmp),
     add_cpu_func_variants(strcat),
     add_cpu_func_variants(strstr),
+    add_cpu_func_variants(strlen),
 };
 
 

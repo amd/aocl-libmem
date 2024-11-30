@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,16 +22,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "amd_memcpy.h"
-#include "amd_mempcpy.h"
-#include "amd_memmove.h"
-#include "amd_memset.h"
-#include "amd_memcmp.h"
-#include "amd_memchr.h"
-#include "amd_strcpy.h"
-#include "amd_strncpy.h"
-#include "amd_strcmp.h"
-#include "amd_strncmp.h"
-#include "amd_strcat.h"
-#include "amd_strstr.h"
-#include "amd_strlen.h"
+#include "./optimized/strlen_avx512.c"
+size_t __attribute__((flatten)) __strlen_avx512(const char *str)
+{
+    LOG_INFO("\n");
+    return _strlen_avx512(str);
+}
+size_t strlen(const char *) __attribute__((weak,
+                        alias("__strlen_avx512"), visibility("default")));

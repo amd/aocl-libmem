@@ -122,7 +122,7 @@ set(SOURCE_FILES cache_info.c cpu_features.c threshold.c libmem.c)
 set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 
 # String Functions
-set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strstr)
+set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strstr strlen)
 
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
@@ -192,11 +192,6 @@ target_link_libraries("${PROJECT_NAME}_static" libmem_objlib)
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
-
-
-# String Functions
-add_subdirectory(strlen)
-
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR} CACHE PATH "..." FORCE)

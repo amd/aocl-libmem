@@ -87,4 +87,9 @@ __attribute__((visibility("default")))char * (*_strstr_variant)(const char *, co
 LIBMEM_FN_MAP(strstr);
 WEAK_ALIAS(strstr, MK_FN_NAME(strstr));
 
+__attribute__((visibility("default")))size_t (*_strlen_variant)(const char *);
+// strlen mapping
+LIBMEM_FN_MAP(strlen);
+WEAK_ALIAS(strlen, MK_FN_NAME(strlen));
+
 #endif
