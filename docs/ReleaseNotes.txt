@@ -19,4 +19,8 @@ implementation of the function as per the application requirements.
 
 Highlights of AMD AOCL-LibMem version 5.0.1
 --------------------------------------------
+ * Added support for new function
+    -strchr
  * Optimized strlen-AVX2
+ * TBM bug fix
+ * Added dynamic dispatcher support

@@ -11,14 +11,19 @@ Following two states are possible with this library based on the tunable setting
 By default, LibMem will choose the best fit implementation based on the underlying microarchitecture.
 
 _Micro Architecuture specific Implementations:_
- * `ZEN1` : *<mem_func>_zen1*
- * `ZEN2` : *<mem_func>_zen2*
- * `ZEN3` : *<mem_func>_zen3*
- * `Generic Implementation`: *<mem_func>_system*
+ * `ZEN1` : *<LibMem_func>_zen1*
+ * `ZEN2` : *<LibMem_func>_zen2*
+ * `ZEN3` : *<LibMem_func>_zen3*
+ * `ZEN4` : *<LibMem_func>_zen4*
+ * `ZEN5` : *<LibMem_func>_zen5*
+ * `Generic Implementation`: *<LibMem_func>_system*
 
-`Note:` _If the library failed to identify the underlying microarchitecture, then a generic implementation will be chosen._
+`Note:` _If the library failed to identify, then the underlying system specific(eg.GLIBC) implementation will be chosen._
 
-### 1.2. Tunable State
+### 1.2. Dynamic State
+Dynamic CPU dispatching option can be run on any x86 platform and on non-AMD it will pick the underlying system implementation(eg.GLIBC).
+`Note:` _Dynamic dispatched binary may not necessarily result into best performance of the library on the given architecture. For the best performance on given architecture use default build option._
+### 1.3. Tunable State
 *LibMem library exposes two tunable parameters for the users to choose
 the variant of implementations as per the application requirement.*
  * **`LIBMEM_OPERATION`** : instruction based on alignment and cacheability
