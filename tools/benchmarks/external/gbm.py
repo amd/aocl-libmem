@@ -206,6 +206,6 @@ class GBM:
             self.ranges[0] = 1
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return

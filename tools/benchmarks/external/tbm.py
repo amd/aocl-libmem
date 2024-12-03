@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -158,7 +158,7 @@ class TBM:
             self.ranges[0] = 1
 
         with open(self.result_dir+'/'+str(self.variant)+'.txt', 'w') as f:
-            subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
+            subprocess.run(['taskset', '-c',str(self.core),'./tinymembench',str(self.func),\
             str(self.ranges[0]),str(self.ranges[1]), str(self.iterator)],cwd=self.path+"/tinymembench",\
                 env=env, stdout=f)
 
