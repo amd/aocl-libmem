@@ -1,4 +1,4 @@
-# Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -85,7 +85,7 @@ set(MAX_TIMEOUT 12000) #Timout set to 200Mins for Memcmp
 set(LIBMEM_PATH ${CMAKE_INSTALL_PREFIX}/lib/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
-    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strstr" "strspn" "strchr")
+    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strncat" "strstr" "strspn" "strchr")
 
 set(memory_threshold_func "memcpy" "memmove" "mempcpy")
 

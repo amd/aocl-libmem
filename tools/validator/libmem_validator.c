@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -39,6 +39,7 @@
 #define MAX_PRINTABLE_ASCII     126
 #define NULL_BYTE               1
 #define LOWER_CHARS             26
+#define SIZE_MIN                0
 
 #define PAGE_CNT(X)             (X + NULL_BYTE + CACHE_LINE_SZ)/PAGE_SZ + \
                                 !!((X + NULL_BYTE + CACHE_LINE_SZ) % PAGE_SZ)
@@ -48,6 +49,8 @@
 #else
     #define VEC_SZ YMM_SZ
 #endif
+
+extern void *mempcpy(void *dest, const void *src, size_t n);
 
 typedef struct
 {
@@ -100,13 +103,26 @@ char *test_memchr( const char *src, int ch, size_t len)
     return NULL;
 }
 
-char *test_strcat( char *dst, char *src)
-{
+char *test_strcat_common(char *dst, const char *src, size_t n) {
     char *ret = dst;
-    while(*dst++ != NULL_TERM_CHAR);
-    --dst;
-
-    while((*dst++ = *src++) != NULL_TERM_CHAR);
+    // Find the end of the destination string
+    while (*dst != NULL_TERM_CHAR)
+        dst++;
+    // Concatenate src to the end of dst
+    if (n == 0)
+    {
+        // Behave like strcat
+        while ((*dst++ = *src++) != NULL_TERM_CHAR);
+    }
+    else
+    {
+        // Behave like strncat
+        while (n-- && *src != NULL_TERM_CHAR)
+        {
+            *dst++ = *src++;
+        }
+        *dst = NULL_TERM_CHAR; // Null-terminate the result
+    }
     return ret;
 }
 
@@ -184,34 +200,49 @@ static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
     void *buff_addr = NULL;
-
+    int ret;
     switch (mode)
     {
         case OVERLAP_BUFFER:
-            posix_memalign(&buff_addr, CACHE_LINE_SZ, \
+            ret = posix_memalign(&buff_addr, CACHE_LINE_SZ, \
                             2 * (size + 2 * CACHE_LINE_SZ));
+            if(ret != 0)
+                return NULL;  // posix_memalign failed
+
             * head_buff = (uint8_t *)buff_addr;
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
              CACHE_LINE_SZ + rand()%(size + 1)) & ~(CACHE_LINE_SZ - 1));
             break;
         case NON_OVERLAP_BUFFER:
-            posix_memalign(&buff_addr, CACHE_LINE_SZ, \
+            ret = posix_memalign(&buff_addr, CACHE_LINE_SZ, \
                             2 * (size + 2 * CACHE_LINE_SZ));
+
+            if(ret != 0)
+                return NULL;  // posix_memalign failed
+
             * head_buff = (uint8_t *)buff_addr;
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
                      size + 2*CACHE_LINE_SZ) & ~(CACHE_LINE_SZ - 1));
             break;
 
         case NON_OVERLAP_BUFFER_EXTRA:
-            posix_memalign(&buff_addr, CACHE_LINE_SZ, \
+            ret = posix_memalign(&buff_addr, CACHE_LINE_SZ, \
                             3 * (size + 2 * CACHE_LINE_SZ));
+
+            if(ret != 0)
+                return NULL;  // posix_memalign failed
+
             * head_buff = (uint8_t *)buff_addr;
             * tail_buff = (uint8_t *)(((uint64_t)buff_addr +\
                      2*size + 2*CACHE_LINE_SZ) & ~(CACHE_LINE_SZ - 1));
             break;
 
         default:
-            posix_memalign(&buff_addr, CACHE_LINE_SZ, size + 2 * CACHE_LINE_SZ);
+            ret = posix_memalign(&buff_addr, CACHE_LINE_SZ, size + 2 * CACHE_LINE_SZ);
+
+            if(ret != 0)
+                return NULL;  // posix_memalign failed
+
             * tail_buff = (uint8_t *)buff_addr;
             * head_buff = NULL;
     }
@@ -247,8 +278,6 @@ static inline int boundary_check(uint8_t *dst, size_t size)
 
 void generate_random_string(uint8_t *buf, size_t length)
 {
-    // Seed the random number generator
-    srand((unsigned int)time(NULL));
     for (size_t i = 0; i < length; i++) {
         buf[i] = MIN_PRINTABLE_ASCII + (rand() % (MAX_PRINTABLE_ASCII - MIN_PRINTABLE_ASCII));
     }
@@ -683,7 +712,6 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
-    srand(time(0));
 
     //special case to handle size ZERO with NULL buff.
     if (size == 0)
@@ -796,7 +824,6 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index, str1_len;
     void *ret = NULL;
-    srand(time(0));
 
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
@@ -881,7 +908,6 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     //Generating random str1 buffer of size less than n
 
     //Multi-Null check
-    srand(time(0));
     size_t null_idx = rand() % (size);
     size_t more_null_idx = rand() % (size - null_idx);
     str1_len = null_idx;
@@ -955,7 +981,6 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     }
     str2_alnd_addr = buff_tail + str2_alnmnt;
     str1_alnd_addr = buff_head + str1_alnmnt;
-    srand(time(0));
 
     //Case1: Equal strings
     //intialize str1 and str2 memory
@@ -1121,8 +1146,6 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 
     str1_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
 
-    srand(time(0));
-
     for (index = 0; index < size; index++)
     {
         *(str1_alnd_addr +index) = *(str2_alnd_addr +index) = ((char) 'a' + rand() % LOWER_CHARS);
@@ -1167,7 +1190,6 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     }
     str2_alnd_addr = buff_tail + str2_alnmnt;
     str1_alnd_addr = buff_head + str1_alnmnt;
-    srand(time(0));
 
     //Case1: Equal strings with NULL
     //intialize str1 and str2 memory
@@ -1338,7 +1360,6 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
     }
 
     str_alnd_addr = buff_tail + str1_alnmnt;
-    srand(time(0));
 
     for (index = 0; index < size; index++)
     {
@@ -1375,8 +1396,6 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt,\
 
     str_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
 
-    srand(time(0));
-
     for (index = 0; index < size; index++)
     {
         *(str_alnd_addr +index) = ((char) 'a' + rand() % LOWER_CHARS);
@@ -1408,7 +1427,6 @@ static inline void memchr_validator(size_t size, uint32_t str2_alnmnt,\
         perror("Failed to allocate memory");
         exit(-1);
     }
-    srand(time(0));
     str_alnd_addr = buff_tail + str1_alnmnt;
 
     if (size == 0)
@@ -1469,7 +1487,6 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
     uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index;
     void *ret = NULL;
-    srand(time(0));
 
     if(size == 0) //For Null expected behaviour is SEGFAULT
     {
@@ -1517,7 +1534,7 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
     test_strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
     strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
 
-    if(test_strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr) != 0)
+    if(test_strcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, SIZE_MIN),(char *)str1_alnd_addr) != 0)
     {
         printf("ERROR: [VALIDATION] failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
     }
@@ -1530,7 +1547,7 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
     *(str2_alnd_addr + more_null_idx) = NULL_TERM_CHAR;
     strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
 
-    if(test_strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr ) != 0)
+    if(test_strcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, SIZE_MIN),(char *)str1_alnd_addr ) != 0)
     {
         printf("ERROR: [VALIDATION] MultiNull check failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
     }
@@ -1562,9 +1579,9 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
         *(str1_alnd_addr + size -1) = *(str2_alnd_addr + (rand()%size)) = NULL_TERM_CHAR;
 
         test_strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
-        test_strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
+        strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
 
-        if(test_strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr), (char *)str1_alnd_addr) != 0)
+        if(test_strcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, SIZE_MIN), (char *)str1_alnd_addr) != 0)
         {
             printf("ERROR: [PAGE-CROSS] failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
         }
@@ -1577,7 +1594,7 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
         *(str2_alnd_addr + more_null_idx) = NULL_TERM_CHAR;
         strcat((char *)str1_alnd_addr, (char *)str2_alnd_addr);
 
-        if(test_strcmp(test_strcat((char *)tmp_alnd_addr, (char *)str2_alnd_addr),(char *)str1_alnd_addr) != 0)
+        if(test_strcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, SIZE_MIN),(char *)str1_alnd_addr) != 0)
         {
             printf("ERROR: [PAGE-CROSS] MultiNull check failed\n str1:%s\n str2:%s\n str1+str2:%s\n",tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
         }
@@ -1585,6 +1602,128 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
     }
     free(temp_buff);
     free(str1_buff);
+}
+
+static inline void strncat_validator(size_t size, uint32_t str2_alnmnt,\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *str1_buff = NULL, *str2_buff = NULL, *temp_buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL, *str3_alnd_addr =  NULL ;
+    size_t index;
+    void *ret = NULL;
+
+    if(size == 0) //For Null, expected behaviour is SEGFAULT
+    {
+        return;
+    }
+    str1_buff = alloc_buffer(&buff_head, &buff_tail,2 * size + NULL_BYTE, DEFAULT);
+    // String size big enough to accommodate str2
+    if (str1_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    str1_alnd_addr = buff_tail + str1_alnmnt;
+    str2_buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE, DEFAULT);
+    if (str2_buff == NULL)
+    {
+        free(str1_buff);
+        perror("Failed to allocate memory");
+        exit(-1);
+    }
+    str2_alnd_addr = buff_tail + str2_alnmnt;
+
+    //intialize str1 & str2 memory
+    for (index = 0; index < size; index++)
+    {
+        *(str1_alnd_addr + index) = random_char();
+        *(str2_alnd_addr + index) = random_char();
+    }
+    //Appending Null Charachter at the end of str1 string
+    *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
+    *(str2_alnd_addr + (rand() % size)) = NULL_TERM_CHAR;
+    //Source Corruption
+    temp_buff = alloc_buffer(&buff_head, &buff_tail, 2 * size + NULL_BYTE, DEFAULT);
+
+    if (temp_buff == NULL)
+    {
+        perror("Failed to allocate memory");
+        free(str1_buff);
+        free(str2_buff);
+        exit(-1);
+    }
+    uint8_t *tmp_alnd_addr = NULL;
+    tmp_alnd_addr = buff_tail + str1_alnmnt;
+
+    test_strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
+    strncat((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+
+    if(memcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, size),(char *)str1_alnd_addr, size) != 0)
+    {
+        printf("ERROR: [VALIDATION] failed for size:%zu\n str1:%s\n str2:%s\n str1+str2:%s\n", size, tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    //Multi-Null check
+    size_t more_null_idx = rand() % (size);
+    *(tmp_alnd_addr + more_null_idx) = NULL_TERM_CHAR;
+    test_strcpy((char *)str1_alnd_addr, (char *)tmp_alnd_addr);
+
+    *(str2_alnd_addr + more_null_idx) = NULL_TERM_CHAR;
+    strncat((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+
+    if(memcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str2_alnd_addr, size),(char *)str1_alnd_addr, size) != 0)
+    {
+        printf("ERROR: [VALIDATION] MultiNull check failed for size:%zu\n str1:%s\n str2:%s\n str1+str2:%s\n", size, tmp_alnd_addr, str2_alnd_addr,str1_alnd_addr);
+    }
+
+    //Page_check
+    if (size <= PAGE_SZ)
+    {
+        void *str2_page_buff = NULL;
+        uint32_t page_cnt = PAGE_CNT(2 * size);
+
+        posix_memalign(&str2_page_buff, PAGE_SZ, page_cnt * PAGE_SZ);
+        if (str2_page_buff == NULL)
+        {
+            perror("Failed to allocate memory");
+            free(str1_buff);
+            free(temp_buff);
+            exit(-1);
+        }
+
+        str3_alnd_addr = (uint8_t *)str2_page_buff + page_cnt* PAGE_SZ - (size + NULL_BYTE + str2_alnmnt);
+
+        test_strcpy((char*)str1_alnd_addr,(char*)tmp_alnd_addr);
+        test_strcpy((char*)str3_alnd_addr,(char*)str2_alnd_addr);
+
+        more_null_idx = rand()%size;
+        *(str1_alnd_addr + size -1) = *(str3_alnd_addr + more_null_idx) =*(tmp_alnd_addr + size -1) = *(str2_alnd_addr + more_null_idx) = NULL_TERM_CHAR;
+
+
+        test_strcpy((char *)tmp_alnd_addr, (char *)str1_alnd_addr);
+        strncat((char *)str1_alnd_addr, (char *)str3_alnd_addr, size);
+
+        if(memcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str3_alnd_addr, size), (char *)str1_alnd_addr, size) != 0)
+        {
+            printf("ERROR: [PAGE-CROSS] failed for size:%zu\n str1:%s\n str2:%s\n str1+str2:%s\n", size, tmp_alnd_addr, str3_alnd_addr,str1_alnd_addr);
+        }
+
+        //Page_check with Multi-NULL
+        more_null_idx = rand() % size;
+        *(str1_alnd_addr + size -1) = *(str3_alnd_addr + more_null_idx) = *(tmp_alnd_addr + size -1) = NULL_TERM_CHAR;
+
+        test_strcpy((char *)str1_alnd_addr, (char *)tmp_alnd_addr);
+        strncat((char *)str1_alnd_addr, (char *)str3_alnd_addr, size);
+
+        if(memcmp(test_strcat_common((char *)tmp_alnd_addr, (char *)str3_alnd_addr, size),(char *)str1_alnd_addr, size) != 0)
+        {
+            printf("ERROR: [PAGE-CROSS] MultiNull check failed for size:%zu\n str1:%s\n str2:%s\n str1+str2:%s\n", size, tmp_alnd_addr, str3_alnd_addr,str1_alnd_addr);
+        }
+        free(str2_page_buff);
+    }
+    free(temp_buff);
+    free(str1_buff);
+    free(str2_buff);
 }
 
 static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
@@ -1619,7 +1758,6 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
         perror("Failed to allocate memory");
         exit(-1);
     }
-    srand(time(0));
     haystack = buff_tail + str1_alnmnt;
     //case1: Haystack = SUBSTRINGS(NEEDLE) without the NEEDLE
     needle_len = ceil(sqrt(size));
@@ -1640,7 +1778,7 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
     //case2: NEEDLE at the END of HAYSTACK
     //Adding Needle at the end of haysatck
     haystack[size - needle_len] = NULL_TERM_CHAR;
-    test_strcat((char*)haystack, (char*)needle);
+    test_strcat_common((char*)haystack, (char*)needle, SIZE_MIN);
 
     res = strstr((char*)haystack, (char*) needle);
     if (res != test_strstr((char*)haystack, (char*)needle))
@@ -1749,7 +1887,6 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
         perror("Failed to allocate memory");
         exit(-1);
     }
-    srand(time(0));
     s = buff_tail + str1_alnmnt;
     //case 1 : Accept in S+
     accept_len = ceil(sqrt(size));
@@ -1872,8 +2009,6 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt,\
 
     str_alnd_addr = buff_tail + str1_alnmnt;
     prepare_boundary(str_alnd_addr, size);
-    srand(time(0));
-
 
     if (size == 0)
     {
@@ -1962,8 +2097,6 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt,\
 
     str_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
 
-    srand(time(0));
-
     for (index = 0; index < size; index++)
     {
         *(str_alnd_addr + index) = random_char();
@@ -1980,7 +2113,7 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt,\
     if ((test_strchr((char*)str_alnd_addr,(int)find)) != (char*)res)
     {
         printf("ERROR:[PAGE-CROSS (MATCH)] failure for str1_aln:%u size: %lu,"\
-                " return_value = %d, EXP= %s\n",str1_alnmnt, size, res, \
+                " return_value = %s, EXP= %s\n",str1_alnmnt, size, res, \
                 test_strchr((char*)str_alnd_addr,(int)find));
     }
 
@@ -2039,6 +2172,7 @@ libmem_func supp_funcs[]=
     {"strncmp", strncmp_validator},
     {"strlen",  strlen_validator},
     {"strcat",  strcat_validator},
+    {"strncat", strncat_validator},
     {"strstr",  strstr_validator},
     {"strspn",  strspn_validator},
     {"strchr",  strchr_validator},
@@ -2048,6 +2182,7 @@ libmem_func supp_funcs[]=
 
 int main(int argc, char **argv)
 {
+    srand((unsigned int)time(NULL));
     uint64_t diff = 0;
     uint64_t size;
     char *ptr;
@@ -2072,11 +2207,11 @@ int main(int argc, char **argv)
         }
     }
 
-    for (int idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
+    for (int index = 0; index <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); index++)
     {
-        if (!strcmp(supp_funcs[idx].func_name, argv[1]))
+        if (!strcmp(supp_funcs[index].func_name, argv[1]))
         {
-            lm_func_validator = &supp_funcs[idx];
+            lm_func_validator = &supp_funcs[index];
             break;
         }
     }
@@ -2088,8 +2223,6 @@ int main(int argc, char **argv)
 
     if (argv[4] != NULL)
         dst_alignment = atoi(argv[4]) % VEC_SZ;
-
-    srand(time(0));
 
     if (argv[5] != NULL)
         al_check = atoi(argv[5]); //Check for alignment validation test.
