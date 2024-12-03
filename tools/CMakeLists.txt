@@ -30,4 +30,21 @@ add_subdirectory(validator)
 add_subdirectory(graph_generator)
 
 # generating a file to parse the library path for tools
-file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'")
+file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'\n")
+
+set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
+set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
+set(DETECT_FEATURE 2)
+set(AVX512 3)
+set(AVX512_FEATURE_ENABLED "False")
+# Detect CPU features
+set(FEATURE AVX512)
+try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
+if (HAS_${FEATURE})
+    #AVX512 supported
+    set(AVX512_FEATURE_ENABLED "True")
+endif()
+
+# Append the AVX512_FEATURE_ENABLED variable to the libmem_defs script
+file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "AVX512_FEATURE_ENABLED = ${AVX512_FEATURE_ENABLED}\n")

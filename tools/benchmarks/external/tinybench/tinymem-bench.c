@@ -62,14 +62,6 @@ bench_info *get_asm_framebuffer_benchmarks(void);
 
 #endif
 
-int test_strcmp(const char* str1, const char* str2) {
-    while (*str1 && (*str1 == *str2)) {
-        str1++;
-        str2++;
-    }
-    return *(unsigned char*)str1 - *(unsigned char*)str2;
-}
-
 static void *mmap_framebuffer(size_t *fbsize)
 {
     int fd;
@@ -133,7 +125,7 @@ static double bandwidth_bench_helper(int64_t *dstbuf, int64_t *srcbuf,
             }
             else
             {
-               if(test_strcmp(description,"strcat") !=0 )
+               if(strstr(description,"cat") == NULL)
                 {   for (i = 0; i < innerloopcount; i++)
                     {
                         (void)f(dstbuf, srcbuf, size);
@@ -231,6 +223,11 @@ int strcat_wrapper(int64_t *dst, int64_t *src, int size)
     strcat((char *)dst, (char *)src);
 }
 
+int strncat_wrapper(int64_t *dst, int64_t *src, int size)
+{
+    strncat((char *)dst, (char *)src, size);
+}
+
 int strspn_wrapper(int64_t *dst, int64_t *src, int size)
 {
     strspn((char *)dst, (char *)src);
@@ -280,35 +277,12 @@ bench_info supp_funcs[]=
     {"strncmp", 0, strncmp_wrapper},
     {"strlen", 0, strlen_wrapper},
     {"strcat", 0, strcat_wrapper},
+    {"strncat", 0, strncat_wrapper},
     {"strspn", 0, strspn_wrapper},
     {"strstr", 0, strstr_wrapper},
     {"strchr", 0, strchr_wrapper},
     {"none", 0,  NULL}
 };
-
-char *test_strstr(const char *str1, const char *str2)
-{
-    if (*str2 == '\0') {
-        return (char*)str1;
-    }
-    const char *p1 = str1;
-    const char *p2 = str2;
-    while (*p1 != '\0') {
-        if (*p1 == *p2) {
-            const char *q1 = p1;
-            const char *q2 = p2;
-            while (*q1 != '\0' && *q2 != '\0' && *q1 == *q2) {
-                ++q1;
-                ++q2;
-            }
-            if (*q2 == '\0') {
-                return (char*)p1;
-            }
-        }
-        ++p1;
-    }
-    return NULL;
-}
 
 void generate_uniq_random_string(char * str, size_t length) {
     size_t i;
@@ -339,7 +313,7 @@ int main(int argc, char **argv)
 
     for (idx = 0; idx <= sizeof(supp_funcs)/sizeof(supp_funcs[0]); idx++)
     {
-        if (!test_strcmp(supp_funcs[idx].description, argv[1]))
+        if (!strcmp(supp_funcs[idx].description, argv[1]))
         {
            break;
         }
@@ -351,8 +325,8 @@ int main(int argc, char **argv)
 
     for (bufsize = start; bufsize<= end; bufsize = (bufsize + iter) * (iter != 0) + (bufsize << 1) * (iter == 0))
     {
-        //Bigger dst buffer for strcat operation
-        if (test_strstr(bench_func[0].description,"strcat"))
+        //Bigger dst buffer for strcat and strncat operation
+        if (strstr(bench_func[0].description,"cat"))
         {
             poolbuf = alloc_four_nonaliased_buffers((void **)&srcbuf, bufsize,
                                                     (void **)&dstbuf, MAXREPEATS * bufsize,
@@ -370,9 +344,9 @@ int main(int argc, char **argv)
         printf("SIZE: %zu B \n",bufsize);
         memset(srcbuf, 'c', bufsize);
         //For handling string functions
-        if (test_strstr(bench_func[0].description, "str") || test_strstr(bench_func[0].description, "memchr"))
+        if (strstr(bench_func[0].description, "str") || strstr(bench_func[0].description, "memchr"))
         {
-            if (test_strstr(bench_func[0].description, "strspn"))
+            if (strstr(bench_func[0].description, "strspn"))
             {
                 size_t accept_len = ceil(sqrt(bufsize));
 
@@ -387,7 +361,7 @@ int main(int argc, char **argv)
             else
             {
                 *((char *)srcbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
-                if (test_strstr(bench_func[0].description, "cmp") || test_strstr(bench_func[0].description, "cat") || test_strstr(bench_func[0].description, "strstr"))
+                if (strstr(bench_func[0].description, "cmp") || strstr(bench_func[0].description, "cat") || strstr(bench_func[0].description, "strstr"))
                 {
                     memcpy(dstbuf, srcbuf, bufsize);
                     *((char *)srcbuf + bufsize - 2) = NULL_TERM_CHAR;

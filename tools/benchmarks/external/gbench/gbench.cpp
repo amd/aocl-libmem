@@ -37,15 +37,17 @@
 #define MAX_PRINTABLE_ASCII     127
 #define NULL_TERM_CHAR          '\0'
 
-
-#if defined(__AVX512F__)
+#ifdef AVX512_FEATURE_ENABLED
     #define VEC_SIZE            64
 #else
     #define VEC_SIZE            32
 #endif
 
 #define CL_SIZE                 64
+#define CACHELINE_MULTIPLE      6
 
+#define CLFLUSHOPT(addr, cacheline_iters) \
+    _mm_clflushopt((void *)((uintptr_t)(addr) + (cacheline_iters) * CL_SIZE))
 
 enum MemoryMode {
     CACHED,
@@ -99,7 +101,7 @@ char* my_strstr(char* haystack, const char* needle) {
 }
 
 struct substr{
-    char* functionName;
+    const char* functionName;
     char* (*functionPtr)(char*, const char*);
 };
 
@@ -198,30 +200,29 @@ public:
     void memRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
 
+        SetUp(size, alignment);
         if(mode == CACHED)
         {
-            SetUp(size, alignment);
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func(dst_alnd, src_alnd, size));
             }
-            TearDown();
         }
         else
         {
             for (auto _ : state) {
                 state.PauseTiming();
-                SetUp(size, alignment);
-
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
-                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
+                uint32_t cacheline_iters= size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                    CLFLUSHOPT(dst_alnd, cacheline_iters);
+                }while (cacheline_iters--);
 
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
             }
         }
+        TearDown();
 
         Bench_Result(state);
     }
@@ -229,27 +230,27 @@ public:
     template <typename MemFunction, typename... Args>
     void Misc_memRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
+        SetUp(size, alignment);
         if(mode == CACHED)
         {
-            SetUp(size, alignment);
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func(src_alnd, 'x', size));
             }
-            TearDown();
         }
         else
         {
             for (auto _ : state) {
                 state.PauseTiming();
-                SetUp(size, alignment);
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                }while (cacheline_iters--);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func(src_alnd, 'x', size));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
             }
         }
+        TearDown();
         Bench_Result(state);
     }
 
@@ -345,8 +346,7 @@ public:
         }
         memset(src_alnd, 'x', size);
 
-        char* val = static_cast<char*>(src_alnd);
-        val[size -1] = NULL_TERM_CHAR;
+        *((char*)src_alnd + size -1) = NULL_TERM_CHAR;
         strcpy((char*)dst_alnd,(char*)src_alnd);
     }
 
@@ -383,21 +383,18 @@ public:
     template <typename MemFunction, typename... Args>
     void strRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
+        SetUp(size, alignment);
         if(mode == CACHED)
         {
             if (name == "strcat")
             {
-                SetUp(size, alignment);
                 for (auto _ : state) {
-                    char *val = static_cast<char*>(dst_alnd);
-                    val[size -1] = NULL_TERM_CHAR;
+                    *((char*)dst_alnd + size -1) = NULL_TERM_CHAR;
                     benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 }
             }
             else if (name == "strspn")
             {
-                SetUp(size, alignment);
-
                 std::string s;
                 std::string accept;
 
@@ -409,13 +406,10 @@ public:
             }
             else
             {
-                SetUp(size, alignment);
                 for (auto _ : state) {
                     benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
                 }
             }
-
-            TearDown();
         }
         else
         {
@@ -427,33 +421,42 @@ public:
 
                 for (auto _ : state) {
                     state.PauseTiming();
-                    SetUp(size, alignment);
+                    uint32_t cacheline_iters= s.length() >> CACHELINE_MULTIPLE;
+                    do
+                    {
+                        CLFLUSHOPT(s.data(), cacheline_iters);
+                    }while (cacheline_iters--);
 
-                    __builtin___clear_cache(&s[0], &s[0] + s.length());
-                    __builtin___clear_cache(&accept[0], &accept[0] + accept.length());
+                    cacheline_iters= accept.length() >> CACHELINE_MULTIPLE;
+                    do
+                    {
+                        CLFLUSHOPT(accept.data(), cacheline_iters);
+                    }while (cacheline_iters--);
                     state.ResumeTiming();
-
                     benchmark::DoNotOptimize(strspn(s.c_str(), accept.c_str()));
-                    state.PauseTiming();
-                    TearDown();
-                    state.ResumeTiming();
                 }
             }
+
             else
             {
                 for (auto _ : state) {
                     state.PauseTiming();
-                    SetUp(size, alignment);
-                    __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
-                    __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
+                    if (name == "strcat")
+                    {
+                        *((char*)dst_alnd + size -1) = NULL_TERM_CHAR;
+                    }
+                    uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                    do
+                    {
+                        CLFLUSHOPT(src_alnd, cacheline_iters);
+                        CLFLUSHOPT(dst_alnd, cacheline_iters);
+                    }while (cacheline_iters--);
                     state.ResumeTiming();
                     benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd));
-                    state.PauseTiming();
-                    TearDown();
-                    state.ResumeTiming();
                 }
             }
         }
+        TearDown();
     Bench_Result(state);
     }
 
@@ -461,27 +464,27 @@ public:
     template <typename MemFunction, typename... Args>
     void strlenRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
+        SetUp(size, alignment);
         if(mode == CACHED)
         {
-            SetUp(size, alignment);
             for (auto _ : state) {
             benchmark::DoNotOptimize(func((char*)src_alnd));
             }
-            TearDown();
         }
         else
         {
             for (auto _ : state) {
                 state.PauseTiming();
-                SetUp(size, alignment);
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                }while (cacheline_iters--);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)src_alnd));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
             }
         }
+        TearDown();
     Bench_Result(state);
     }
 
@@ -549,8 +552,18 @@ public:
                 }
                 haystack += needle;
 
-                __builtin___clear_cache(&haystack[0], &haystack[0] + haystack.length());
-                __builtin___clear_cache(&needle[0], &needle[0] + needle.length());
+                uint32_t cacheline_iters= haystack.length() >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(haystack.data(), cacheline_iters);
+                }while (cacheline_iters--);
+
+                cacheline_iters= needle.length() >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(needle.data(), cacheline_iters);
+                }while (cacheline_iters--);
+
                 state.ResumeTiming();
 
                 benchmark::DoNotOptimize(strstr(haystack.c_str(), needle.c_str()));
@@ -565,54 +578,70 @@ public:
     template <typename MemFunction, typename... Args>
     void str_n_RunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
+        SetUp(size, alignment);
         if  (mode == CACHED)
         {
-            SetUp(size, alignment);
-            for (auto _ : state) {
-                benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+            if (name == "strncat")
+            {
+                for (auto _ : state) {
+                    *((char*)dst_alnd + size -1) = NULL_TERM_CHAR;
+                    benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+                }
             }
-            TearDown();
+            else
+            {
+                for (auto _ : state) {
+                    benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
+                }
+            }
         }
         else
         {
+
             for (auto _ : state) {
                 state.PauseTiming();
-                SetUp(size, alignment);
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
-                __builtin___clear_cache(dst_alnd, reinterpret_cast<char*>(dst_alnd)+ size);
+                if (name == "strncat")
+                {
+                    *((char*)dst_alnd + size -1) = NULL_TERM_CHAR;
+                }
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                    CLFLUSHOPT(dst_alnd, cacheline_iters);
+                }while (cacheline_iters--);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
             }
         }
-    Bench_Result(state);
+        TearDown();
+        Bench_Result(state);
     }
     template <typename MemFunction, typename... Args>
     void strchrRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
+        SetUp(size, alignment);
         if  (mode == CACHED)
         {
-            SetUp(size, alignment);
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
             }
-            TearDown();
+
         }
         else
         {
             for (auto _ : state) {
                 state.PauseTiming();
-                SetUp(size, alignment);
-                __builtin___clear_cache(src_alnd, reinterpret_cast<char*>(src_alnd)+ size);
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                }while (cacheline_iters--);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
-                state.PauseTiming();
-                TearDown();
-                state.ResumeTiming();
             }
         }
+        TearDown();
     Bench_Result(state);
     }
 
@@ -683,33 +712,45 @@ substr subfunctionList[] = {
 Str_n_Data str_n_functionList[] = {
     REGISTER_STR_N_FUNCTION(strncpy),
     REGISTER_STR_N_FUNCTION(strncmp),
+    REGISTER_STR_N_FUNCTION(strncat),
 };
 
 Strlen_Data Strlen_functionList[] = {
     {"strlen",  (void *(*)(const char*)) strlen},
 };
 
+enum class Parameters
+{
+    function_name = 1,  // argv[1]
+    function_mode,      // argv[2]
+    start,              // argv[3]
+    end,                // argv[4]
+    iterations,         // argv[5]
+    align               // argv[6]
+};
+
 int main(int argc, char** argv) {
+    ::benchmark::Initialize(&argc, argv);
     srand(time(0));
     char mode='c', alignment = 'd';
     unsigned int size_start, size_end, iter = 0;
     std::string func;
 
-    func = argv[2];
+    func = argv[static_cast<int>(Parameters::function_name)];
 
-    if(argv[3]!=NULL)
-        mode= *argv[3];
+    if(argv[static_cast<int>(Parameters::function_mode)]!=NULL)
+        mode = *argv[static_cast<int>(Parameters::function_mode)];
 
-    if (argv[4] != NULL)
-        size_start = atoi(argv[4]);
-    if (argv[5] != NULL)
-        size_end = atoi(argv[5]);
+    if (argv[static_cast<int>(Parameters::start)] != NULL)
+        size_start = std::atoi(argv[static_cast<int>(Parameters::start)]);
+    if (argv[static_cast<int>(Parameters::end)] != NULL)
+        size_end = std::atoi(argv[static_cast<int>(Parameters::end)]);
 
-    if (argv[6] != NULL)
-        iter = atoi(argv[6]);
+    if (argv[static_cast<int>(Parameters::iterations)] != NULL)
+        iter = std::atoi(argv[static_cast<int>(Parameters::iterations)]);
 
-    if(argv[7]!=NULL)
-        alignment= *argv[7];
+    if(argv[static_cast<int>(Parameters::align)]!=NULL)
+        alignment= *argv[static_cast<int>(Parameters::align)];
 
     std::cout<<"FUNCTION: "<<func<<" MODE: "<<mode<<std::endl;
     std::cout<<"SIZE: "<<size_start<<" "<<size_end<<std::endl;
@@ -720,7 +761,6 @@ int main(int argc, char** argv) {
     else
         operation = CACHED;
 
-    ::benchmark::Initialize(&argc, argv);
     auto memoryBenchmark = [&](benchmark::State& state) {
         for (const auto &MemData : functionList) {
             if (func == MemData.functionName) {

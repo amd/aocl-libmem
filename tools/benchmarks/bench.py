@@ -66,7 +66,7 @@ class Bench:
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
 libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp']
-libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strspn', 'strstr', 'memchr', 'strchr']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
 libmem_funcs = libmem_memory + libmem_string
 
 def main():

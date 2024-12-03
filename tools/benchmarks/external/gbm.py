@@ -77,7 +77,22 @@ class GBM:
                 + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         os.makedirs(self.result_dir, exist_ok=False)
 
-        subprocess.run(["g++","-Wno-deprecated-declarations","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
+        self.command = [
+                    "g++",
+                    "-Wno-deprecated-declarations",
+                    "gbench.cpp",
+                    "-isystem", "benchmark/include",
+                    "-Lbenchmark/build/src",
+                    "-lbenchmark",
+                    "-lpthread",
+                    "-mclflushopt",
+                    "-o", "googlebench"
+                  ]
+        #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
+        if AVX512_FEATURE_ENABLED:
+            self.command.insert(1, "-DAVX512_FEATURE_ENABLED")
+
+        subprocess.run(self.command,cwd=self.path)
         if (self.perf == 'b'):
             print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
             self.variant="glibc"
