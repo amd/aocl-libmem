@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -81,6 +81,11 @@ __attribute__((visibility("default")))char * (*_strcat_variant)(char *, const ch
 // strcat mapping
 LIBMEM_FN_MAP(strcat);
 WEAK_ALIAS(strcat, MK_FN_NAME(strcat));
+
+__attribute__((visibility("default")))char * (*_strncat_variant)(char *, const char *, size_t);
+// strncat mapping
+LIBMEM_FN_MAP(strncat);
+WEAK_ALIAS(strncat, MK_FN_NAME(strncat));
 
 __attribute__((visibility("default")))char * (*_strstr_variant)(const char *, const char *);
 // strstr mapping

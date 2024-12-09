@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,51 +22,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef _LIBMEM_DEFS_H_
-#define _LIBMEM_DEFS_H_
-
-#define PAGE_SZ                 4096
-#define CACHELINE_SZ            64
-#define STR_TERM_CHAR           '\0'
-#define NULL_BYTE               1
-#define ALL_BITS_SET            ((uint64_t)-1)
-#define LOWER_BIT_SET           ((uint64_t)1)
-#define NULL_MASK               0x0
-#define CACHE_LINE_OFFSET       (1 << 5)
-#define AVX2_VEC_4_OFFSET       (1 << 6)
-#define AVX512_VEC_4_OFFSET     (1 << 7)
-#define AVX2_VEC_4_SZ           (1 << 7)
-#define AVX512_VEC_4_SZ         (1 << 8)
-#define AVX512_VEC_OFFSET       (1 << 6)
-#define ALL_BITS_SET_64         0xFFFFFFFFFFFFFFFF
-#define NULL_TERM_CHAR         '\0'
-
-#define likely(x)      __builtin_expect(!!(x), 1)
-#define unlikely(x)    __builtin_expect(!!(x), 0)
-
+#ifndef _STRNCAT_H_
+#define _STRNCAT_H_
+#include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifdef __linux__
-#define ALM_MEM_BARRIER() __asm__ __volatile__("":::"memory");
-
-/*
-    Intrinsic '_tzcnt_u16' is not supported on GCC major versions 11 and below.
-    Henceforth, handling '_tzcnt_u16' with masked '_tzcnt_u32' intrinsics.
-*/
-
-#if (( __GNUC__ <= 11 ))
-#define ALM_TZCNT_U16(x)    _tzcnt_u32((x) & 0xffff)
-#else
-#define ALM_TZCNT_U16(x)    _tzcnt_u16(x)
-#endif
-
-#endif
-
+extern char * strncat(char *, const char *, size_t);
+//Micro architecture specifc implementations.
+extern char * __strncat_zen1(char *,const char *, size_t);
+extern char * __strncat_zen2(char *,const char *, size_t);
+extern char * __strncat_zen3(char *,const char *, size_t);
+extern char * __strncat_zen4(char *,const char *, size_t);
+extern char * __strncat_zen5(char *,const char *, size_t);
+//System solution which takes in system config.
+extern char * __strncat_system(char *,const char *, size_t);
+extern char *(*_strncat_variant)(char *, const char *, size_t);
 #ifdef __cplusplus
 }
 #endif
-
-#endif //HEADER
+#endif

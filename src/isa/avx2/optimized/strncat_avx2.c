@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,50 +23,34 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _LIBMEM_DEFS_H_
-#define _LIBMEM_DEFS_H_
+#include <stddef.h>
+#include "logger.h"
+#include <stdint.h>
+#include "strlen_avx2.c"
+#include "memcpy_avx2.c"
+#define NULL_TERM_CHAR '\0'
+static inline char * __attribute__((flatten)) _strncat_avx2(char *dst, const char *src, size_t n)
+{
+    register void *ret asm("rax");
+    ret = dst;
+    size_t offset = _strlen_avx2(dst);
+    size_t len = _strlen_avx2(src);
 
-#define PAGE_SZ                 4096
-#define CACHELINE_SZ            64
-#define STR_TERM_CHAR           '\0'
-#define NULL_BYTE               1
-#define ALL_BITS_SET            ((uint64_t)-1)
-#define LOWER_BIT_SET           ((uint64_t)1)
-#define NULL_MASK               0x0
-#define CACHE_LINE_OFFSET       (1 << 5)
-#define AVX2_VEC_4_OFFSET       (1 << 6)
-#define AVX512_VEC_4_OFFSET     (1 << 7)
-#define AVX2_VEC_4_SZ           (1 << 7)
-#define AVX512_VEC_4_SZ         (1 << 8)
-#define AVX512_VEC_OFFSET       (1 << 6)
-#define ALL_BITS_SET_64         0xFFFFFFFFFFFFFFFF
-#define NULL_TERM_CHAR         '\0'
+    /*Check if the src string length is less than or equal to
+    the maximum number of characters to append (n) */
+    if (len <= n)
+    {
+        //If the source string is shorter than or equal to n,
+        //copy the entire source string plus the null terminator
+        _memcpy_avx2(dst + offset , src, len + 1);
+    }
 
-#define likely(x)      __builtin_expect(!!(x), 1)
-#define unlikely(x)    __builtin_expect(!!(x), 0)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifdef __linux__
-#define ALM_MEM_BARRIER() __asm__ __volatile__("":::"memory");
-
-/*
-    Intrinsic '_tzcnt_u16' is not supported on GCC major versions 11 and below.
-    Henceforth, handling '_tzcnt_u16' with masked '_tzcnt_u32' intrinsics.
-*/
-
-#if (( __GNUC__ <= 11 ))
-#define ALM_TZCNT_U16(x)    _tzcnt_u32((x) & 0xffff)
-#else
-#define ALM_TZCNT_U16(x)    _tzcnt_u16(x)
-#endif
-
-#endif
-
-#ifdef __cplusplus
+    else
+    {
+        // If the source string is longer than n,
+        // copy only the first n characters from the source string
+        _memcpy_avx2(dst + offset , src, n);
+        *(dst + offset + n) = NULL_TERM_CHAR;
+    }
+    return ret;
 }
-#endif
-
-#endif //HEADER

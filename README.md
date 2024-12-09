@@ -21,6 +21,7 @@ This release of AOCL-LibMem library supports the following functions:
 + strcat
 + strstr
 + strchr
++ strncat
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:

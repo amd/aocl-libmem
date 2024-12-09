@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -276,6 +276,7 @@ static __attribute__((constructor)) void libmem_init()
     _strcmp_variant = ((int (*)(const char *, const char *))libmem_cpu_impls[STRCMP][cpu_var_idx]);
     _strncmp_variant = ((int (*)(const char *, const char *, size_t))libmem_cpu_impls[STRNCMP][cpu_var_idx]);
     _strcat_variant = ((char* (*)(char *, const char *))libmem_cpu_impls[STRCAT][cpu_var_idx]);
+    _strncat_variant = ((char* (*)(char *, const char *, size_t))libmem_cpu_impls[STRNCAT][cpu_var_idx]);
     _strstr_variant = ((char* (*)(const char *, const char *))libmem_cpu_impls[STRSTR][cpu_var_idx]);
     _strlen_variant = ((size_t (*)(const char *))libmem_cpu_impls[STRLEN][cpu_var_idx]);
     _strchr_variant = ((char* (*)(const char *, int))libmem_cpu_impls[STRCHR][cpu_var_idx]);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -33,6 +33,7 @@
 #include "amd_strcmp.h"
 #include "amd_strncmp.h"
 #include "amd_strcat.h"
+#include "amd_strncat.h"
 #include "amd_strstr.h"
 #include "amd_strlen.h"
 #include "amd_strchr.h"

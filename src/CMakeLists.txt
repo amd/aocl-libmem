@@ -1,4 +1,4 @@
-# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -122,7 +122,7 @@ set(SOURCE_FILES cache_info.c cpu_features.c threshold.c libmem.c)
 set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 
 # String Functions
-set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strstr strlen strchr)
+set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strchr)
 
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
