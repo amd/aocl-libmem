@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -41,6 +41,12 @@ char ** get_environ() {
     return my_environ;
 }
 
+int string_compare(char *str1, char *str2)
+{
+	while(*str1 && *(str1++) == *(str2++));
+	return (*(unsigned char *)str1 - *(unsigned char *)str2);
+}
+
 void parse_env_operation_cfg(void)
 {
     char * user_operation_cfgs, *token;
@@ -62,11 +68,11 @@ void parse_env_operation_cfg(void)
         return;
     }
 
-    if (!strcmp(token, "avx512"))
+    if (!string_compare(token, "avx512"))
         user_config.user_operation.avx512 = 1;
-    else if (!strcmp(token, "avx2"))
+    else if (!string_compare(token, "avx2"))
         user_config.user_operation.avx2 = 1;
-    else if (!strcmp(token, "erms"))
+    else if (!string_compare(token, "erms"))
         user_config.user_operation.erms = 1;
     else
     {

@@ -60,7 +60,7 @@ static inline void *_memmove_avx512(void *dst, const void *src, size_t size)
         offset = 4 * ZMM_SZ - dst_align;
 
         //Aligned Load and Store addresses
-        if ((uintptr_t)src & (ZMM_SZ - 1) == dst_align)
+        if (((uintptr_t)src & (ZMM_SZ - 1)) == dst_align)
         {
             // 4-ZMM registers
             if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size

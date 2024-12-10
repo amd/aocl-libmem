@@ -282,14 +282,15 @@ static __attribute__((constructor)) void libmem_init()
 #endif //end of dynamic dispatching
 #ifdef ALMEM_TUNABLES
     tunable_variant_idx tun_var_idx = libmem_tunable_resolver();
-    //if tunables are not valid go ahead with detected cpu implementation
-    if (tun_var_idx == UNKNOWN)
-        tun_var_idx = (tunable_variant_idx)cpu_var_idx;
 
-    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMCPY][tun_var_idx]);
-    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMPCPY][tun_var_idx]);
-    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMMOVE][tun_var_idx]);
-    _memset_variant = ((void* (*)(void *, int, size_t))libmem_tun_impls[MEMSET][tun_var_idx]);
-    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_tun_impls[MEMCMP][tun_var_idx]);
+    //pick the tunable implementation only with valid tunable config
+    if (tun_var_idx != UNKNOWN)
+    {
+        _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMCPY][tun_var_idx]);
+        _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMPCPY][tun_var_idx]);
+        _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMMOVE][tun_var_idx]);
+        _memset_variant = ((void* (*)(void *, int, size_t))libmem_tun_impls[MEMSET][tun_var_idx]);
+        _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_tun_impls[MEMCMP][tun_var_idx]);
+    }
 #endif //end of tunables
 }
