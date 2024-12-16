@@ -22,12 +22,17 @@ _Micro Architecuture specific Implementations:_
 
 ### 1.2. Dynamic State
 Dynamic CPU dispatching option can be run on any x86 platform and on non-AMD it will pick the underlying system implementation(eg.GLIBC).
+
 `Note:` _Dynamic dispatched binary may not necessarily result into best performance of the library on the given architecture. For the best performance on given architecture use default build option._
+
+`Warning:`_This binary may segfault with LD_PRELOAD of applications that use other libraries and make calls to functions defined in libmem before the libmem dynamic resolver._
 ### 1.3. Tunable State
 *LibMem library exposes two tunable parameters for the users to choose
 the variant of implementations as per the application requirement.*
  * **`LIBMEM_OPERATION`** : instruction based on alignment and cacheability
  * **`LIBMEM_THRESHOLD`** : threshold for ERMS and Non-Temporal instructions
+
+`Warning:`_This binary may segfault with LD_PRELOAD of applications that use other libraries and make calls to functions defined in libmem before the libmem dynamic resolver._
 
 #### 1.2.1. LIBMEM_OPERATION
 Setting tunable _LIBMEM_OPERATION_ will make the library choose
