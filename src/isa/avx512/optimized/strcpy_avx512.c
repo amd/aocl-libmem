@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -29,202 +29,166 @@
 #include "alm_defs.h"
 #include "zen_cpu_info.h"
 
+/* This function is an optimized version of strcpy using AVX-512 instructions.
+It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
+
 static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const char *src)
 {
-    size_t offset = 0, index = 0;
-    __m512i z0, z1, z2, z3, z4, z5, z6, z7;
-    uint64_t ret = 0, ret1 = 0, ret2 = 0;
-    __mmask64 mask, mask2;
+    size_t offset, index;
+    __m512i z0, z1, z2, z3, z4, z5, z6;
+    uint64_t match, match1, match2;
+    __mmask64 mask;
 
-    z0 = _mm512_setzero_epi32 ();
+    // Store the original destination pointer to return at the end
+    register void *ret asm("rax");
+    ret = dst;
 
+    // Initialize a zeroed AVX-512 register for comparisons
+    z0 = _mm512_setzero_epi32();
+
+    // Calculate the offset to align the source pointer to 64 bytes
     offset = (uintptr_t)src & (ZMM_SZ - 1);
 
-    if (offset)
+    // Handle cases where `src` is close to the end of a memory page
+    if (unlikely((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)src)))
     {
-        if ((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)src))
+        // Load bytes from `src` into z1 with a offsetted mask to avoid crossing the page boundary
+        z6 = _mm512_set1_epi8(0xff);
+        mask = ((uint64_t)-1) >> offset;
+        z1 =  _mm512_mask_loadu_epi8(z6 ,mask, src);
+
+        // Compare `z1` with zero register to find the null terminator
+        match = _mm512_cmpeq_epu8_mask(z1, z0);
+
+        // If a null terminator is found, calculate the index and store the result
+        if (match)
         {
-            z7 = _mm512_set1_epi8(0xff);
-            mask = ((uint64_t)-1) >> offset;
-            z1 =  _mm512_mask_loadu_epi8(z7 ,mask, src);
-            ret =_mm512_cmpeq_epu8_mask(z0, z1);
-            if (ret)
-            {
-                index =  _tzcnt_u64(ret);
-                mask2 = ((uint64_t)-1) >> (63 - index);
-                _mm512_mask_storeu_epi8(dst, mask2, z1);
-                return dst;
-            }
-        }
-        z1 = _mm512_loadu_si512(src);
-        ret =_mm512_cmpeq_epu8_mask(z0, z1);
-        if (ret)
-        {
-            index =  _tzcnt_u64(ret);
-            mask = ((uint64_t)-1) >> (63 - index);
+            index =  _tzcnt_u64(match);
+            mask = ((uint64_t)-1) >> (63 - (index));
             _mm512_mask_storeu_epi8(dst, mask, z1);
-            return dst;
+            return ret;
         }
-        _mm512_storeu_si512(dst, z1);
-        offset = ZMM_SZ - offset;
     }
-    z1 = _mm512_load_si512(src + offset);
-    ret =_mm512_cmpeq_epu8_mask(z0, z1);
-    if (ret != 0)
-    {
-        index =  _tzcnt_u64(ret);
-        mask = ((uint64_t)-1) >> (63 - index);
-        _mm512_mask_storeu_epi8(dst + offset, mask, z1);
-        return dst;
-    }
-    z2 = _mm512_load_si512(src + ZMM_SZ + offset);
 
-    ret = _mm512_cmpeq_epu8_mask(z2, z0);
-    if (ret != 0)
+    // Load the first 64 bytes from `src` and check for null terminator
+    z1 = _mm512_loadu_si512(src);
+    match =_mm512_cmpeq_epu8_mask(z0, z1);
+    if (match)
     {
-        index = _tzcnt_u64(ret);
+        index =  _tzcnt_u64(match);
         mask = ((uint64_t)-1) >> (63 - index);
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_mask_storeu_epi8(dst + ZMM_SZ + offset, mask, z2);
-        return dst;
+        _mm512_mask_storeu_epi8(dst, mask, z1);
+        return ret;
     }
-    z3 = _mm512_load_si512(src + 2 * ZMM_SZ + offset);
-    ret1 = _mm512_cmpeq_epu8_mask(z3, z0);
-    if (ret1)
-    {
-        index = _tzcnt_u64(ret1);
-        mask = ((uint64_t)-1) >> (63 - index);
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_storeu_si512(dst + ZMM_SZ + offset, z2);
-        _mm512_mask_storeu_epi8(dst + 2 * ZMM_SZ + offset, mask, z3);
-        return dst;
-    }
-    z4 = _mm512_load_si512(src + 3 * ZMM_SZ + offset);
-    ret = _mm512_cmpeq_epu8_mask(z4, z0);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret);
-        mask = ((uint64_t)-1) >> (63 - index);
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_storeu_si512(dst + ZMM_SZ + offset, z2);
-        _mm512_storeu_si512(dst + 2 * ZMM_SZ + offset, z3);
-        _mm512_mask_storeu_epi8(dst + 3 * ZMM_SZ + offset, mask, z4);
-        return dst;
-    }
-    _mm512_storeu_si512(dst + offset, z1);
-    _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
-    _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
-    _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z4);
-    offset += 4*ZMM_SZ;
+    // Store the first 64 bytes to `dst`
+    _mm512_storeu_si512(dst, z1);
 
+    // Adjust the offset for the next load operation
+    offset = ZMM_SZ - offset;
+
+    // Initialize a counter to process the next 192 bytes (3 * 64B) from the source
+    uint8_t cnt_vec = 2;
     do
     {
-        if ((PAGE_SZ - 4 * ZMM_SZ) >= ((PAGE_SZ - 1) & ((uintptr_t)src + offset)))
-        {
-            z1 = _mm512_loadu_si512(src + offset);
-            ret =_mm512_cmpeq_epu8_mask(z0, z1);
-            if (ret)
-            {
-                index =  _tzcnt_u64(ret);
-                mask = ((uint64_t)-1) >> (63 - index);
-                _mm512_mask_storeu_epi8(dst + offset, mask, z1);
-                return dst;
-            }
-            z2 = _mm512_loadu_si512(src + ZMM_SZ + offset);
+        z2 = _mm512_load_si512(src + offset);
+        match = _mm512_cmpeq_epu8_mask(z2, z0);
 
-            ret = _mm512_cmpeq_epu8_mask(z2, z0);
-            if (ret)
-            {
-                index = _tzcnt_u64(ret);
-                mask = ((uint64_t)-1) >> (63 - index);
-                _mm512_storeu_si512(dst + offset, z1);
-                _mm512_mask_storeu_epi8(dst + ZMM_SZ + offset, mask, z2);
-                return dst;
-            }
-            z3 = _mm512_loadu_si512(src + 2 * ZMM_SZ + offset);
-            ret = _mm512_cmpeq_epu8_mask(z3, z0);
-            if (ret)
-            {
-                index = _tzcnt_u64(ret);
-                mask = ((uint64_t)-1) >> (63 - index);
-                _mm512_storeu_si512(dst + offset, z1);
-                _mm512_storeu_si512(dst + ZMM_SZ + offset, z2);
-                _mm512_mask_storeu_epi8(dst + 2 * ZMM_SZ + offset, mask, z3);
-                return dst;
-            }
-            z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ + offset);
-            ret = _mm512_cmpeq_epu8_mask(z4, z0);
-            if (ret)
-            {
-                index = _tzcnt_u64(ret);
-                mask = ((uint64_t)-1) >> (63 - index);
-                _mm512_storeu_si512(dst + offset, z1);
-                _mm512_storeu_si512(dst + ZMM_SZ + offset, z2);
-                _mm512_storeu_si512(dst + 2 * ZMM_SZ + offset, z3);
-                _mm512_mask_storeu_epi8(dst + 3 * ZMM_SZ + offset, mask, z4);
-                return dst;
-            }
-            _mm512_storeu_si512(dst + offset, z1);
-            _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
-            _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
-            _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z4);
-            offset += 4 * ZMM_SZ;
-            if (offset > (PAGE_SZ - 4 * ZMM_SZ))
-            offset = (offset & (-ZMM_SZ)) - ((uintptr_t)(dst) & (ZMM_SZ - 1));
+        // If a null terminator is found within the loaded bytes, copy the tail vector.
+        // Load and copy the remaining bytes up to and including the null terminator
+        if (match)
+        {
+            index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
+            z5 = _mm512_loadu_si512(src + index);
+            _mm512_storeu_si512(dst + index, z5);
+            return ret;
         }
 
-        z1 = _mm512_loadu_si512(src + offset);
-        z2 = _mm512_loadu_si512(src + offset + ZMM_SZ);
-        z3 = _mm512_loadu_si512(src + offset + 2 * ZMM_SZ);
-        z4 = _mm512_loadu_si512(src + offset + 3 * ZMM_SZ);
+        _mm512_storeu_si512(dst + offset, z2);
+        offset += ZMM_SZ;
+    } while (cnt_vec--);
 
+
+    // Determine if the next four 64-byte blocks (256 bytes total) are within the same memory
+    // page , this is to avoid crossing a page boundary, which could lead to a page fault if
+    // the memory is not mapped. Here it calculates and processes the maximum number of 64-byte
+    // vectors that can be handled without the risk of crossing into an adjacent memory page.
+    cnt_vec = 4 - (((uintptr_t)src + offset) & (4 * ZMM_SZ - 1) >> 6);
+    while (cnt_vec--)
+    {
+        z2 = _mm512_load_si512(src + offset);
+        match = _mm512_cmpeq_epu8_mask(z2, z0);
+
+        if (match)
+        {
+            index =  _tzcnt_u64(match);
+            mask = ((uint64_t)-1) >> (63 - index);
+            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+            return ret;
+        }
+
+        _mm512_storeu_si512(dst + offset, z2);
+        offset += ZMM_SZ;
+    }
+
+    // Main loop to process 4 vectors at a time for larger sizes(> 256B)
+    while (1)
+    {
+        // Load 4 vectors from `src`
+        z1 = _mm512_load_si512(src + offset);
+        z2 = _mm512_load_si512(src + offset + ZMM_SZ);
+        z3 = _mm512_load_si512(src + offset + 2 * ZMM_SZ);
+        z4 = _mm512_load_si512(src + offset + 3 * ZMM_SZ);
+
+        // Find the minimum of the loaded vectors to check for null terminator
         z5 = _mm512_min_epu8(z1,z2);
         z6 = _mm512_min_epu8(z3,z4);
 
-        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
-        if (ret != 0)
-          break;
+        // Compare the minimums to find the null terminator
+        match = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
+        if (match)
+          break; // If found, exit the loop
 
+        // Store the 4 vectors to `dst`
         _mm512_storeu_si512(dst + offset, z1);
         _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
         _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
         _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z4);
-
         offset += 4 * ZMM_SZ;
-    } while(1);
-
-    //check for zero in regs: Z1, Z2
-    if ((ret1 = _mm512_cmpeq_epu8_mask(z5, z0)))
-    {
-        if ((ret2 = _mm512_cmpeq_epu8_mask(z1, z0)))
-        {
-            index = _tzcnt_u64(ret2);
-            mask = ((uint64_t)-1) >> (63 - index);
-            _mm512_mask_storeu_epi8(dst + offset, mask, z1);
-            return dst;
-        }
-        index = _tzcnt_u64(ret1);
-        mask = ((uint64_t)-1) >> (63 - index);
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_mask_storeu_epi8(dst + offset + ZMM_SZ, mask, z2);
-        return dst;
     }
-    //check for zero in regs: Z3, Z4
+
+    // Check for null terminator in the first two vectors (z1, z2)
+    if ((match1 = _mm512_cmpeq_epu8_mask(z5, z0)))
+    {
+        if ((match2 = _mm512_cmpeq_epu8_mask(z1, z0)))
+        {
+            match = match2;
+            goto copy_tail_vec;
+        }
+        _mm512_storeu_si512(dst + offset, z1);
+        offset += ZMM_SZ;
+        match = match1;
+    }
+    // Check for null terminator in the last two vectors (z3, z4)
     else
     {
         _mm512_storeu_si512(dst + offset, z1);
         _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
-        if ((ret2 =_mm512_cmpeq_epu8_mask(z3, z0)))
+        if ((match2 =_mm512_cmpeq_epu8_mask(z3, z0)))
         {
-            index = _tzcnt_u64(ret2);
-            mask = ((uint64_t)-1) >> (63 - index);
-            _mm512_mask_storeu_epi8(dst + offset + 2 * ZMM_SZ, mask, z3);
-            return dst;
+            match = match2;
+            offset += 2 * ZMM_SZ;
+            goto copy_tail_vec;
         }
-        index = _tzcnt_u64(ret);
-        mask = ((uint64_t)-1) >> (63 - index);
         _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
-        _mm512_mask_storeu_epi8(dst + offset + 3 * ZMM_SZ, mask, z4);
+        offset += 3 * ZMM_SZ;
     }
-    return dst;
+
+    // Label for copying the tail of the string where the null terminator was found
+    copy_tail_vec:
+    {
+        index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
+        z5 = _mm512_loadu_si512(src + index);
+        _mm512_storeu_si512(dst + index, z5);
+        return ret;
+    }
 }
