@@ -42,6 +42,8 @@ class GBM:
         self.MYPARSER = self.ARGS["ARGS"]
         self.func=self.MYPARSER['ARGS']['func']
         self.align = str(self.MYPARSER['ARGS']['align'])
+        self.spill = str(self.MYPARSER['ARGS']['spill'])
+        self.page = str(self.MYPARSER['ARGS']['page'])
         self.path="../tools/benchmarks/external/gbench/"
         self.variant=""
         self.isExist=""
@@ -60,6 +62,8 @@ class GBM:
         self.size_unit=[]
         self.perf = self.MYPARSER['ARGS']['perf']
         self.preload = self.MYPARSER['ARGS']['preload']
+        self.repetitions = self.MYPARSER['ARGS']['repetitions']
+        self.warm_up = self.MYPARSER['ARGS']['warm_up']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -122,11 +126,12 @@ class GBM:
         self.variant="amd"
         self.gbm_run()
 
-        values= subprocess.run(["awk", "/^.*CACHED/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        self.size_values= [val.split('/')[1] for val in values]
-        self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        values= subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.result_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
+        self.size_values= [int(val) for val in values]
+        self.amd_throughput_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
+
         if (self.perf == 'b'):
-            self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+            self.glibc_throughput_values = subprocess.run(["grep '_mean' gbglibc.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
 
         #Converting the M/s values to G/s
         self.throughput_converter(self.amd_throughput_values)
@@ -243,8 +248,8 @@ class GBM:
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
             if self.preload == 'y':
-                subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+                subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_repetitions="+str(self.repetitions),"--benchmark_min_warmup_time="+str(self.warm_up),"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
             else:
-                 subprocess.run(["taskset", "-c", str(self.core),"./googlebench"+"_"+self.variant,"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,check=True,stdout =g,stderr=subprocess.PIPE)
+                 subprocess.run(["taskset", "-c", str(self.core),"./googlebench"+"_"+self.variant,"--benchmark_repetitions="+str(self.repetitions),"--benchmark_min_warmup_time="+str(self.warm_up),"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return

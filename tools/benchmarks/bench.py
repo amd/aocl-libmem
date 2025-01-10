@@ -73,85 +73,112 @@ def main():
     """
     Arguments are captured and stored to variable.
     """
-    avaliable_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
+    available_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
-    parser = argparse.ArgumentParser(prog='bench', description='This\
-            program will perform the benchmarking:TBM GBM FBM ')
-    parser = ParserConfig.add_parser('This\
-                            program will perform the benchmarking ')
-    parser.add_argument("benchmark", help="select the \
-            benchmarking tool for LibMem",
-                         type=str,choices = ["tbm", "gbm","fbm"], default="gbm")
-    parser.add_argument("func", help="LibMem supported functions",
+    parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM')
+
+    # Create subparsers for different benchmarking tools
+    subparsers = parser.add_subparsers(dest='benchmark', required=True)
+
+    # Common arguments for all benchmarks
+    common_parser = argparse.ArgumentParser(add_help=False)
+
+    common_parser.add_argument("func", help="LibMem supported functions",
                             type=str, choices = libmem_funcs,default="memcpy")
 
-    parser.add_argument("-r", "--range", nargs = 2, help="range of data\
+    common_parser.add_argument("-r", "--range", nargs = 2, help="range of data\
                                 lengths to be benchmarked.\
                                 Memory functions [8 - 32MB]\
                                 String functions [8 - 4KB]",
                             type=int)
-    parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
-                            c - cached, u - un-cached, w - walk, p - page_walk\
-                            GBM supports [c,u]",\
-                            type = str, choices = ['c', 'u', 'w', 'p'], \
-                            default = 'm')
-    parser.add_argument("-a", "--align", help = "alignemnt of source\
-                                and destination addresses: p - page_aligned,\
-                                v - vector_aligned, u - unaligned, c - cache_aligned and d - default alignment\
-                                is random.[p,v,u and c are Experimental options]",\
-                                type = str, choices = ['p', 'v', 'u', 'c', 'd'],  default = 'd')
-    parser.add_argument("-mem_alloc", help = "specify the memory allocator\
-                                for FleetBench",type = str,choices=['tcmalloc','glibc'], \
-                                default= ['glibc'])
 
-    parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
+    common_parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default is shift left\
                             by 1 of starting size - '<<1'.",
                             type = int, default = 0)
-    parser.add_argument("-i", "--iterations", help = "Number of iterations for\
-                                performance measurement. Default value is \
-                                set to 1000 iterations.",
-                            type = int, default = 1000)
-    parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
+
+    common_parser.add_argument("-x", "--core_id",
+                               help=f"CPU core_id on which benchmark has to be performed.\
+                            Default choice of core-id is 8. Valid range is \
+                            [0..{int(available_cores) - 1}]",
+                            type=int,default=8)
+
+    # Subparser for GBM with additional options
+    gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GBM Benchmarking Tool')
+    group = gbm_parser.add_mutually_exclusive_group()
+    gbm_parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
+                            c - cached, u - un-cached",\
+                            type = str, choices = ['c', 'u'], \
+                            default = 'c')
+
+    #Align and Page are mutually_exclusive options
+    group.add_argument("-a", "--align", help = "alignemnt of source\
+                                and destination addresses: a - aligned\
+                                u - unaligned, and d - default alignment\
+                                is random.",\
+                                type = str, choices = ['a','u','d'],  default = 'd')
+
+    group.add_argument("-p", "--page", help = "Page boundary options\
+                                x - page_cross, t - page_tail",\
+                                type = str, choices = ['x','t'],  default = 'n')
+
+    gbm_parser.add_argument("-s", "--spill", help = "cache spilling mode applicable only for\
+                                aligned and unaligned: l - less_spill,\
+                                m - more_spill, default is no-spill",\
+                                type = str, choices = ['l', 'm',],  default = 'n')
+
+    gbm_parser.add_argument("-i", "--repetitions", help = "Number of repitations for\
+                            performance measurement. Default value is \
+                            set to 10 iterations.",
+                        type = int, default = 10)
+
+    gbm_parser.add_argument("-w", "--warm_up", help = "time in seconds\
+                                Default value is set to 1sec.",
+                            type = float, default = 1)
+
+    gbm_parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
                           type = str, choices = ['y', 'n'], default = 'y')
-    parser.add_argument("-perf", help = "performance runs for LibMem.\
+
+    gbm_parser.add_argument("-perf", help = "performance runs for LibMem.\
                             Default is benchmarking mode against system Libc",
                             type = str, choices = ['p', 'b'], default = 'b')
 
-    """
-    parser.add_argument("-g", "--graph", help="Generates the Latency and \
-            Throughput Reports by plotting LibMem vs Glibc graphs with gains,\
-            Report",type=str,choices=['l'])
-    """
-    parser.add_argument("-x", "--core_id", help = "CPU core_id on which \
-                            benchmark has to be performed. Default choice of \
-                            core-id is 8", type = int, default = 8,
-                            choices = range(0, int(avaliable_cores)))
+    # Subparser for TBM
+    tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TBM Benchmarking Tool')
 
+    # Subparser for FBM
+    fbm_parser = subparsers.add_parser('fbm', parents=[common_parser], help='FBM Benchmarking Tool')
 
-    args = ParserConfig.parser_args()
+    fbm_parser.add_argument("-mem_alloc", help="specify the memory allocator for FleetBench",
+                               type=str, choices=['tcmalloc', 'glibc'], default='glibc')
+
+    fbm_parser.add_argument("-i", "--repetitions", help = "Number of repitations for\
+                            performance measurement. Default value is \
+                            set to 100 iterations.",
+                        type = int, default = 100)
+
+    args = parser.parse_args()
+
     # Set the default range based on the func argument
-    if args['range'] is None:
-        if args['func'] in libmem_string:
-            args['range'] = [8, 4096]
+    if args.range is None:
+        if args.func in libmem_string:
+            args.range = [8, 4096]
         else:
-            args['range'] = [8, 32*1024*1024]
+            args.range = [8, 32 * 1024 * 1024]
 
-    return args
+    return vars(args)
 
 if __name__ == "__main__":
     try:
-    # Check if numactl is installed
+        # Check if numactl is installed
         subprocess.check_output(['which', 'numactl'])
-
     except subprocess.CalledProcessError:
-    # numactl is not installed, exiting the program
+        # numactl is not installed, exiting the program
         print("numactl utility NOT found. Please install it.")
         exit(1)
+
     myparser = main()
-    obj = Bench( ARGS=myparser)
+
+    obj = Bench(ARGS=myparser)
     obj()
-
-
-

@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -51,6 +51,7 @@ class FBM:
         self.bench_name='FleeteBench'
         self.last=9
         self.allocator=self.MYPARSER['ARGS']['mem_alloc']
+        self.repetitions = self.MYPARSER['ARGS']['repetitions']
         self.amd_throughput_value=[]
         self.glibc_throughput_value=[]
         self.amd_raw=[]
@@ -63,7 +64,6 @@ class FBM:
         self.func=self.MYPARSER['ARGS']['func']
         self.LibMemVersion=''
         self.GlibcVersion=''
-
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/fleetbench')
@@ -160,6 +160,6 @@ class FBM:
 
         for i in range(0,self.last):
             with open(self.result_dir+'/fb_'+str(i)+str(self.variant)+'.txt','w') as g:
-                subprocess.run(["taskset","-c", str(self.core),"numactl","-C"+str(self.core),"bazel","run","--config=opt","fleetbench/libc/mem_benchmark","--","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions=300"], cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+                subprocess.run(["taskset","-c", str(self.core),"bazel","run","--config=opt","fleetbench/libc/mem_benchmark","--","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions="+str(self.repetitions)], cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
         return
 
