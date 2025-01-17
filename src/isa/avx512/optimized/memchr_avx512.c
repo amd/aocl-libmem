@@ -186,18 +186,21 @@ static inline void * __attribute__((flatten)) _memchr_avx512(const void *mem, in
             match = _mm512_cmpeq_epu8_mask(z0, z1);
             if (match)
                 break;
+            __attribute__ ((fallthrough));
         case 2:
             offset = size - 3 * ZMM_SZ;
             z1 = _mm512_loadu_si512(mem + offset);
             match = _mm512_cmpeq_epu8_mask(z0, z1);
             if (match)
                 break;
+            __attribute__ ((fallthrough));
         case 1:
             offset = size - 2 * ZMM_SZ;
             z1 = _mm512_loadu_si512(mem + offset);
             match = _mm512_cmpeq_epu8_mask(z0, z1);
             if (match)
                 break;
+            __attribute__ ((fallthrough));
         case 0:
             offset = size - ZMM_SZ;
             z1 = _mm512_loadu_si512(mem + offset);

@@ -35,6 +35,8 @@
 #define YMM_SZ                  32
 #define ZMM_SZ                  64
 #define NULL_TERM_CHAR         '\0'
+#define NULL_STRING            ((uint8_t *)"\0")
+#define SINGLE_CHAR_STRING     ((uint8_t *)"A")
 #define MIN_PRINTABLE_ASCII     32
 #define MAX_PRINTABLE_ASCII     126
 #define NULL_BYTE               1
@@ -583,7 +585,7 @@ static inline void memset_validator(size_t size, uint32_t dst_alnmnt,\
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
     uint8_t *dst_alnd_addr = NULL;
-    int value;
+    int value = 0;
     size_t index;
     void *ret = NULL;
     //special case to handle size ZERO with NULL buff inputs.
@@ -1164,7 +1166,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
-    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *buff = NULL, *buff_head = SINGLE_CHAR_STRING, *buff_tail = NULL_STRING;
     uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index;
     int ret = 0;
@@ -1174,7 +1176,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     //special case to handle size ZERO with NULL buff inputs.
     if (size == 0)
     {
-        ret = strncmp((char*)buff, (char*)buff, size);
+        ret = strncmp((char*)buff_head, (char*)buff_tail, size);
         if (ret != exp_ret)
             printf("ERROR:[VALIDATION] failure for size(%lu): expected - %d"\
                         ", actual - %d\n", size, exp_ret, ret);
@@ -1608,7 +1610,7 @@ static inline void strncat_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *str1_buff = NULL, *str2_buff = NULL, *temp_buff = NULL, *buff_head, *buff_tail;
-    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL, *str3_alnd_addr =  NULL ;
+    uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL, *str3_alnd_addr = NULL ;
     size_t index;
     void *ret = NULL;
 
@@ -1730,25 +1732,23 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *haystack = NULL, *needle = NULL, *page_alnd_addr =NULL;
+    uint8_t *haystack = SINGLE_CHAR_STRING, *needle = NULL_STRING, *page_alnd_addr = NULL;
     char *find, *res;
     size_t needle_len = 0;
 
     if (size == 0)
     {
         //Needle is Zero
-        char null_needle = NULL_TERM_CHAR;
-        res = strstr((char *)haystack, &null_needle);
+        res = strstr((char *)haystack, (char *)needle);
         if (res != (char*)haystack)
             printf("ERROR:[RETURN] value mismatch for NEEDLE size(%lu): expected -%p "\
                         ", actual - %p\n", size, (char*)haystack, res);
 
         //Haystack is Zero
-        char null_haystack = NULL_TERM_CHAR;
-        res = strstr(&null_haystack, &null_needle);
-        if (res != &null_haystack)
-            printf("ERROR:[RETURN] value mismatch for HAYSTACK size(%lu): expected -%p "\
-                        ", actual - %p\n", size, &null_haystack, res);
+        res = strstr((char *)needle, (char *)haystack);
+        if (res != NULL)
+            printf("ERROR:[RETURN] value mismatch for HAYSTACK size(%lu): expected -NULL "\
+                        ", actual - %p\n", size, res);
         return;
     }
 
@@ -1857,7 +1857,7 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *s = NULL, *accept = NULL, *page_alnd_addr =NULL;
+    uint8_t *s = SINGLE_CHAR_STRING, *accept = NULL_STRING, *page_alnd_addr = NULL;
     size_t res, expected;
     size_t accept_len = 0;
 
@@ -1866,15 +1866,13 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
     if (size == 0)
     {
         //accept is Zero
-        char null_accept = NULL_TERM_CHAR;
-        res = strspn((char *)s, &null_accept);
+        res = strspn((char *)s, (char*)accept);
         if (res != 0)
             printf("ERROR:[RETURN] value mismatch for ACCEPT size(%lu): expected - 0 "\
                         ", actual - %lu\n", size, res);
 
         //S is Zero
-        char null_s = NULL_TERM_CHAR;
-        res = strspn(&null_s, &null_accept);
+        res = strspn((char*)accept, (char *)s);
         if (res != 0)
             printf("ERROR:[RETURN] value mismatch for S size(%lu): expected - 0 "\
                         ", actual - %lu\n", size, res);

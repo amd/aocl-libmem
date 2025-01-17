@@ -145,6 +145,7 @@ static inline int cmp_needle_avx512(const char *str1, const char *str2, size_t s
             ret = _mm512_cmpneq_epu8_mask(z1,z2);
             if (ret)
                 break;
+            __attribute__ ((fallthrough));
         case 2:
             offset = size - 3 * ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
@@ -152,6 +153,7 @@ static inline int cmp_needle_avx512(const char *str1, const char *str2, size_t s
             ret = _mm512_cmpneq_epu8_mask(z3, z4);
             if(ret)
                 break;
+            __attribute__ ((fallthrough));
         case 1:
             offset = size - 2 * ZMM_SZ;
             z1 = _mm512_loadu_si512(str1 + offset);
@@ -159,6 +161,7 @@ static inline int cmp_needle_avx512(const char *str1, const char *str2, size_t s
             ret = _mm512_cmpneq_epu8_mask(z1,z2);
             if(ret)
                 break;
+            __attribute__ ((fallthrough));
         case 0:
             offset = size - ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);

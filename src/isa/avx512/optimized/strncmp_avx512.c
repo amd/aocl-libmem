@@ -197,6 +197,7 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
             match = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
             if (match)
                 break;
+            __attribute__ ((fallthrough));
         case 2:
             offset = size - 3 * ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
@@ -204,6 +205,7 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
             match = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
             if(match)
                 break;
+            __attribute__ ((fallthrough));
         case 1:
             offset = size - 2 * ZMM_SZ;
             z1 = _mm512_loadu_si512(str1 + offset);
@@ -211,6 +213,7 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
             match = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
             if(match)
                 break;
+            __attribute__ ((fallthrough));
         case 0:
             offset = size - ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);

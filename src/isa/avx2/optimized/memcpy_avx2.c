@@ -60,12 +60,15 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
                 case 3:
                     y3 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
                     _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y3);
+                    __attribute__ ((fallthrough));
                 case 2:
                     y2 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
                     _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y2);
+                    __attribute__ ((fallthrough));
                 case 1:
                     y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
                     _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
+                    __attribute__ ((fallthrough));
                 default:
                     y0 = _mm256_loadu_si256(src + size - 1 * YMM_SZ);
                     _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y0);

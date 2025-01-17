@@ -105,7 +105,7 @@ endif()
 # Compiler Warning flags
 set(_CC_Warning_Flags -Wall -Wextra -Werror -Wunused-macros -Wundef)
 # Compiler Exempted Warning flags
-set(_CC_Exempted_Warning_Flags -Wno-unused-function -Wno-implicit-fallthrough)
+set(_CC_Exempted_Warning_Flags -Wno-unused-function)
 # Compiler Optimization flags
 set(_CC_Optimization_Flags -O3 -mcmodel=small)
 # Compiler Code Generation flags

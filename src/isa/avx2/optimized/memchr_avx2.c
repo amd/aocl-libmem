@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -98,47 +98,45 @@ static inline void *memchr_le_2ymm(void *mem, int val, uint8_t size)
         return NULL;
     }
 
-    if (size < 2 * DWORD_SZ)
+    if (size < DWORD_SZ)
     {
-        if (size < DWORD_SZ)
+        uint8_t cmp = 0;
+        cmp = (*(uint8_t*)(mem))^((uint8_t)val);
+        if (cmp == 0)
+            return mem;
+        if (size > 1)
         {
-            uint8_t cmp = 0;
-            cmp = (*(uint8_t*)(mem))^((uint8_t)val);
+            cmp = (*(uint8_t*)(mem + 1))^((uint8_t)val);
             if (cmp == 0)
-                return mem;
-            if (size > 1)
+                return mem + 1;
+            if (size > 2)
             {
-                cmp = (*(uint8_t*)(mem + 1))^((uint8_t)val);
+                cmp = (*(uint8_t*)(mem + 2))^((uint8_t)val);
                 if (cmp == 0)
-                    return mem + 1;
-                if (size > 2)
-                {
-                    cmp = (*(uint8_t*)(mem + 2))^((uint8_t)val);
-                    if (cmp == 0)
-                        return mem + 2;
-                }
+                    return mem + 2;
             }
-            return NULL;
         }
+        return NULL;
+    }
 
-        x0 = _mm_set1_epi8((char)val);
-        x1 = _mm_loadu_si32(mem);
+    x0 = _mm_set1_epi8((char)val);
+    x1 = _mm_loadu_si32(mem);
+    x3 = _mm_cmpeq_epi8(x0, x1);
+    ret = _mm_movemask_epi8(x3);
+
+    if (ret > 16 || ret == 0)
+    {
+        index = size - DWORD_SZ;
+        x1 = _mm_loadu_si32(mem + index);
         x3 = _mm_cmpeq_epi8(x0, x1);
         ret = _mm_movemask_epi8(x3);
-
         if (ret > 16 || ret == 0)
-        {
-            index = size - DWORD_SZ;
-            x1 = _mm_loadu_si32(mem + index);
-            x3 = _mm_cmpeq_epi8(x0, x1);
-            ret = _mm_movemask_epi8(x3);
-            if (ret > 16 || ret == 0)
-                return NULL;
-        }
-        index += _tzcnt_u32(ret);
-        return (uint8_t*)(mem + index);
+            return NULL;
     }
-    return NULL;
+    index += _tzcnt_u32(ret);
+    return (uint8_t*)(mem + index);
+
+return NULL;
 }
 
 static inline void * __attribute__((flatten)) _memchr_avx2(const void *mem, int val, size_t size)

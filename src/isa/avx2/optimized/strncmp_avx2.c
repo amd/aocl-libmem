@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -280,6 +280,7 @@ static inline int __attribute__((flatten)) _strncmp_avx2(const char *str1, const
 
             if (ret)
                 break;
+            __attribute__ ((fallthrough));
         case 2:
             offset = size - 3 * YMM_SZ;
             y3 = _mm256_loadu_si256((void *)str1 + offset);
@@ -289,6 +290,7 @@ static inline int __attribute__((flatten)) _strncmp_avx2(const char *str1, const
             ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
             if(ret)
                 break;
+            __attribute__ ((fallthrough));
         case 1:
             offset = size - 2 * YMM_SZ;
             y1 = _mm256_loadu_si256((void *)str1 + offset);
@@ -299,6 +301,7 @@ static inline int __attribute__((flatten)) _strncmp_avx2(const char *str1, const
 
             if(ret)
                 break;
+            __attribute__ ((fallthrough));
         case 0:
             offset = size - YMM_SZ;
             y3 = _mm256_loadu_si256((void *)str1 + offset);
