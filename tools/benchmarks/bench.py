@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -113,6 +113,8 @@ def main():
                                 performance measurement. Default value is \
                                 set to 1000 iterations.",
                             type = int, default = 1000)
+    parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
+                          type = str, choices = ['y', 'n'], default = 'y')
     parser.add_argument("-perf", help = "performance runs for LibMem.\
                             Default is benchmarking mode against system Libc",
                             type = str, choices = ['p', 'b'], default = 'b')

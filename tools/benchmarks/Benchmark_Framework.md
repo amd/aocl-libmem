@@ -66,11 +66,14 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
 ## Running Bench framework
 
-    $ ./bench.py <benchmark_name> <memory_function> -m <mode> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
+    $ ./bench.py <benchmark_name> <memory_function> -m <mode> -preload <y,n> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
         <benchmark_name>  = gbm, tbm, fbm.
         <memory_function> = memcpy,memset,memmove,memcmp,strcpy,strncpy.
         -m <Mode>         = c,u(GBM)
         -x <core_id>      = Enter the CPU core on which you want to run the benchmark.
+        -preload          = y,n.
+                            Running with LD_PRELOAD = y
+                            Running with static binaries = n
         -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)
         -t "iter_value"   = increments the start size by "value".(0 stands for size<<1; other +ve integers stands for incremental iterations.)
         -i <iterations>   = specify the no.of iterations.

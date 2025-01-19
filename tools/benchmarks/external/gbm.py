@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -59,6 +59,7 @@ class GBM:
         self.GlibcVersion=''
         self.size_unit=[]
         self.perf = self.MYPARSER['ARGS']['perf']
+        self.preload = self.MYPARSER['ARGS']['preload']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -75,9 +76,7 @@ class GBM:
 
         self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' \
                 + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-        os.makedirs(self.result_dir, exist_ok=False)
-
-        self.command = [
+        command = [
                     "g++",
                     "-Wno-deprecated-declarations",
                     "gbench.cpp",
@@ -86,13 +85,35 @@ class GBM:
                     "-lbenchmark",
                     "-lpthread",
                     "-mclflushopt",
-                    "-o", "googlebench"
-                  ]
+                    ]
         #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
         if AVX512_FEATURE_ENABLED:
-            self.command.insert(1, "-DAVX512_FEATURE_ENABLED")
+            command.insert(1, "-DAVX512_FEATURE_ENABLED")
 
-        subprocess.run(self.command,cwd=self.path)
+        os.makedirs(self.result_dir, exist_ok=False)
+
+        #If PRELOAD option is enabled,set the output file name
+        if self.preload == 'y':
+            command.extend(["-o", "googlebench"])
+
+        #If static build, set the output file name
+        else:
+            #Generate the command for running LibMem by adding libmem static flags
+            command_amd = command.copy()
+            command_amd.extend(["-L" + LIBMEM_ARCHIVE_PATH,"-l:libaocl-libmem.a","-o", "googlebench_amd"])
+
+            #Generate the command for running Glibc by adding glibc static flags
+            command_glibc = command.copy()
+            command_glibc.extend(["-static-libgcc","-static-libstdc++","-o", "googlebench_glibc"])
+
+        if self.preload == 'y':
+            subprocess.run(command,cwd=self.path)
+
+        else:
+            #Compile and generate the executables
+            subprocess.run(command_amd,cwd=self.path)
+            subprocess.run(command_glibc,cwd=self.path)
+
         if (self.perf == 'b'):
             print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
             self.variant="glibc"
@@ -221,6 +242,9 @@ class GBM:
             self.ranges[0] = 1
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            if self.preload == 'y':
+                subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            else:
+                 subprocess.run(["taskset", "-c", str(self.core),"./googlebench"+"_"+self.variant,"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return

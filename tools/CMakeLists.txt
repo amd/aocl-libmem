@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -31,6 +31,7 @@ add_subdirectory(graph_generator)
 
 # generating a file to parse the library path for tools
 file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'\n")
+file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_ARCHIVE_PATH='${CMAKE_INSTALL_PREFIX}/lib'\n")
 
 set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
@@ -48,3 +49,4 @@ endif()
 
 # Append the AVX512_FEATURE_ENABLED variable to the libmem_defs script
 file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "AVX512_FEATURE_ENABLED = ${AVX512_FEATURE_ENABLED}\n")
+
