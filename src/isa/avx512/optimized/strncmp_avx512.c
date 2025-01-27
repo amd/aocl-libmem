@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,59 +30,73 @@
 #include "alm_defs.h"
 #include "zen_cpu_info.h"
 
+/* This function is an optimized version of strncmp using AVX-512 instructions.
+It compares atmost `size` bytes of str1 and str2, and returns an integer
+indicating the result of the comparison.*/
+
 static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, const char *str2, size_t size)
 {
+    // If the size is zero, the strings are considered equal
+    if (!size)
+        return 0;
+
     size_t offset = 0;
     __m512i z0, z1, z2, z3, z4, z5, z6, z7, z8;
-    uint64_t  cmp_idx = 0, ret = 0, ret1 = 0, ret2 =0;
-    uint64_t mask1 = 0, mask2 = 0;
+    uint64_t  cmp_idx, match, match1, match2;
+    uint64_t mask1, mask2;
     __mmask64 mask;
 
+    // Initialize a zeroed AVX-512 register for comparisons against null terminators
     z0 = _mm512_setzero_epi32 ();
 
+    // Handle cases where size to compare is less than or equal to 64B
     if (size <= ZMM_SZ)
     {
-        if (size)
+        z7 = _mm512_set1_epi8(0xff);
+        // Create a mask based on the size of the string to compare
+        mask = ((uint64_t)-1) >> (ZMM_SZ - size);
+        z1 =  _mm512_mask_loadu_epi8(z7, mask, str1);
+        z2 =  _mm512_mask_loadu_epi8(z7, mask, str2);
+
+        // Compare the two vectors for inequality
+        match = _mm512_cmpneq_epu8_mask(z1,z2);
+
+        // If there is a difference, find the first differing byte and return the difference
+        if (match)
         {
-            z7 = _mm512_set1_epi8(0xff);
-            mask = ((uint64_t)-1) >> (ZMM_SZ - size);
-            z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
-            z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
-
-            ret = _mm512_cmpneq_epu8_mask(z1,z2);
-
-            if (ret)
-            {
-                cmp_idx = _tzcnt_u64(ret | _mm512_cmpeq_epu8_mask(z1, z0));
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
+            cmp_idx = _tzcnt_u64(match | _mm512_cmpeq_epu8_mask(z1, z0));
+            return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
         return 0;
     }
 
+    // Handle cases where size to compare lies between 65B-128B
     if (size <= 2 * ZMM_SZ)
     {
+        // Load the first 64B of the strings
         z1 = _mm512_loadu_si512(str1);
         z2 = _mm512_loadu_si512(str2);
 
-        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-        if (!ret)
+        match = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+        // If the first 64B is equal, compare the tail part
+        if (!match)
         {
-                offset = size - ZMM_SZ;
-                z3 = _mm512_loadu_si512(str1 + offset);
-                z4 = _mm512_loadu_si512(str2 + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                if(!ret)
-                    return 0;
+            // Adjust the offset for next 64B
+            offset = size - ZMM_SZ;
+            z3 = _mm512_loadu_si512(str1 + offset);
+            z4 = _mm512_loadu_si512(str2 + offset);
+            //Check for NULL
+            match = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+            if(!match)
+                return 0;
         }
-        cmp_idx = _tzcnt_u64(ret) + offset;
+        cmp_idx = _tzcnt_u64(match) + offset;
         return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
     }
 
-    if (size <= 4* ZMM_SZ)
+    // Handle cases where size to compare lies between 129B-256B
+    if (size <= 4 * ZMM_SZ)
     {
-        uint64_t mask1 = 0, mask2 = 0;
         z1 = _mm512_loadu_si512(str1);
         z2 = _mm512_loadu_si512(str1 + ZMM_SZ);
 
@@ -91,16 +105,16 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
 
-        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
-        if (ret1)
+        match1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
+        if (match1)
         {
-            ret = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
-            if (!ret)
+            match = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
+            if (!match)
             {
                 offset += ZMM_SZ;
-                ret = ret1;
+                match = match1;
             }
-            cmp_idx = _tzcnt_u64(ret) + offset;
+            cmp_idx = _tzcnt_u64(match) + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
         z3 = _mm512_loadu_si512(str1 + size - 2 * ZMM_SZ);
@@ -109,22 +123,23 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
         z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
 
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
-        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
-        if (ret2)
+        match2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
+        if (match2)
         {
             offset = - 2 * ZMM_SZ;
-            ret = _mm512_cmpeq_epu8_mask(z3,z0) | mask2;
-            if (!ret)
+            match = _mm512_cmpeq_epu8_mask(z3,z0) | mask2;
+            if (!match)
             {
                 offset += ZMM_SZ;
-                ret = ret2;
+                match = match2;
             }
-            cmp_idx = _tzcnt_u64(ret) + size + offset;
+            cmp_idx = _tzcnt_u64(match) + size + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
         return 0;
     }
 
+    // Handle cases where size to compare is greater than 256B
     while ((size - offset) >= 4 * ZMM_SZ)
     {
         z1 = _mm512_loadu_si512(str1 + offset);
@@ -134,17 +149,17 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
         z6 = _mm512_loadu_si512(str2 + offset + 1 * ZMM_SZ);
 
         mask1 = _mm512_cmpneq_epu8_mask(z1,z5);
-        ret1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
+        match1 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z1,z2), z0) | mask1 | _mm512_cmpneq_epu8_mask(z2,z6);
 
-        if (ret1)
+        if (match1)
         {
-            ret = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
-            if (!ret)
+            match = _mm512_cmpeq_epu8_mask(z1,z0) | mask1;
+            if (!match)
             {
                 offset += ZMM_SZ;
-                ret = ret1;
+                match = match1;
             }
-            cmp_idx = _tzcnt_u64(ret) + offset;
+            cmp_idx = _tzcnt_u64(match) + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
 
@@ -153,18 +168,18 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
         z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
         z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
         mask2 = _mm512_cmpneq_epu8_mask(z3,z7);
-        ret2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
+        match2 = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z3,z4), z0) | mask2 | _mm512_cmpneq_epu8_mask(z4,z8);
 
-        if (ret2)
+        if (match2)
         {
             offset +=  2 * ZMM_SZ;
-            ret = _mm512_cmpeq_epu8_mask(z3,z0) | mask2;
-            if (!ret)
+            match = _mm512_cmpeq_epu8_mask(z3,z0) | mask2;
+            if (!match)
             {
                 offset += ZMM_SZ;
-                ret = ret2;
+                match = match2;
             }
-            cmp_idx = _tzcnt_u64(ret) + offset;
+            cmp_idx = _tzcnt_u64(match) + offset;
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
         offset += 4 * ZMM_SZ;
@@ -179,32 +194,32 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
             offset = size - 4 * ZMM_SZ;
             z1 = _mm512_loadu_si512(str1 + offset);
             z2 = _mm512_loadu_si512(str2 + offset);
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if (ret)
+            match = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            if (match)
                 break;
         case 2:
             offset = size - 3 * ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
             z4 = _mm512_loadu_si512(str2 + offset);
-            ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-            if(ret)
+            match = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+            if(match)
                 break;
         case 1:
             offset = size - 2 * ZMM_SZ;
             z1 = _mm512_loadu_si512(str1 + offset);
             z2 = _mm512_loadu_si512(str2 + offset);
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if(ret)
+            match = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            if(match)
                 break;
         case 0:
             offset = size - ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
             z4 = _mm512_loadu_si512(str2 + offset);
-            ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+            match = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
 
-            if(!ret)
+            if(!match)
                 return 0;
     }
-    cmp_idx = _tzcnt_u64(ret) + offset;
+    cmp_idx = _tzcnt_u64(match) + offset;
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }
