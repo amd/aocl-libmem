@@ -1,4 +1,4 @@
-# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -66,6 +66,14 @@ endif ()
 if (ENABLE_TUNABLES) #retaining for backward compatibility
     set(ALMEM_TUNABLES ON)
 endif()
+
+#reset ISA for invalid options
+if (NOT (${ALMEM_ISA} STREQUAL "avx2" OR ${ALMEM_ISA} STREQUAL "avx512"))
+    if (${ALMEM_ISA} MATCHES "avx")
+        message("InValid ISA option; Going ahead with next feasible option")
+    endif ()
+    set(ALMEM_ISA "")
+endif ()
 
 if (ALMEM_ISA) #ISA has precedence over DYN_DISPATCH
     if (ALMEM_DYN_DISPATCH)
