@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,182 +28,183 @@
 #include "zen_cpu_info.h"
 #include "alm_defs.h"
 
-extern cpu_info zen_info;
-
+/* This function is an optimized version of memchr using AVX-512 instructions.
+It scans  the initial `size` bytes of the `mem` area for the first instance of `val`. */
 static inline void * __attribute__((flatten)) _memchr_avx512(const void *mem, int val, size_t size)
 {
     __m512i z0, z1, z2, z3, z4;
-    uint64_t ret = 0, ret1 = 0, ret2 = 0, ret3 = 0;
+    uint64_t match, match1, match2, match3;
     size_t index = 0, offset = 0;
+
+    // Broadcast the value to find to all elements of z0
     z0 = _mm512_set1_epi8((char)val);
+
+    // Pointer to return the found byte location
     void *ret_ptr = (void *)mem;
+    // Use the 'rax' register to hold the return pointer
+    register void *ret asm("rax");
+    ret = ret_ptr;
 
-    if (size == 0)
-        return NULL;
-
-    if (size <= ZMM_SZ)
+    // Handle the case where size is less than 64B
+    // Perform a masked load and comparison
+    if (likely(size <= ZMM_SZ))
     {
-       __m512i z0, z1, z2;
-        __mmask64 mask;
-        mask = ((uint64_t)-1) >> (ZMM_SZ - size);
-        z0 = _mm512_set1_epi8(val);
-        z1 = _mm512_set1_epi8(val + 1);
-        z2 =  _mm512_mask_loadu_epi8(z1, mask, mem);
-        ret = _mm512_cmpeq_epu8_mask(z0, z2);
-        if (ret == 0)
-            return NULL;
-        index = _tzcnt_u64(ret);
-        return ret_ptr + index;
+        if (likely(size))
+        {
+            __mmask64 mask;
+            mask = ((uint64_t)-1) >> (ZMM_SZ - size);
+            // Set z1 vector to a value different from the search value
+            z1 = _mm512_set1_epi8(val + 1);
+            // Load the memory block into z2 vector with masking
+            z2 =  _mm512_mask_loadu_epi8(z1, mask, mem);
+            // Compare the vector with the search value
+            match = _mm512_cmpeq_epu8_mask(z0, z2);
+            // If no match is found, return NULL
+            if (!match)
+                return NULL;
+            // Find the index of the first match and return the pointer to the matching byte
+            index = _tzcnt_u64(match);
+            return ret + index;
+        }
+        // If the size is zero, return NULL as there's nothing to search(unlikely to happen)
+        return NULL;
     }
 
+    // Handle the case where size lies between 65B-128B
     if (size <= 2 * ZMM_SZ)
     {
+        // Load the first 64B and check for the match
         z1 = _mm512_loadu_si512(mem);
-        ret = _mm512_cmpeq_epu8_mask(z0, z1);
+        match = _mm512_cmpeq_epu8_mask(z0, z1);
 
-        if (ret == 0)
+        //If no match is found, adjust the index and load the last 64B of the memory block
+        if (!match)
         {
             index = size - ZMM_SZ;
-            z1 = _mm512_loadu_si512(ret_ptr + index);
-            ret = _mm512_cmpeq_epu8_mask(z0, z1);
+            z1 = _mm512_loadu_si512(ret + index);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
 
-            if (ret == 0)
+            // If no match is found, return NULL
+            if (!match)
                 return NULL;
         }
-        index += _tzcnt_u64(ret);
-        return ret_ptr + index;
+        // Find the index of the first match and return the pointer to the matching byte
+        index += _tzcnt_u64(match);
+        return ret + index;
     }
 
+    // Handle the case where size lies between 129B-256B
     if (size <= 4 * ZMM_SZ)
     {
+        // Load the memory block in to four parts
         z1 = _mm512_loadu_si512(mem);
         z2 = _mm512_loadu_si512(mem + ZMM_SZ);
         z3 = _mm512_loadu_si512(mem + (size - 2 * ZMM_SZ));
         z4 = _mm512_loadu_si512(mem + (size - ZMM_SZ));
 
-        ret = _mm512_cmpeq_epu8_mask(z0, z1);
-        ret1 = ret | _mm512_cmpeq_epu8_mask(z0, z2);
-        ret2 = _mm512_cmpeq_epu8_mask(z0, z3);
-        ret3 = ret2 | _mm512_cmpeq_epu8_mask(z0, z4);
+        // Perform comparisons across all four parts
+        match = _mm512_cmpeq_epu8_mask(z0, z1);
+        match1 = match | _mm512_cmpeq_epu8_mask(z0, z2);
+        match2 = match1 | _mm512_cmpeq_epu8_mask(z0, z3);
+        match3 = match2 | _mm512_cmpeq_epu8_mask(z0, z4);
 
-        if (ret1 | ret3)
+        // If a match is found in any part, determine which part,
+        // and return the pointer to the matching byte
+        if (match3)
         {
-            if (ret1)
+            if (match)
             {
-                if (ret)
-                {
-                    index = _tzcnt_u64(ret);
-                    return ret_ptr + index;
-                }
-                index = _tzcnt_u64(ret1) + ZMM_SZ;
-                return ret_ptr + index;
+                index = _tzcnt_u64(match);
+                return ret + index;
             }
-            if (ret2)
+            if (match1)
             {
-                index = _tzcnt_u64(ret2) + (size - 2 * ZMM_SZ);
-                return ret_ptr + index;
+                index = _tzcnt_u64(match1) + ZMM_SZ;
+                return ret + index;
             }
-            index = _tzcnt_u64(ret3) + (size - ZMM_SZ);
-            return ret_ptr + index;
+            if (match2)
+            {
+                index = _tzcnt_u64(match2) + (size - 2 * ZMM_SZ);
+                return ret + index;
+            }
+            index = _tzcnt_u64(match3) + (size - ZMM_SZ);
+            return ret + index;
         }
+        // If no match is found, return NULL
         return NULL;
     }
 
-    z1 = _mm512_loadu_si512(mem);
-    ret = _mm512_cmpeq_epu8_mask(z0, z1);
-    if (ret)
+    // For larger sizes(>256B), loop through the memory block in chunks of four ZMM registers
+    while ((size - offset) >= 4 * ZMM_SZ)
     {
-        index = _tzcnt_u64(ret);
-        return ret_ptr + index;
-    }
+        z1 = _mm512_loadu_si512(mem + offset);
+        z2 = _mm512_loadu_si512(mem + offset + ZMM_SZ);
+        z3 = _mm512_loadu_si512(mem + offset + 2 * ZMM_SZ);
+        z4 = _mm512_loadu_si512(mem + offset + 3 * ZMM_SZ);
 
-    z2 = _mm512_loadu_si512(mem + ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z2);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + ZMM_SZ;
-        return ret_ptr + index;
-    }
-    z3 = _mm512_loadu_si512(mem + 2 * ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z3);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + 2 * ZMM_SZ;
-        return ret_ptr + index;
-    }
-    z4 = _mm512_loadu_si512(mem + 3 * ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z4);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + 3 * ZMM_SZ;
-        return ret_ptr + index;
-    }
+        match = _mm512_cmpeq_epu8_mask(z0, z1);
+        match1 = match | _mm512_cmpeq_epu8_mask(z0, z2);
+        match2 = match1 | _mm512_cmpeq_epu8_mask(z0, z3);
+        match3 = match2 | _mm512_cmpeq_epu8_mask(z0, z4);
 
-    offset = 4 * ZMM_SZ - ((uintptr_t)mem & (ZMM_SZ - 1));
-    size -= 4 * ZMM_SZ;
-    while (size >= offset)
-    {
-        z1 = _mm512_load_si512(mem + offset);
-        z2 = _mm512_load_si512(mem + offset + ZMM_SZ);
-        z3 = _mm512_load_si512(mem + offset + 2 * ZMM_SZ);
-        z4 = _mm512_load_si512(mem + offset + 3 * ZMM_SZ);
-
-        ret = _mm512_cmpeq_epu8_mask(z0, z1);
-        ret1 = ret | _mm512_cmpeq_epu8_mask(z0, z2);
-        ret2 = ret1 | _mm512_cmpeq_epu8_mask(z0, z3);
-        ret3 = ret2 | _mm512_cmpeq_epu8_mask(z0, z4);
-
-        if (ret3 != 0)
+        if (match3)
         {
-            if (ret != 0)
+            if (match)
             {
-                index = _tzcnt_u64(ret) + offset;
-                return ret_ptr + index;
+                index = _tzcnt_u64(match) + offset;
+                return ret + index;
             }
-            if (ret1 != 0)
+            if (match1)
             {
-                index = _tzcnt_u64(ret1) + offset + ZMM_SZ;
-                return ret_ptr + index;
+                index = _tzcnt_u64(match1) + offset + ZMM_SZ;
+                return ret + index;
             }
-            if (ret2 != 0)
+            if (match2)
             {
-                index = _tzcnt_u64(ret2) + offset + 2 * ZMM_SZ;
-                return ret_ptr + index;
+                index = _tzcnt_u64(match2) + offset + 2 * ZMM_SZ;
+                return ret + index;
             }
-            index = _tzcnt_u64(ret3) + offset + 3 * ZMM_SZ;
-            return ret_ptr + index;
+            index = _tzcnt_u64(match3) + offset + 3 * ZMM_SZ;
+            return ret + index;
         }
         offset += 4 * ZMM_SZ;
     }
 
-    z1 = _mm512_loadu_si512(mem + size);
-    ret = _mm512_cmpeq_epu8_mask(z0, z1);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + size;
-        return ret_ptr + index;
-    }
+    // Handle any remaining bytes that were not compared in the above loop
+    uint8_t left_out = size - offset;
+    if (!left_out)
+        return NULL;
 
-    z2 = _mm512_loadu_si512(mem + size + ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z2);
-    if (ret)
+    // Determine how many 64-byte chunks are left and compare them accordingly
+    switch(left_out >> 6)
     {
-        index = _tzcnt_u64(ret) + size + ZMM_SZ;
-        return ret_ptr + index;
+        // For each case, load the remaining chunk into z1 and compare
+        // If a match is found, break to calculate the index
+        case 3:
+            offset = size - 4 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(mem + offset);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
+            if (match)
+                break;
+        case 2:
+            offset = size - 3 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(mem + offset);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
+            if (match)
+                break;
+        case 1:
+            offset = size - 2 * ZMM_SZ;
+            z1 = _mm512_loadu_si512(mem + offset);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
+            if (match)
+                break;
+        case 0:
+            offset = size - ZMM_SZ;
+            z1 = _mm512_loadu_si512(mem + offset);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
+            if(!match)
+                return NULL;
     }
-    z3 = _mm512_loadu_si512(mem + size + 2 * ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z3);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + size + 2 * ZMM_SZ;
-        return ret_ptr + index;
-    }
-    z4 = _mm512_loadu_si512(mem + size + 3 * ZMM_SZ);
-    ret = _mm512_cmpeq_epu8_mask(z0, z4);
-    if (ret)
-    {
-        index = _tzcnt_u64(ret) + size + 3 * ZMM_SZ;
-        return ret_ptr + index;
-    }
-    return NULL;
+    index = _tzcnt_u64(match) + offset;
+    return ret + index;
 }
