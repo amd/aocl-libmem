@@ -70,7 +70,7 @@ class FBM:
         if (not self.isExist):
             print("Preparing Fleetbench benchmark")
             subprocess.run(["git","clone","-c","advice.detachedHead=false","-b","v0.2","https://github.com/google/fleetbench.git"],cwd=self.path)
-            subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable"],cwd=self.path+"/fleetbench")
+            subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable","--cxxopt=-Wno-changes-meaning"],cwd=self.path+"/fleetbench")
 
         self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -160,6 +160,6 @@ class FBM:
 
         for i in range(0,self.last):
             with open(self.result_dir+'/fb_'+str(i)+str(self.variant)+'.txt','w') as g:
-                subprocess.run(["taskset","-c", str(self.core),"bazel","run","--config=opt","fleetbench/libc/mem_benchmark","--","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions="+str(self.repetitions)], cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+                subprocess.run(["taskset","-c", str(self.core),"bazel","run","--cxxopt=-Wno-changes-meaning","--config=opt","fleetbench/libc/mem_benchmark","--","--benchmark_filter=BM_Memory/"+str(self.func)+"/"+str(i),"--benchmark_repetitions="+str(self.repetitions)], cwd=self.path+"/fleetbench",env=env,check=True,stdout =g,stderr=subprocess.PIPE)
         return
 
