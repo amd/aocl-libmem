@@ -85,10 +85,13 @@ class GBM:
                     "-Wno-deprecated-declarations",
                     "gbench.cpp",
                     "-isystem", "benchmark/include",
-                    "-Lbenchmark/build/src",
-                    "-lbenchmark",
-                    "-lpthread",
                     "-mclflushopt",
+                    ]
+
+        linker_flags = [
+                        "-Lbenchmark/build/src",
+                        "-lbenchmark",
+                        "-lpthread",
                     ]
         #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
         if AVX512_FEATURE_ENABLED:
@@ -98,17 +101,17 @@ class GBM:
 
         #If PRELOAD option is enabled,set the output file name
         if self.preload == 'y':
-            command.extend(["-o", "googlebench"])
+            command.extend(linker_flags + ["-o", "googlebench"])
 
         #If static build, set the output file name
         else:
             #Generate the command for running LibMem by adding libmem static flags
             command_amd = command.copy()
-            command_amd.extend(["-L" + LIBMEM_ARCHIVE_PATH,"-l:libaocl-libmem.a","-o", "googlebench_amd"])
+            command_amd.extend(["-L" + LIBMEM_ARCHIVE_PATH,"-l:libaocl-libmem.a"] + linker_flags + ["-o", "googlebench_amd"])
 
             #Generate the command for running Glibc by adding glibc static flags
             command_glibc = command.copy()
-            command_glibc.extend(["-static-libgcc","-static-libstdc++","-o", "googlebench_glibc"])
+            command_glibc.extend(["-static-libgcc","-static-libstdc++"] + linker_flags + ["-o", "googlebench_glibc"])
 
         if self.preload == 'y':
             subprocess.run(command,cwd=self.path)

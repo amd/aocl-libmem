@@ -102,8 +102,20 @@ else ()
 endif()
 
 
-# Generic CC flags
-add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -fno-common -Wundef -fvisibility=hidden -O3 -mcmodel=small -Wno-implicit-fallthrough)
+# Compiler Warning flags
+set(_CC_Warning_Flags -Wall -Wextra -Werror -Wunused-macros -Wundef)
+# Compiler Exempted Warning flags
+set(_CC_Exempted_Warning_Flags -Wno-unused-function -Wno-implicit-fallthrough)
+# Compiler Optimization flags
+set(_CC_Optimization_Flags -O3 -mcmodel=small)
+# Compiler Code Generation flags
+set(_CC_Code_Gen_Flags -fno-common)
+# Compiler Shared binary exclusive flags
+set(_CC_Shared_Flags -flto -fvisibility=hidden)
+
+set(_CC_Flags ${_CC_Warning_Flags} ${_CC_Exempted_Warning_Flags} ${_CC_Optimization_Flags} ${_CC_Code_Gen_Flags})
+
+add_compile_options(${_CC_Flags})
 
 # Compiler exceptions
 if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ALMEM_TUNABLES)
@@ -138,7 +150,6 @@ if (ALMEM_ISA)
 else ()
     add_subdirectory(uarch)
     if (ALMEM_DYN_DISPATCH)
-        list(APPEND SOURCE_FILES libmem_iface.c)
         add_subdirectory(system)
     endif ()
     if (ALMEM_TUNABLES)
@@ -147,46 +158,35 @@ else ()
     endif ()
 endif ()
 
-
 # common object lib
 add_library(libmem_objlib OBJECT ${SOURCE_FILES})
-target_include_directories(libmem_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
-set_property(TARGET libmem_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
-if (ALMEM_TUNABLES)
-    set(OBJLIB_CMPLR_FLAGS -mavx512f -mavx512bw)
-else ()
-    if (${HAS_AVX512})
-        set(OBJLIB_CMPLR_FLAGS -mavx512f -mavx512bw)
-    else ()
-        set(OBJLIB_CMPLR_FLAGS -mavx2)
-    endif ()
-endif ()
-list(APPEND OBJLIB_CMPLR_FLAGS -mbmi -mlzcnt)
+target_include_directories(libmem_objlib PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(libmem_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_compile_options(libmem_objlib PRIVATE ${OBJLIB_CMPLR_FLAGS})
-
-# shared lib
-add_library(${PROJECT_NAME} SHARED)
-target_link_libraries(${PROJECT_NAME} libmem_objlib)
-
+set(OBJ-LIST libmem_objlib)
+# create object-list
 if (ALMEM_ISA)
     if (ALMEM_ISA MATCHES "avx")
-        target_link_libraries(${PROJECT_NAME} isa_objlib)
+        list(APPEND OBJ-LIST isa_objlib)
     endif ()
 else ()
-    target_link_libraries(${PROJECT_NAME} uarch_objlib)
+    list(APPEND OBJ-LIST uarch_objlib)
     if (ALMEM_DYN_DISPATCH)
-        target_link_libraries(${PROJECT_NAME} system_objlib)
+        list(APPEND OBJ-LIST system_objlib)
     endif ()
     if (ALMEM_TUNABLES)
-        target_link_libraries(${PROJECT_NAME} tunable_objlib)
+        list(APPEND OBJ-LIST tunable_objlib)
     endif()
 endif ()
 
+# shared lib
+add_library(${PROJECT_NAME} SHARED)
+target_link_options(${PROJECT_NAME} PRIVATE ${_CC_Flags} ${_CC_Shared_Flags})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${OBJ-LIST})
 
 # static lib
 add_library("${PROJECT_NAME}_static" STATIC)
-target_link_libraries("${PROJECT_NAME}_static" libmem_objlib)
+target_link_libraries("${PROJECT_NAME}_static" PRIVATE ${OBJ-LIST})
 
 # renaming static binary
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})

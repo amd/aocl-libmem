@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-extern char * strncpy(char *, const char *, size_t);
+typedef char * (*amd_strncpy_fn)(char *, const char *, size_t);
 
 //Micro architecture specifc implementations.
 extern char * __strncpy_zen1(char *,const char *, size_t);
@@ -41,8 +41,6 @@ extern char * __strncpy_zen5(char *,const char *, size_t);
 
 //System solution which takes in system config and  threshold values.
 extern char * __strncpy_system(char *,const char *, size_t);
-
-extern char *(*_strncpy_variant)(char *, const char *, size_t);
 
 #ifdef __cplusplus
 }

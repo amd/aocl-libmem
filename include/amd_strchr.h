@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,16 +28,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern char * strchr(const char *, int);
+
+typedef char * (*amd_strchr_fn)(const char *, int);
+
 //Micro architecture specifc implementations.
 extern char * __strchr_zen1(const char *, int);
 extern char * __strchr_zen2(const char *, int);
 extern char * __strchr_zen3(const char *, int);
 extern char * __strchr_zen4(const char *, int);
 extern char * __strchr_zen5(const char *, int);
+
 //System solution which takes in system config.
 extern char * __strchr_system(const char *, int);
-extern char *(*_strchr_variant)(const char *, int);
+
 #ifdef __cplusplus
 }
 #endif

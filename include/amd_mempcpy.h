@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,7 +30,8 @@
 extern "C" {
 #endif
 
-extern void * mempcpy(void *, const void *, size_t);
+typedef void* (*amd_mempcpy_fn)(void *, const void*, size_t);
+
 //Micro architecture specifc implementations.
 extern void * __mempcpy_zen1(void *dest,const void *src, size_t size);
 extern void * __mempcpy_zen2(void *dest,const void *src, size_t size);
@@ -69,9 +70,6 @@ extern void * __mempcpy_erms_w_aligned(void *dest,const void *src, size_t size);
 extern void * __mempcpy_erms_d_aligned(void *dest,const void *src, size_t size);
 extern void * __mempcpy_erms_q_aligned(void *dest,const void *src, size_t size);
 #endif
-
-extern void *(*_mempcpy_variant)(void *, const void *, size_t);
-
 
 #ifdef __cplusplus
 }

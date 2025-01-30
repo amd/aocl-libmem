@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-extern int strcmp(const char *, const char *);
+typedef int (*amd_strcmp_fn)(const char *, const char *);
 
 //Micro architecture specifc implementations.
 extern int __strcmp_zen1(const char *,const char *);
@@ -41,9 +41,6 @@ extern int __strcmp_zen5(const char *,const char *);
 
 //System solution which takes in system config.
 extern int __strcmp_system(const char *,const char *);
-
-extern int(*_strcmp_variant)(const char *, const char *);
-
 
 #ifdef __cplusplus
 }

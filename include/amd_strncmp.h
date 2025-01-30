@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,16 +28,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern int strncmp(const char *, const char *, size_t);
+
+typedef int (*amd_strncmp_fn)(const char *, const char *, size_t);
+
 //Micro architecture specifc implementations.
 extern int __strncmp_zen1(const char *,const char *, size_t);
 extern int __strncmp_zen2(const char *,const char *, size_t);
 extern int __strncmp_zen3(const char *,const char *, size_t);
 extern int __strncmp_zen4(const char *,const char *, size_t);
 extern int __strncmp_zen5(const char *,const char *, size_t);
+
 //System solution which takes in system config.
 extern int __strncmp_system(const char *,const char *, size_t);
-extern int(*_strncmp_variant)(const char *, const char *, size_t);
+
 #ifdef __cplusplus
 }
 #endif

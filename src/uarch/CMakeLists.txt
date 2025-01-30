@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -42,9 +42,9 @@ foreach(uarch ${uarch_list})
     endforeach()
 
     add_library(lib_zen${uarch} OBJECT ${UARCH_SRC_FILES})
-    target_include_directories(lib_zen${uarch} PUBLIC ${CMAKE_SOURCE_DIR}/include)
+    target_include_directories(lib_zen${uarch} PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-    set(_MODULE_CC_FLAGS "")
+    set(_MODULE_CC_FLAGS ${_CC_Flags})
     if (${CONFIG_COMPILER_HAS_ZEN${uarch}})
         list(APPEND _MODULE_CC_FLAGS -march=znver${uarch})
     else ()
@@ -65,7 +65,6 @@ foreach(uarch ${uarch_list})
         endif()
         list(APPEND _MODULE_CC_FLAGS -mbmi -mlzcnt)
     endif ()
-
-    set_target_properties(lib_zen${uarch} PROPERTIES POSITION_INDEPENDENT_CODE "ON" COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
+    set_target_properties(lib_zen${uarch} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
     target_sources(uarch_objlib INTERFACE $<TARGET_OBJECTS:lib_zen${uarch}>)
 endforeach()

@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -39,13 +39,13 @@ foreach(tunable ${tune_list})
     add_library(lib_${tunable} OBJECT ${TUNABLE_SRC_FILES})
     target_include_directories(lib_${tunable} PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-    set(_MODULE_CC_FLAGS -mbmi -mlzcnt)
+    set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mlzcnt)
     if (${tunable} MATCHES avx512)
         list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
     elseif (${tunable} MATCHES avx2)
         list(APPEND _MODULE_CC_FLAGS -mavx2)
     endif ()
 
-    set_target_properties(lib_${tunable} PROPERTIES POSITION_INDEPENDENT_CODE "ON" COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
+    set_target_properties(lib_${tunable} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
     target_sources(tunable_objlib INTERFACE $<TARGET_OBJECTS:lib_${tunable}>)
 endforeach()

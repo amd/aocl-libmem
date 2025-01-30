@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -35,7 +35,7 @@ endforeach()
 add_library(isa_objlib OBJECT ${ISA_SRC_FILES})
 target_include_directories(isa_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-set(_MODULE_CC_FLAGS -mbmi -mlzcnt)
+set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mlzcnt)
 if (${ALMEM_ISA} MATCHES "avx512")
     list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
 else ()

@@ -28,16 +28,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern char * strncat(char *, const char *, size_t);
+
+typedef char * (*amd_strncat_fn)(char *, const char *, size_t);
+
 //Micro architecture specifc implementations.
 extern char * __strncat_zen1(char *,const char *, size_t);
 extern char * __strncat_zen2(char *,const char *, size_t);
 extern char * __strncat_zen3(char *,const char *, size_t);
 extern char * __strncat_zen4(char *,const char *, size_t);
 extern char * __strncat_zen5(char *,const char *, size_t);
+
 //System solution which takes in system config.
 extern char * __strncat_system(char *,const char *, size_t);
-extern char *(*_strncat_variant)(char *, const char *, size_t);
+
 #ifdef __cplusplus
 }
 #endif

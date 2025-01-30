@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -32,7 +32,7 @@ list(APPEND SYSTEM_SRC_FILES
 endforeach()
 
 add_library(system_objlib OBJECT ${SYSTEM_SRC_FILES})
-target_include_directories(system_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(system_objlib PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(system_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_CC_Flags}")
 
-set_target_properties(system_objlib PROPERTIES POSITION_INDEPENDENT_CODE "ON")
 target_link_libraries(system_objlib dl)

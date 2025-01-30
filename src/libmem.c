@@ -28,6 +28,7 @@
 #ifdef ALMEM_DYN_DISPATCH
 #include "libmem_impls.h"
 #include "libmem.h"
+#include "libmem_iface.c"
 #endif
 
 cpu_info zen_info;
@@ -265,21 +266,21 @@ static __attribute__((constructor)) void libmem_init()
     if (is_amd_cpu == true)
         cpu_var_idx  = libmem_cpu_resolver();
 
-    _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_cpu_impls[MEMCPY][cpu_var_idx]);
-    _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_cpu_impls[MEMPCPY][cpu_var_idx]);
-    _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_cpu_impls[MEMMOVE][cpu_var_idx]);
-    _memset_variant = ((void* (*)(void *, int, size_t))libmem_cpu_impls[MEMSET][cpu_var_idx]);
-    _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_cpu_impls[MEMCMP][cpu_var_idx]);
-    _memchr_variant = ((void* (*)(const void *, int, size_t))libmem_cpu_impls[MEMCHR][cpu_var_idx]);
-    _strcpy_variant = ((char* (*)(char *, const char *))libmem_cpu_impls[STRCPY][cpu_var_idx]);
-    _strncpy_variant = ((char* (*)(char *, const char *, size_t))libmem_cpu_impls[STRNCPY][cpu_var_idx]);
-    _strcmp_variant = ((int (*)(const char *, const char *))libmem_cpu_impls[STRCMP][cpu_var_idx]);
-    _strncmp_variant = ((int (*)(const char *, const char *, size_t))libmem_cpu_impls[STRNCMP][cpu_var_idx]);
-    _strcat_variant = ((char* (*)(char *, const char *))libmem_cpu_impls[STRCAT][cpu_var_idx]);
-    _strncat_variant = ((char* (*)(char *, const char *, size_t))libmem_cpu_impls[STRNCAT][cpu_var_idx]);
-    _strstr_variant = ((char* (*)(const char *, const char *))libmem_cpu_impls[STRSTR][cpu_var_idx]);
-    _strlen_variant = ((size_t (*)(const char *))libmem_cpu_impls[STRLEN][cpu_var_idx]);
-    _strchr_variant = ((char* (*)(const char *, int))libmem_cpu_impls[STRCHR][cpu_var_idx]);
+    _memcpy_variant     = (amd_memcpy_fn) libmem_cpu_impls[MEMCPY][cpu_var_idx];
+    _mempcpy_variant    = (amd_mempcpy_fn) libmem_cpu_impls[MEMPCPY][cpu_var_idx];
+    _memmove_variant    = (amd_memmove_fn) libmem_cpu_impls[MEMMOVE][cpu_var_idx];
+    _memset_variant     = (amd_memset_fn) libmem_cpu_impls[MEMSET][cpu_var_idx];
+    _memcmp_variant     = (amd_memcmp_fn) libmem_cpu_impls[MEMCMP][cpu_var_idx];
+    _memchr_variant     = (amd_memchr_fn) libmem_cpu_impls[MEMCHR][cpu_var_idx];
+    _strcpy_variant     = (amd_strcpy_fn) libmem_cpu_impls[STRCPY][cpu_var_idx];
+    _strncpy_variant    = (amd_strncpy_fn) libmem_cpu_impls[STRNCPY][cpu_var_idx];
+    _strcmp_variant     = (amd_strcmp_fn) libmem_cpu_impls[STRCMP][cpu_var_idx];
+    _strncmp_variant    = (amd_strncmp_fn) libmem_cpu_impls[STRNCMP][cpu_var_idx];
+    _strcat_variant     = (amd_strcat_fn) libmem_cpu_impls[STRCAT][cpu_var_idx];
+    _strncat_variant    = (amd_strncat_fn) libmem_cpu_impls[STRNCAT][cpu_var_idx];
+    _strstr_variant     = (amd_strstr_fn) libmem_cpu_impls[STRSTR][cpu_var_idx];
+    _strlen_variant     = (amd_strlen_fn) libmem_cpu_impls[STRLEN][cpu_var_idx];
+    _strchr_variant     = (amd_strchr_fn) libmem_cpu_impls[STRCHR][cpu_var_idx];
 #endif //end of dynamic dispatching
 #ifdef ALMEM_TUNABLES
     tunable_variant_idx tun_var_idx = libmem_tunable_resolver();
@@ -287,11 +288,11 @@ static __attribute__((constructor)) void libmem_init()
     //pick the tunable implementation only with valid tunable config
     if (tun_var_idx != UNKNOWN)
     {
-        _memcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMCPY][tun_var_idx]);
-        _mempcpy_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMPCPY][tun_var_idx]);
-        _memmove_variant = ((void* (*)(void *, const void *, size_t))libmem_tun_impls[MEMMOVE][tun_var_idx]);
-        _memset_variant = ((void* (*)(void *, int, size_t))libmem_tun_impls[MEMSET][tun_var_idx]);
-        _memcmp_variant =((int (*)(const void *, const void *, size_t))libmem_tun_impls[MEMCMP][tun_var_idx]);
+        _memcpy_variant     = (amd_memcpy_fn) libmem_cpu_impls[MEMCPY][cpu_var_idx];
+        _mempcpy_variant    = (amd_mempcpy_fn) libmem_cpu_impls[MEMPCPY][cpu_var_idx];
+        _memmove_variant    = (amd_memmove_fn) libmem_cpu_impls[MEMMOVE][cpu_var_idx];
+        _memset_variant     = (amd_memset_fn) libmem_cpu_impls[MEMSET][cpu_var_idx];
+        _memcmp_variant     = (amd_memcmp_fn) libmem_cpu_impls[MEMCMP][cpu_var_idx];
     }
 #endif //end of tunables
 }

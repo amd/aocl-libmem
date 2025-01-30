@@ -27,77 +27,78 @@
 #include <stddef.h>
 #include "libmem_iface.h"
 
-__attribute__((visibility("default")))void * (*_memcpy_variant)(void *, const void *, size_t);
+__attribute__((visibility("default"))) amd_memcpy_fn _memcpy_variant = __memcpy_system;
+
 // memcpy mapping
 LIBMEM_FN_MAP(memcpy);
 WEAK_ALIAS(memcpy, MK_FN_NAME(memcpy));
 
-__attribute__((visibility("default")))void * (*_mempcpy_variant)(void *, const void *, size_t);
+__attribute__((visibility("default"))) amd_mempcpy_fn _mempcpy_variant = __mempcpy_system;
 // mempcpy mapping
 LIBMEM_FN_MAP(mempcpy);
 WEAK_ALIAS(mempcpy, MK_FN_NAME(mempcpy));
 
-__attribute__((visibility("default")))void * (*_memmove_variant)(void *, const void *, size_t);
+__attribute__((visibility("default"))) amd_memmove_fn _memmove_variant = __memmove_system;
 // memmove mapping
 LIBMEM_FN_MAP(memmove);
 WEAK_ALIAS(memmove, MK_FN_NAME(memmove));
 
-__attribute__((visibility("default")))void * (*_memset_variant)(void *, int , size_t);
+__attribute__((visibility("default"))) amd_memset_fn _memset_variant = __memset_system;
 // memset mapping
 LIBMEM_FN_MAP(memset);
 WEAK_ALIAS(memset, MK_FN_NAME(memset));
 
-__attribute__((visibility("default")))int (*_memcmp_variant)(const void *, const void * , size_t);
+__attribute__((visibility("default"))) amd_memcmp_fn _memcmp_variant = __memcmp_system;
 // memcmp mapping
 LIBMEM_FN_MAP(memcmp);
 WEAK_ALIAS(memcmp, MK_FN_NAME(memcmp));
 
-__attribute__((visibility("default")))void * (*_memchr_variant)(void *, int , size_t);
+__attribute__((visibility("default")))  amd_memchr_fn _memchr_variant = __memchr_system;
 // memchr mapping
 LIBMEM_FN_MAP(memchr);
 WEAK_ALIAS(memchr, MK_FN_NAME(memchr));
 
-__attribute__((visibility("default")))char * (*_strcpy_variant)(char *, const char *);
+__attribute__((visibility("default")))  amd_strcpy_fn _strcpy_variant = __strcpy_system;
 // strcpy mapping
 LIBMEM_FN_MAP(strcpy);
 WEAK_ALIAS(strcpy, MK_FN_NAME(strcpy));
 
-__attribute__((visibility("default")))char * (*_strncpy_variant)(char *, const char *, size_t);
+__attribute__((visibility("default"))) amd_strncpy_fn _strncpy_variant = __strncpy_system;
 // strncpy mapping
 LIBMEM_FN_MAP(strncpy);
 WEAK_ALIAS(strncpy, MK_FN_NAME(strncpy));
 
-__attribute__((visibility("default")))int (*_strcmp_variant)(const char *, const char *);
+__attribute__((visibility("default"))) amd_strcmp_fn _strcmp_variant  = __strcmp_system;
 // strcmp mapping
 LIBMEM_FN_MAP(strcmp);
 WEAK_ALIAS(strcmp, MK_FN_NAME(strcmp));
 
-__attribute__((visibility("default")))int (*_strncmp_variant)(const char *, const char *, size_t);
+__attribute__((visibility("default"))) amd_strncmp_fn _strncmp_variant = __strncmp_system;
 // strncmp mapping
 LIBMEM_FN_MAP(strncmp);
 WEAK_ALIAS(strncmp, MK_FN_NAME(strncmp));
 
-__attribute__((visibility("default")))char * (*_strcat_variant)(char *, const char *);
+__attribute__((visibility("default"))) amd_strcat_fn _strcat_variant = __strcat_system;
 // strcat mapping
 LIBMEM_FN_MAP(strcat);
 WEAK_ALIAS(strcat, MK_FN_NAME(strcat));
 
-__attribute__((visibility("default")))char * (*_strncat_variant)(char *, const char *, size_t);
+__attribute__((visibility("default"))) amd_strncat_fn _strncat_variant  = __strncat_system;
 // strncat mapping
 LIBMEM_FN_MAP(strncat);
 WEAK_ALIAS(strncat, MK_FN_NAME(strncat));
 
-__attribute__((visibility("default")))char * (*_strstr_variant)(const char *, const char *);
+__attribute__((visibility("default"))) amd_strstr_fn _strstr_variant  = __strstr_system;
 // strstr mapping
 LIBMEM_FN_MAP(strstr);
 WEAK_ALIAS(strstr, MK_FN_NAME(strstr));
 
-__attribute__((visibility("default")))size_t (*_strlen_variant)(const char *);
+__attribute__((visibility("default"))) amd_strlen_fn _strlen_variant  = __strlen_system;
 // strlen mapping
 LIBMEM_FN_MAP(strlen);
 WEAK_ALIAS(strlen, MK_FN_NAME(strlen));
 
-__attribute__((visibility("default")))char * (*_strchr_variant)(const char *, int);
+__attribute__((visibility("default"))) amd_strchr_fn _strchr_variant  = __strchr_system;
 // strchr mapping
 LIBMEM_FN_MAP(strchr);
 WEAK_ALIAS(strchr, MK_FN_NAME(strchr));

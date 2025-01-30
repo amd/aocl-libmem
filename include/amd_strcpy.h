@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-extern char * strcpy(char *, const char *);
+typedef char * (*amd_strcpy_fn)(char *, const char *);
 
 //Micro architecture specifc implementations.
 extern char * __strcpy_zen1(char *,const char *);
@@ -41,9 +41,6 @@ extern char * __strcpy_zen5(char *,const char *);
 
 //System solution which takes in system config.
 extern char * __strcpy_system(char *,const char *);
-
-extern char *(*_strcpy_variant)(char *, const char *);
-
 
 #ifdef __cplusplus
 }

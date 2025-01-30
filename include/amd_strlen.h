@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -28,16 +28,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern size_t strlen(const char *);
+
+typedef size_t (*amd_strlen_fn)(const char *);
+
 //Micro architecture specifc implementations.
 extern size_t __strlen_zen1(const char *);
 extern size_t __strlen_zen2(const char *);
 extern size_t __strlen_zen3(const char *);
 extern size_t __strlen_zen4(const char *);
 extern size_t __strlen_zen5(const char *);
+
 //System solution which takes in system config.
 extern size_t __strlen_system(const char *);
-extern size_t(*_strlen_variant)(const char *);
+
 #ifdef __cplusplus
 }
 #endif
