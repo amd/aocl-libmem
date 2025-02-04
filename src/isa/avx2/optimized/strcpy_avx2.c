@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -66,117 +66,121 @@ static inline void strcpy_ble_ymm(void *dst, const void *src, uint32_t size)
     return;
 }
 
+/* This function is an optimized version of strcpy using AVX2 instructions.
+It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
 static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char *src)
 {
-    size_t offset = 0, index = 0;
+    size_t offset , index;
     uint32_t ret = 0, ret1 = 0, ret2 = 0;
     __m256i y0, y1, y2, y3, y4, y5, y6, y_cmp;
 
-    y0 = _mm256_setzero_si256();
-    offset = (size_t)src & (YMM_SZ - 1);
-    if (offset)
-    {
-        //check for offset falling in the last vec of the page
-        if ((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)src))
-        {
-            y1 = _mm256_load_si256((void *)src - offset);
-            y_cmp = _mm256_cmpeq_epi8(y0, y1);
+    // Store the original destination pointer to return at the end
+    register void *ret_dst asm("rax");
+    ret_dst = dst;
 
-            ret = (uint32_t)_mm256_movemask_epi8(y_cmp) >> offset;
-            if (ret)
-            {
-                index = _tzcnt_u32(ret) + 1;
-                strcpy_ble_ymm(dst, src, index);
-                return dst;
-            }
-        }
-        y1 = _mm256_loadu_si256((void *)src);
+    // Initialize a zeroed AVX2 register for comparisons
+    y0 = _mm256_setzero_si256();
+
+    // Calculate the offset to align the source pointer to 32 bytes
+    offset = (uintptr_t)src & (YMM_SZ - 1);
+
+    // Handle cases where `src` is close to the end of a memory page
+    if (unlikely((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)src)))
+    {
+        y1 = _mm256_load_si256((void *)src - offset);
         y_cmp = _mm256_cmpeq_epi8(y0, y1);
 
-        ret = _mm256_movemask_epi8(y_cmp);
+        ret = (uint32_t)_mm256_movemask_epi8(y_cmp) >> offset;
+
+        // If a null terminator is found, calculate the index and store the result
         if (ret)
         {
-            index =  _tzcnt_u32(ret) + 1;
+            index = _tzcnt_u32(ret) + 1;
             strcpy_ble_ymm(dst, src, index);
-            return dst;
+            return ret_dst;
         }
-        _mm256_storeu_si256((void *)dst, y1);
-        offset = YMM_SZ - offset;
     }
-
-    y1 = _mm256_load_si256((void *)src + offset);
+    y1 = _mm256_loadu_si256((void *)src);
     y_cmp = _mm256_cmpeq_epi8(y0, y1);
 
     ret = _mm256_movemask_epi8(y_cmp);
     if (ret)
     {
-        index = _tzcnt_u32(ret) + 1;
-        strcpy_ble_ymm(dst + offset, src + offset, index);
-        return dst;
+        index =  _tzcnt_u32(ret) + 1;
+        strcpy_ble_ymm(dst, src, index);
+        return ret_dst;
     }
-    y2 = _mm256_load_si256((void *)src + YMM_SZ + offset);
-    y_cmp = _mm256_cmpeq_epi8(y0, y2);
-    ret = _mm256_movemask_epi8(y_cmp);
+    // Store the first 32 bytes to `dst`
+    _mm256_storeu_si256((void *)dst, y1);
 
-    if (ret != 0)
-    {
-        index = _tzcnt_u32(ret) + 1;
-        y2 = _mm256_loadu_si256((void*)src + offset + index);
-        _mm256_storeu_si256((void *)dst + offset, y1);
-        _mm256_storeu_si256((void*)dst + offset + index, y2);
-        return dst;
-    }
+    // Adjust the offset for the next load operation
+    offset = YMM_SZ - offset;
 
-    y3 = _mm256_load_si256((void *)src + 2 * YMM_SZ + offset);
-    y_cmp = _mm256_cmpeq_epi8(y3, y0);
-    ret = _mm256_movemask_epi8(y_cmp);
-    if (ret != 0)
+    // Initialize a counter to process the next 192 bytes (6 * 32B) from the source
+    uint8_t cnt_vec = 5;
+    do
     {
-        index = _tzcnt_u32(ret) + 1;
-        y3 = _mm256_loadu_si256((void*)src + index + YMM_SZ + offset);
+        y1 = _mm256_load_si256((void *)src + offset);
+        y_cmp = _mm256_cmpeq_epi8(y0, y1);
+        ret = _mm256_movemask_epi8(y_cmp);
+
+        // If a null terminator is found within the loaded bytes, copy the tail vector.
+        // Load and copy the remaining bytes up to and including the null terminator
+        if (ret)
+        {
+            index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
+            y2 = _mm256_loadu_si256((void *)src + index);
+            _mm256_storeu_si256((void*)dst + index, y2);
+            return ret_dst;
+        }
+
         _mm256_storeu_si256((void*)dst + offset, y1);
-        _mm256_storeu_si256((void*)dst + YMM_SZ + offset, y2);
-        _mm256_storeu_si256((void*)dst + YMM_SZ + index + offset, y3);
-        return dst;
-    }
+        offset += YMM_SZ;
+    } while (cnt_vec--);
 
-    y4 = _mm256_load_si256((void *)src + 3 * YMM_SZ + offset);
-    y_cmp = _mm256_cmpeq_epi8(y4, y0);
-    ret = _mm256_movemask_epi8(y_cmp);
-    if (ret != 0)
+    // Determine if the next four 32-byte blocks (128 bytes total) are within the same memory
+    // page , this is to avoid crossing a page boundary, which could lead to a page fault if
+    // the memory is not mapped. Here it calculates and processes the maximum number of 32-byte
+    // vectors that can be handled without the risk of crossing into an adjacent memory page.
+    cnt_vec = 4 - (((uintptr_t)src + offset) & (4 * YMM_SZ - 1) >> 5);
+    while (cnt_vec--)
     {
-        index = _tzcnt_u32(ret) + 1;
-        y4 = _mm256_loadu_si256((void*)src + index + 2 * YMM_SZ + offset);
-        _mm256_storeu_si256((void*)dst + offset, y1);
-        _mm256_storeu_si256((void*)dst + YMM_SZ + offset, y2);
-        _mm256_storeu_si256((void*)dst + 2 * YMM_SZ + offset, y3);
-        _mm256_storeu_si256((void*)dst + 2 * YMM_SZ + index + offset, y4);
-        return dst;
+        y2 = _mm256_load_si256((void *)src + offset);
+        y_cmp = _mm256_cmpeq_epi8(y0, y2);
+        ret = _mm256_movemask_epi8(y_cmp);
+
+        if (ret)
+        {
+            index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
+            y3 = _mm256_loadu_si256((void *)src + index);
+            _mm256_storeu_si256((void*)dst + index, y3);
+            return ret_dst;
+        }
+
+        _mm256_storeu_si256((void*)dst + offset, y2);
+        offset += YMM_SZ;
     }
 
-    _mm256_storeu_si256((void*)dst + offset, y1);
-    _mm256_storeu_si256((void*)dst + offset + YMM_SZ, y2);
-    _mm256_storeu_si256((void*)dst + offset + 2 * YMM_SZ, y3);
-    _mm256_storeu_si256((void*)dst + offset + 3 * YMM_SZ, y4);
-
-    offset += 4 * YMM_SZ;
-
-    while ((PAGE_SZ - 4 * YMM_SZ) < ((PAGE_SZ - 1) & ((uintptr_t)src + offset)))
+    // Main loop to process 4 vectors at a time for larger sizes(> 256B)
+    while(1)
     {
         y1 = _mm256_load_si256((void *)src + offset);
         y2 = _mm256_load_si256((void *)src + offset + YMM_SZ);
         y3 = _mm256_load_si256((void *)src + offset + 2 * YMM_SZ);
         y4 = _mm256_load_si256((void *)src + offset + 3 * YMM_SZ);
 
+        // Find the minimum of the loaded vectors to check for null terminator
         y5 = _mm256_min_epu8(y1, y2);
         y6 = _mm256_min_epu8(y3, y4);
 
+        // Compare the minimums to find the null terminator
         y_cmp = _mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0);
         ret = _mm256_movemask_epi8(y_cmp);
 
-        if (ret)
-            break;
+        if (ret != 0)
+            break;// If found, exit the loop
 
+        // Store the 4 vectors to `dst`
         _mm256_storeu_si256((void*)dst + offset, y1);
         _mm256_storeu_si256((void*)dst + offset + YMM_SZ, y2);
         _mm256_storeu_si256((void*)dst + offset + 2 * YMM_SZ, y3);
@@ -184,65 +188,43 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
 
         offset += 4 * YMM_SZ;
     }
-    if (!ret)
-    {
-        offset = (offset & (-YMM_SZ)) - ((uintptr_t)(dst) & (YMM_SZ - 1));
-        while(1)
-        {
-            y1 = _mm256_loadu_si256((void *)src + offset);
-            y2 = _mm256_loadu_si256((void *)src + offset + YMM_SZ);
-            y3 = _mm256_loadu_si256((void *)src + offset + 2 * YMM_SZ);
-            y4 = _mm256_loadu_si256((void *)src + offset + 3 * YMM_SZ);
 
-            y5 = _mm256_min_epu8(y1, y2);
-            y6 = _mm256_min_epu8(y3, y4);
-
-            y_cmp = _mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0);
-            ret = _mm256_movemask_epi8(y_cmp);
-
-            if (ret != 0)
-                break;
-
-            _mm256_store_si256((void*)dst + offset, y1);
-            _mm256_store_si256((void*)dst + offset + YMM_SZ, y2);
-            _mm256_store_si256((void*)dst + offset + 2 * YMM_SZ, y3);
-            _mm256_store_si256((void*)dst + offset + 3 * YMM_SZ, y4);
-
-            offset += 4 * YMM_SZ;
-        }
-    }
-   //check for zero in regs: Y1, Y2
+   //Check for null terminator in the first two vectors (y1, y2)
     if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
     {
         if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
         {
-            index = _tzcnt_u32(ret2) + 1 + offset - YMM_SZ;
-            y1 = _mm256_loadu_si256((void*)src + index);
-            _mm256_storeu_si256((void*)dst + index, y1);
-            return dst;
+            ret = ret2;
+            goto copy_tail_vec;
+
         }
         _mm256_storeu_si256((void*)dst + offset, y1);
-        index = _tzcnt_u32(ret1) + 1 + offset;
-        y1 = _mm256_loadu_si256((void*)src + index);
-        _mm256_storeu_si256((void*)dst + index, y1);
-        return dst;
+        offset += YMM_SZ;
+        ret = ret1;
     }
-    //check for zero in regs: Y3, Y4
+    // Check for null terminator in the last two vectors (y3, y4)
     else
     {
         _mm256_storeu_si256((void*)dst + offset, y1);
         _mm256_storeu_si256((void*)dst + offset + YMM_SZ, y2);
         if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
         {
-            index = _tzcnt_u32(ret1) + 1 + offset + YMM_SZ;
-            y1 = _mm256_loadu_si256((void*)src + index);
-            _mm256_storeu_si256((void*)dst + index, y1);
-            return dst;
+            ret = ret1;
+            offset += 2 * YMM_SZ;
+            goto copy_tail_vec;
         }
         _mm256_storeu_si256((void*)dst + offset + 2 * YMM_SZ, y3);
-        index = _tzcnt_u32(ret) + 1 + offset + 2 * YMM_SZ;
+        offset += 3 * YMM_SZ;
+    }
+
+    // Label for copying the tail of the string where the null terminator was found
+    copy_tail_vec:
+    {
+        index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
         y1 = _mm256_loadu_si256((void*)src + index);
         _mm256_storeu_si256((void*)dst + index, y1);
+        return ret_dst;
+
     }
-    return dst;
+
 }
