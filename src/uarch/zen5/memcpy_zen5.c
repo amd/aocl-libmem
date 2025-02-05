@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,12 +23,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../../isa/avx512/optimized/memcpy_avx512.c"
+#include "../../isa/avx512/optimized/memcpy_avx512_erms.c"
 
 void *__memcpy_zen5(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
-    return _memcpy_avx512(dst, src, size);
+    return _memcpy_avx512_erms(dst, src, size);
 }
 
 #ifndef ALMEM_DYN_DISPATCH

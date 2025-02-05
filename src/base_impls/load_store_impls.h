@@ -1,4 +1,4 @@
-/* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -47,19 +47,98 @@
 
 
 #define PFTCH_TWO_CL_ONE_STEP       \
-  _mm_prefetch(load_addr + offset + CACHE_LINE_SZ, _MM_HINT_NTA);   \
-  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_NTA);
+  _mm_prefetch(load_addr + offset + 0 * CACHE_LINE_SZ, _MM_HINT_NTA);   \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
 #define PFTCH_TWO_CL_TWO_STEP       \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 3 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+#define PFTCH_FOUR_CL_ONE_STEP      \
+  _mm_prefetch(load_addr + offset + 0 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
   _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_NTA); \
-  _mm_prefetch(load_addr + offset + 4 * CACHE_LINE_SZ, _MM_HINT_NTA);
+  _mm_prefetch(load_addr + offset + 3 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+#define PFTCH_FOUR_CL_TWO_STEP      \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 3 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+#define PFTCH_EIGHT_CL_ONE_STEP      \
+  _mm_prefetch(load_addr + offset + 0 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 2 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 3 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 4 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 5 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 6 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 7 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+#define PFTCH_EIGHT_CL_TWO_STEP      \
+  _mm_prefetch(load_addr + offset + 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 3 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 5 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset + 7 * CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
 #define VEC_1X_LOAD_STORE(vec, load_type, store_type)                    \
   VEC_DECL(vec) vec(0) ;                                                 \
   vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);  \
   ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset, vec(0));
+
+
+#define VEC_2X_LOAD_STORE(vec, load_type, store_type)                                    \
+  VEC_DECL(vec) vec(0), vec(1) ;                                                         \
+    vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);                \
+    vec(1) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + VEC_SZ(vec));  \
+    ALM_MEM_BARRIER();                                                                   \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset, vec(0));              \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + VEC_SZ(vec), vec(1));
+
+#define VEC_3X_LOAD_STORE(vec, load_type, store_type)                                         \
+  VEC_DECL(vec) vec(0), vec(1), vec(2);                                                       \
+    vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);                     \
+    vec(1) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + VEC_SZ(vec));       \
+    vec(2) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 2 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                                        \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset , vec(0));                  \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + VEC_SZ(vec), vec(1));     \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 2 * VEC_SZ(vec), vec(2));
+
+#define VEC_4X_LOAD_STORE(vec, load_type, store_type)                                         \
+  VEC_DECL(vec) vec(0), vec(1), vec(2), vec(3);                                               \
+    vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);                     \
+    vec(1) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + VEC_SZ(vec));       \
+    vec(2) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 2 * VEC_SZ(vec));   \
+    vec(3) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 3 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                                        \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset , vec(0));                  \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + VEC_SZ(vec), vec(1));     \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 2 * VEC_SZ(vec), vec(2)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 3 * VEC_SZ(vec), vec(3));
+
+
+#define VEC_8X_LOAD_STORE(vec, load_type, store_type)                          \
+  VEC_DECL(vec) vec(0), vec(1), vec(2), vec(3);                                               \
+  VEC_DECL(vec) vec(4), vec(5), vec(6), vec(7);                                               \
+    vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);                     \
+    vec(1) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + VEC_SZ(vec));       \
+    vec(2) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 2 * VEC_SZ(vec));   \
+    vec(3) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 3 * VEC_SZ(vec));   \
+    vec(4) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 4 * VEC_SZ(vec));   \
+    vec(5) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 5 * VEC_SZ(vec));   \
+    vec(6) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 6 * VEC_SZ(vec));   \
+    vec(7) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset + 7 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                                        \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset, vec(0));                   \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset +  VEC_SZ(vec), vec(1));    \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 2 * VEC_SZ(vec), vec(2)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 3 * VEC_SZ(vec), vec(3)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 4 * VEC_SZ(vec), vec(4)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 5 * VEC_SZ(vec), vec(5)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 6 * VEC_SZ(vec), vec(6)); \
+    ALM_STORE_INSTR(vec, store_type) ((void *)store_addr + offset + 7 * VEC_SZ(vec), vec(7));
 
 
 #define VEC_2X_LOAD_STORE_LOOP(vec, pftch_cl,load_type, store_type)                      \
@@ -154,6 +233,7 @@
   VEC_DECL(vec)  vec(0) , vec(1) ;                                             \
   vec(0) = ALM_LOAD_INSTR(vec, load_type) (load_addr);                         \
   vec(1) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - VEC_SZ(vec));    \
+  ALM_MEM_BARRIER();                                                           \
   ALM_STORE_INSTR(vec, store_type) (store_addr, vec(0));                       \
   ALM_STORE_INSTR(vec, store_type) (store_addr + size - VEC_SZ(vec), vec(1));
 
