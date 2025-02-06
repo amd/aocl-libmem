@@ -249,6 +249,7 @@ static __attribute__((constructor)) void libmem_init()
     if (is_amd_cpu == true)
     {
         LOG_INFO("Is AMD CPU\n");
+        get_cpu_capabilities();
 #ifdef ALMEM_TUNABLES
         parse_env_operation_cfg();
         if (active_operation_cfg == SYS_CFG)
@@ -258,7 +259,6 @@ static __attribute__((constructor)) void libmem_init()
             compute_sys_thresholds(&zen_info);
 
         configure_thresholds();
-        get_cpu_capabilities();
     }
 
 #ifdef ALMEM_DYN_DISPATCH

@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,12 +23,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../../isa/avx512/optimized/memset_avx512.c"
+#include "../../isa/avx512/optimized/memset_avx512_erms.c"
 
 void * __attribute__((flatten)) __memset_zen5(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
-    return _memset_avx512(mem, val, size);
+    return _memset_avx512_erms(mem, val, size);
 }
 
 #ifndef ALMEM_DYN_DISPATCH
