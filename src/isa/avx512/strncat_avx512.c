@@ -29,4 +29,4 @@ char * __attribute__((flatten)) __strncat_avx512(char *dst, const char *src, siz
     return _strncat_avx512(dst, src, n);
 }
 char *strncat(char *, const char *, size_t) __attribute__((weak,
-                        alias("__strcat_avx512"), visibility("default")));
+                        alias("__strncat_avx512"), visibility("default")));
