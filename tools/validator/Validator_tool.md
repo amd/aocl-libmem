@@ -76,6 +76,7 @@ The following three test categories are supported:
                   "shift"                                (Runs Shift test cases on all the functions)
                   "align"                                (Runs Alignment test cases on all the functions)
                   "threshold"                            (Runs threshold specific test cases based on L2 and threshold_nt values)
+                  "aligned_vector"                       (Runs ZEN5 specific aligned vector threshold checks)
                   "function_MODE"                        (Runs the specified MODE:iter,shift,align, and threshold on the input function)
 
     jobs:        Optional paramter for maximum no. of concurrent processes to be used. [0...$(nproc)]
