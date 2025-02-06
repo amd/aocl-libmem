@@ -27,8 +27,11 @@
 #include "logger.h"
 #include <stdint.h>
 #include "strlen_avx512.c"
-#include "memcpy_avx512.c"
+#include "memcpy_avx512_erms.c"
 #define NULL_TERM_CHAR '\0'
+
+/* This function is an optimized version of strncat using AVX-512 instructions.
+It concatenates the n bytes of string `src` to the end of the string `dst`.*/
 static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const char *src, size_t n)
 {
     register void *ret asm("rax");
@@ -42,14 +45,14 @@ static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const c
     {
         //If the source string is shorter than or equal to n,
         //copy the entire source string plus the null terminator
-        _memcpy_avx512(dst + offset , src, len + 1);
+        _memcpy_avx512_erms(dst + offset , src, len + 1);
     }
 
     else
     {
         // If the source string is longer than n,
         // copy only the first n characters from the source string
-        _memcpy_avx512(dst + offset , src, n);
+        _memcpy_avx512_erms(dst + offset , src, n);
         *(dst + offset + n) = NULL_TERM_CHAR;
     }
 
