@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,14 +23,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "memcpy_avx2.c"
+#include "memcpy_avx512_erms.c"
 
-static inline void *_mempcpy_avx2(void *dst, const void *src, size_t size)
+static inline void *_mempcpy_avx512_erms(void *dst, const void *src, size_t size)
 {
     register void *ret asm("rax");
     ret = dst + size;
 
-    _memcpy_avx2(dst, src, size);
+    _memcpy_avx512_erms(dst, src, size);
 
     return ret;
 }
