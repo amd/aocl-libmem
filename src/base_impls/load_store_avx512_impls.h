@@ -1,6 +1,6 @@
 /* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
- * Redistribution and use in source and binarz forms, with or without modification,
+ * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
  * 1. Redistributions of source code must retain the above copzright notice,
  *    this list of conditions and the following disclaimer.
@@ -253,10 +253,22 @@ static inline size_t __unaligned_load_and_store_4zmm_vec_loop(void *store_addr,
     VEC_4X_LOAD_STORE_LOOP(AVX512, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
 }
 
+static inline size_t __unaligned_load_and_store_4zmm_vec_loop_pftch(void *store_addr,
+            const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP(AVX512, PFTCH_TWO_CL_TWO_STEP, UNALIGNED, UNALIGNED)
+}
+
 static inline size_t __unaligned_load_and_store_4zmm_vec_loop_bkwd\
     (void *store_addr, const void *load_addr, size_t size, size_t offset)
 {
     VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
+}
+
+static inline size_t __unaligned_load_and_store_4zmm_vec_loop_bkwd_pftch\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, BKWD_PFTCH_TWO_CL_TWO_STEP, UNALIGNED, UNALIGNED)
 }
 
 static inline size_t __aligned_load_and_store_4zmm_vec_loop(void *store_addr,
@@ -277,6 +289,12 @@ static inline size_t __aligned_load_and_store_4zmm_vec_loop_bkwd\
     VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, PFTCH_ZERO_CL, ALIGNED, ALIGNED)
 }
 
+static inline size_t __aligned_load_and_store_4zmm_vec_loop_bkwd_pftch\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, BKWD_PFTCH_TWO_CL_TWO_STEP, ALIGNED, ALIGNED)
+}
+
 static inline size_t __unaligned_load_aligned_store_4zmm_vec_loop(void *store_addr,
             const void *load_addr, size_t size, size_t offset)
 {
@@ -289,11 +307,16 @@ static inline size_t __unaligned_load_aligned_store_4zmm_vec_loop_pftch(void *st
     VEC_4X_LOAD_STORE_LOOP(AVX512, PFTCH_TWO_CL_ONE_STEP, UNALIGNED, ALIGNED)
 }
 
-
 static inline size_t __unaligned_load_aligned_store_4zmm_vec_loop_bkwd\
     (void *store_addr, const void *load_addr, size_t size, size_t offset)
 {
     VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, PFTCH_ZERO_CL, UNALIGNED, ALIGNED)
+}
+
+static inline size_t __unaligned_load_aligned_store_4zmm_vec_loop_bkwd_pftch\
+    (void *store_addr, const void *load_addr, size_t size, size_t offset)
+{
+    VEC_4X_LOAD_STORE_LOOP_BKWD(AVX512, BKWD_PFTCH_TWO_CL_TWO_STEP, UNALIGNED, ALIGNED)
 }
 
 static inline size_t __aligned_load_unaligned_store_4zmm_vec_loop(void *store_addr,

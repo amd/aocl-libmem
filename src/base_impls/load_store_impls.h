@@ -82,6 +82,22 @@
   _mm_prefetch(load_addr + offset + 7 * CACHE_LINE_SZ, _MM_HINT_NTA);
 
 
+#define BKWD_PFTCH_TWO_CL_ONE_STEP       \
+  _mm_prefetch(load_addr + offset - 1 * CACHE_LINE_SZ, _MM_HINT_NTA);   \
+  _mm_prefetch(load_addr + offset - 2 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+
+#define BKWD_PFTCH_TWO_CL_TWO_STEP                                   \
+  _mm_prefetch(load_addr + offset - 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset - 3 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+#define BKWD_PFTCH_FOUR_CL_ONE_STEP      \
+  _mm_prefetch(load_addr + offset - 1 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset - 2 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset - 3 * CACHE_LINE_SZ, _MM_HINT_NTA); \
+  _mm_prefetch(load_addr + offset - 4 * CACHE_LINE_SZ, _MM_HINT_NTA);
+
+
 #define VEC_1X_LOAD_STORE(vec, load_type, store_type)                    \
   VEC_DECL(vec) vec(0) ;                                                 \
   vec(0) = ALM_LOAD_INSTR(vec, load_type) ((void *)load_addr + offset);  \
@@ -159,11 +175,12 @@
     pftch_cl                                                                        \
     vec(0) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 1 * VEC_SZ(vec));   \
     vec(1) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 2 * VEC_SZ(vec));   \
+    ALM_MEM_BARRIER();                                                              \
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 1 * VEC_SZ(vec), vec(0)); \
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 2 * VEC_SZ(vec), vec(1)); \
     size -= 2 *  VEC_SZ(vec);                                                       \
   }                                                                                 \
-  return offset;
+  return size;
 
 
 
@@ -186,7 +203,7 @@
 
 #define VEC_4X_LOAD_STORE_LOOP_BKWD(vec, pftch_cl, load_type, store_type)           \
   VEC_DECL(vec) vec(0), vec(1), vec(2), vec(3);                                     \
-  while (offset < size) {                                                           \
+  while (offset <= size) {                                                           \
     pftch_cl                                                                        \
     vec(0) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 1 * VEC_SZ(vec));   \
     vec(1) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 2 * VEC_SZ(vec));   \
@@ -199,7 +216,7 @@
     ALM_STORE_INSTR(vec, store_type) (store_addr + size - 4 * VEC_SZ(vec), vec(3)); \
     size -= 4 *  VEC_SZ(vec);                                                       \
   }                                                                                 \
-  return offset;
+  return size;
 
 
 #define VEC_8X_LOAD_STORE_LOOP(vec, pftch_cl, load_type, store_type)                          \
