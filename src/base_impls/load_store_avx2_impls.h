@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -149,14 +149,38 @@ static inline void * __load_store_le_2ymm_vec_overlap(void *store_addr,
     return ret;
 }
 
-/* ################## TEMPORAL HEAD_TAIL ####################
- */
-
 static inline void __load_store_ymm_vec(void *store_addr,
             const void *load_addr, size_t offset)
 {
     VEC_1X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
 }
+
+static inline void __load_store_2ymm_vec(void *store_addr,
+            const void *load_addr, size_t offset)
+{
+    VEC_2X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
+}
+
+static inline void __load_store_3ymm_vec(void *store_addr,
+            const void *load_addr, size_t offset)
+{
+    VEC_3X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
+}
+
+static inline void __load_store_4ymm_vec(void *store_addr,
+            const void *load_addr, size_t offset)
+{
+    VEC_4X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
+}
+
+static inline void __load_store_8ymm_vec(void *store_addr,
+            const void *load_addr, size_t offset)
+{
+    VEC_8X_LOAD_STORE(AVX2, UNALIGNED, UNALIGNED)
+}
+
+/* ################## TEMPORAL HEAD_TAIL ####################
+ */
 
 static inline void __load_store_le_4ymm_vec(void *store_addr,
             const void *load_addr, size_t size)

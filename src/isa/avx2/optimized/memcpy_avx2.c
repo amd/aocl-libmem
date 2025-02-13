@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -35,58 +35,54 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
     register void *ret asm("rax");
     ret = dst;
 
-    if (likely(size <= 2 * YMM_SZ))
-        return __load_store_le_2ymm_vec(dst, src, (uint8_t)size);
-
-    if (size <= 4 * YMM_SZ) //128B
+    if (likely(size <= 4 * YMM_SZ)) //128B
     {
+        if (likely(size <= 2 * YMM_SZ)) //64B
+            return __load_store_le_2ymm_vec(dst, src, (uint8_t)size);
         __load_store_le_4ymm_vec(dst, src, size);
         return ret;
     }
-    if (size <= 8 * YMM_SZ) //256B
+    else if (likely(size <= 8 * YMM_SZ)) //256B
     {
         __load_store_le_8ymm_vec(dst, src, size);
         return ret;
     }
+
+    // Compute alignment of destination address
+    uint8_t dst_align = ((size_t)dst & (YMM_SZ - 1));
+    // Adjust alignment to 4 VEC alignment
+    dst_align = 4 * YMM_SZ - dst_align;
+
+    // Check if the size is less than or equal to the L1D cache size per core
+    // Note: The L1D cache size can vary depending on the underlying architecture
     if (size <= zen_info.zen_cache_info.l1d_per_core)
     {
-        __unaligned_load_and_store_4ymm_vec_loop(dst, src, size & ~(4 * YMM_SZ - 1), 0);
-        size_t offset = size & (4 * YMM_SZ - 1);
-        if (offset)
+        __load_store_4ymm_vec(dst, src, 0);
+        size_t offset = __unaligned_load_aligned_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, dst_align);
+
+        uint16_t rem_data = size - offset;
+        uint8_t rem_vecs = ((rem_data & 0x3E0) >> 5) + !!(rem_data & 0x1F);
+
+        switch (rem_vecs)
         {
-             __m256i y0, y1, y2, y3;
-            switch ((offset >> 5))
-            {
-                case 3:
-                    y3 = _mm256_loadu_si256(src + size - 4 * YMM_SZ);
-                    _mm256_storeu_si256(dst + size - 4 * YMM_SZ, y3);
-                    __attribute__ ((fallthrough));
-                case 2:
-                    y2 = _mm256_loadu_si256(src + size - 3 * YMM_SZ);
-                    _mm256_storeu_si256(dst + size - 3 * YMM_SZ, y2);
-                    __attribute__ ((fallthrough));
-                case 1:
-                    y1 = _mm256_loadu_si256(src + size - 2 * YMM_SZ);
-                    _mm256_storeu_si256(dst + size - 2 * YMM_SZ, y1);
-                    __attribute__ ((fallthrough));
-                default:
-                    y0 = _mm256_loadu_si256(src + size - 1 * YMM_SZ);
-                    _mm256_storeu_si256(dst + size - 1 * YMM_SZ, y0);
-            }
+            case 1:
+                __load_store_ymm_vec(dst + size - YMM_SZ, src + size -  YMM_SZ, 0);
+                break;
+            case 2:
+                __load_store_le_2ymm_vec(dst + size - 2 * YMM_SZ, src + size - 2 * YMM_SZ, 2 * YMM_SZ);
+                break;
+            case 3:
+            case 4:
+                __load_store_le_4ymm_vec(dst + size - 4 * YMM_SZ, src + size - 4 * YMM_SZ, 4 * YMM_SZ);
         }
         return ret;
     }
     // Load-Store first 4 VECs
     __load_store_le_4ymm_vec(dst, src, 4 * YMM_SZ);
 
-    // Compute alignment of destination address
-    uint8_t dst_align = ((size_t)dst & (YMM_SZ - 1));
-
     // Matching alignments of load & store addresses;
     if (unlikely((((size_t)src & (YMM_SZ - 1)) == dst_align)))
     {
-        // Adjust alignment to 4 VEC alignment
-        dst_align = 4 * YMM_SZ - dst_align;
         if (size < __nt_start_threshold)
         {
            __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
@@ -99,7 +95,6 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
     // Mismatching alignments of load & store addresses;
     else
     {
-        dst_align = 4 * YMM_SZ - dst_align;
         if (size < __nt_start_threshold)
         {
            __unaligned_load_aligned_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, dst_align);
