@@ -36,12 +36,11 @@ extern "C" {
 static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "cld\n\t"
     "rep movsb"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -49,13 +48,12 @@ static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $1, %%rcx\n\t"
     "cld\n\t"
     "rep movsw"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -63,13 +61,12 @@ static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $2, %%rcx\n\t"
     "cld\n\t"
     "rep movsd"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -77,13 +74,12 @@ static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 static inline void * __erms_movsq(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $3, %%rcx\n\t"
     "cld\n\t"
     "rep movsq"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
