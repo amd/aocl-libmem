@@ -203,7 +203,7 @@
 
 #define VEC_4X_LOAD_STORE_LOOP_BKWD(vec, pftch_cl, load_type, store_type)           \
   VEC_DECL(vec) vec(0), vec(1), vec(2), vec(3);                                     \
-  while (offset <= size) {                                                           \
+  while (offset < size) {                                                           \
     pftch_cl                                                                        \
     vec(0) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 1 * VEC_SZ(vec));   \
     vec(1) = ALM_LOAD_INSTR(vec, load_type) (load_addr + size - 2 * VEC_SZ(vec));   \
