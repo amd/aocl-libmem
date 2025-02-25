@@ -111,7 +111,7 @@ set(_CC_Optimization_Flags -O3 -mcmodel=small)
 # Compiler Code Generation flags
 set(_CC_Code_Gen_Flags -fno-common)
 # Compiler Shared binary exclusive flags
-set(_CC_Shared_Flags -flto -fvisibility=hidden)
+set(_CC_Shared_Flags -fvisibility=hidden)
 
 set(_CC_Flags ${_CC_Warning_Flags} ${_CC_Exempted_Warning_Flags} ${_CC_Optimization_Flags} ${_CC_Code_Gen_Flags})
 
