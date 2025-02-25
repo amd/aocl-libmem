@@ -47,14 +47,12 @@ class GBM:
         self.path="../tools/benchmarks/external/gbench/"
         self.variant=""
         self.isExist=""
-        self.memory_operation=self.MYPARSER['ARGS']['mode']
-        if self.memory_operation not in ['c','u']:
-                self.memory_operation='c'
+        self.memory_operation=self.MYPARSER['ARGS']['memory_operation']
         self.result_dir =""
         self.variant="amd"
         self.ranges=self.MYPARSER['ARGS']['range']
         self.core=self.MYPARSER['ARGS']['core_id']
-        self.bench_name='GooglBench_Cached'
+        self.bench_name=self.MYPARSER['ARGS']['bench_name']
         self.iterator = self.MYPARSER['ARGS']['iterator']
         self.func=self.MYPARSER['ARGS']['func']
         self.LibMemVersion=''
@@ -64,6 +62,7 @@ class GBM:
         self.preload = self.MYPARSER['ARGS']['preload']
         self.repetitions = self.MYPARSER['ARGS']['repetitions']
         self.warm_up = self.MYPARSER['ARGS']['warm_up']
+        self.result_dir = self.MYPARSER['ARGS']['result_dir']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -75,11 +74,6 @@ class GBM:
             subprocess.run(['cmake','-E','chdir','build','cmake','-DBENCHMARK_DOWNLOAD_DEPENDENCIES=on','-DCMAKE_BUILD_TYPE=Release','../'],cwd=self.path+"/benchmark")
             subprocess.run(['cmake','--build','build','--config','Release'],cwd=self.path+"/benchmark")
 
-        if self.memory_operation == 'u':
-            self.bench_name='GooglBench_UnCached'
-
-        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' \
-                + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         command = [
                     "g++",
                     "-Wno-deprecated-declarations",
@@ -96,8 +90,6 @@ class GBM:
         #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
         if AVX512_FEATURE_ENABLED:
             command.insert(1, "-DAVX512_FEATURE_ENABLED")
-
-        os.makedirs(self.result_dir, exist_ok=False)
 
         #If PRELOAD option is enabled,set the output file name
         if self.preload == 'y':

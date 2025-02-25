@@ -25,7 +25,6 @@
  POSSIBILITY OF SUCH DAMAGE.
 """
 
-
 import subprocess
 import os
 from os import environ as env
@@ -43,6 +42,58 @@ from gbm import GBM
 from fbm import FBM
 from tbm import TBM
 
+def check_root_access():
+    try:
+        subprocess.run(['sudo', '-n', 'true'], check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def run_rdmsr(command):
+    try:
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = result.stdout.decode('utf-8').strip()
+        return output
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {e}")
+        return None
+
+def parse_msr_output(output):
+    # Convert the hexadecimal output to a binary string, ensuring it's at least 64 bits long
+    binary_value = bin(int(output, 16))[2:].zfill(64)
+    # Extract the relevant bits (0-9)
+    parsed_info = {
+        "PrefetchAggressivenessProfile": binary_value[-10:-7],  # Bits 9:7
+        "MasterEnable": binary_value[-11],                      # Bit 6
+        "UpDown": binary_value[-12],                            # Bit 5
+        "Reserved": binary_value[-13],                          # Bit 4
+        "L2Stream": binary_value[-14],                          # Bit 3
+        "L1Region": binary_value[-15],                          # Bit 2
+        "L1Stride": binary_value[-16],                          # Bit 1
+        "L1Stream": binary_value[-17],                          # Bit 0
+    }
+    return parsed_info
+
+def get_msr_info(core_id):
+    command = f"sudo rdmsr -c 0xc0000108 -p {core_id}"
+    output = run_rdmsr(command)
+    if output:
+        return parse_msr_output(output)
+    return None
+
+def get_prefetch_aggressiveness_level(bits):
+    # Map the binary string to the actual level names
+    levels = {
+        '000': 'Level 0 - least aggressive prefetch profile',
+        '001': 'Level 1',
+        '010': 'Level 2',
+        '011': 'Level 3 - most aggressive prefetch profile',
+        '100': 'Reserved - Default, aggressive prefetch profile is disabled',
+        '101': 'Reserved - Default, aggressive prefetch profile is disabled',
+        '110': 'Reserved - Default, aggressive prefetch profile is disabled',
+        '111': 'Reserved - Default, aggressive prefetch profile is disabled',
+    }
+    return levels.get(bits, 'Unknown')
 
 class Bench:
     """
@@ -68,6 +119,120 @@ class Bench:
 libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp']
 libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
 libmem_funcs = libmem_memory + libmem_string
+
+def run_command(cmd):
+    """Runs a shell command and returns the output."""
+    try:
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode()
+    except subprocess.CalledProcessError as e:
+        output = f"Command '{e.cmd}' returned non-zero exit status {e.returncode}\n{e.output.decode()}"
+    return output
+
+def collect_system_info(output_file, core_id):
+    sudo_flag = check_root_access()
+
+    """
+    Collect system information and write to the specified output file.
+    """
+    with open(output_file, "w") as f:
+        f.write("=========================================\n")
+        f.write(" System Information Collection \n")
+        f.write("=========================================\n")
+
+        # Linux Kernel Version
+        f.write("\n==== Linux Kernel Version ====\n")
+        f.write(run_command("uname -r"))
+
+        # Linux Distribution Details
+        f.write("\n==== Linux Distribution Details ====\n")
+        lsb_release = run_command("lsb_release -a")
+        if lsb_release:
+            f.write(lsb_release)
+        else:
+            f.write("lsb_release command not found; using /etc/os-release:\n")
+            f.write(run_command("cat /etc/os-release"))
+
+        # BIOS and Microcode (if logged) Version
+        f.write("\n==== BIOS And MicroCode Info ====\n")
+        f.write("\n ---- Bios Information ----\n")
+        if sudo_flag:
+            f.write(run_command("sudo dmidecode -t bios 2>/dev/null | grep -E 'Vendor:|Version:|Release Date:|Address:'"))
+        else:
+            f.write("Failed to retrieve Bios Information as user does not have root privileges.\n")
+        f.write("\n---- MicroCode version ----\n")
+        f.write(run_command("grep 'microcode' /proc/cpuinfo | head -n 1"))
+
+        # Cache Details
+        f.write("\n==== Cache Details ====\n")
+        f.write(run_command("lscpu -C"))
+
+        # CPU Details
+        f.write("\n==== CPU Details ====\n")
+        f.write("\n---- Frequency Scaling Governor and Fixed Frequency Check ----\n")
+        f.write("Current CPU frequency scaling governor: " \
+                + run_command(f"cat /sys/devices/system/cpu/cpu{core_id}/cpufreq/scaling_governor"))
+        f.write("Current Frequency of the CPU: " + \
+                run_command(f"cat /sys/devices/system/cpu/cpu{core_id}/cpufreq/scaling_cur_freq"))
+        f.write("Min Frequency of the CPU: " + \
+                run_command(f"cat /sys/devices/system/cpu/cpu{core_id}/cpufreq/scaling_min_freq"))
+        f.write("Max Frequency of the CPU: " + \
+                run_command(f"cat /sys/devices/system/cpu/cpu{core_id}/cpufreq/scaling_max_freq"))
+        f.write("Note: If min_freq is equal to max_freq, system is in fixed frequency mode.\n")
+
+        f.write("\n---- CPU Model Name (from /proc/cpuinfo) ----\n")
+        f.write(run_command("grep -m 1 'model name' /proc/cpuinfo"))
+
+        f.write("\n---- Detailed CPU Information ----\n")
+        f.write(run_command("lscpu"))
+
+        # Prefetch Information
+        f.write("\n==== Prefetch Information ====\n")
+        if sudo_flag:
+            f.write("rdmsr output: " + run_command(f"sudo rdmsr -c 0xc0000108 -p {core_id}"))
+            msr_data = get_msr_info(core_id)
+            if msr_data:
+                prefetch_level = get_prefetch_aggressiveness_level(msr_data['PrefetchAggressivenessProfile'])
+                f.write(f"  Prefetch Aggressiveness Profile: {msr_data['PrefetchAggressivenessProfile']} ({prefetch_level})\n")
+                f.write(f"  Master Enable (to enable Prefetch Aggressiveness Profiles): {'Enabled' if msr_data['MasterEnable'] == '1' else 'Disabled'}\n")
+                f.write(f"  UpDown Prefetcher (the prefetcher that uses memory access history to determine whether to fetch the next or previous line into the L2 cache): {'Enabled' if msr_data['UpDown'] == '1' else 'Disabled'}\n")
+                f.write(f"  L2 Stream Prefetcher (the prefetcher that uses history of memory access patterns to fetch additional sequential lines into L2 cache): {'Enabled' if msr_data['L2Stream'] == '1' else 'Disabled'}\n")
+                f.write(f"  L1 Region Prefetcher (the prefetcher that uses memory access history to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Region'] == '1' else 'Disabled'}\n")
+                f.write(f"  L1 Stride Prefetcher (prefetcher that uses memory access history of individual instructions to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Stride'] == '1' else 'Disabled'}\n")
+                f.write(f"  L1 Stream Prefetcher (the stream prefetcher that uses history of memory access patterns to fetch additional sequential lines into L1 cache): {'Enabled' if msr_data['L1Stream'] == '1' else 'Disabled'}\n")
+            else:
+                f.write("Failed to retrieve Prefetch information.\n")
+        else:
+            f.write("Failed to retrieve Prefetch information as user does not have root privileges.\n")
+
+        # Memory Information
+        f.write("\n==== Memory Information ====\n")
+        f.write(run_command("free -h"))
+        f.write("\nAdditional details from /proc/meminfo (first few lines):\n")
+        f.write(run_command("head -n 5 /proc/meminfo"))
+
+        # Memory Speed Information
+        f.write("\n ----Memory Speed Information ----\n")
+        if sudo_flag:
+            f.write(run_command("sudo dmidecode -t memory | grep -i 'Speed' | sort | uniq"))
+        else:
+            f.write("Failed to retrieve memory Speed Information as user does not have root privileges.\n")
+
+        # Cache Type Information
+        f.write("\n ----Cache Type Information ----\n")
+        if sudo_flag:
+            f.write(run_command("sudo dmidecode -t cache | uniq"))
+        else:
+            f.write("Failed to retrieve the cache type information as user does not have root privileges.\n")
+
+        # Disk/Storage Information
+        f.write("\n==== Disk/Storage Information ====\n")
+        f.write(run_command("df -h"))
+        f.write("\n-> lsblk:\n")
+        f.write(run_command("lsblk"))
+
+        f.write("\n=========================================\n")
+        f.write("  System Info Collection Complete\n")
+        f.write("=========================================\n")
 
 def main():
     """
@@ -103,6 +268,9 @@ def main():
                             Default choice of core-id is 8. Valid range is \
                             [0..{int(available_cores) - 1}]",
                             type=int,default=8)
+
+    common_parser.add_argument("-sys", "--system_info", help = "logs system_info details like cpu freq,\
+                                cache info, bios info, etc.", action="store_true")
 
     # Subparser for GBM with additional options
     gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GBM Benchmarking Tool')
@@ -157,8 +325,37 @@ def main():
                             performance measurement. Default value is \
                             set to 100 iterations.",
                         type = int, default = 100)
-
     args = parser.parse_args()
+
+    # Ensure memory_operation is set only if mode exists
+    if hasattr(args, 'mode'):
+        args.memory_operation = args.mode
+        if args.memory_operation not in ['c', 'u']:
+            args.memory_operation = 'c'
+    else:
+        args.memory_operation = 'c'
+
+    if args.benchmark == 'gbm':
+        args.bench_name = 'GooglBench_Cached'
+        if args.memory_operation == 'u':
+            args.bench_name = 'GooglBench_UnCached'
+    elif args.benchmark == 'tbm':
+        args.bench_name = 'TinyMemBench'
+    elif args.benchmark == 'fbm':
+        args.bench_name = 'FleeteBench'
+
+    args.result_dir = 'out/' + args.bench_name + '/' + args.func + '/' \
+        + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+
+    # Create result directory
+    os.makedirs(args.result_dir, exist_ok=False)
+
+    if getattr(args, 'system_info', False):
+        # Create a timestamped output file for system info
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(args.result_dir, f"system_info_{timestamp}.txt")
+        # Collect system information
+        collect_system_info(output_file, args.core_id)
 
     # Set the default range based on the func argument
     if args.range is None:
@@ -177,7 +374,6 @@ if __name__ == "__main__":
         # numactl is not installed, exiting the program
         print("numactl utility NOT found. Please install it.")
         exit(1)
-
     myparser = main()
 
     obj = Bench(ARGS=myparser)

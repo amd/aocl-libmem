@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -49,12 +49,13 @@ class TBM:
         self.variant="amd"
         self.ranges=self.MYPARSER['ARGS']['range']
         self.core=self.MYPARSER['ARGS']['core_id']
-        self.bench_name='TinyMemBench'
+        self.bench_name=self.MYPARSER['ARGS']['bench_name']
         self.func=self.MYPARSER['ARGS']['func']
         self.iterator = self.MYPARSER['ARGS']['iterator']
         self.LibMemVersion=''
         self.GlibcVersion=''
         self.size_unit=[]
+        self.result_dir = self.MYPARSER['ARGS']['result_dir']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/tinymembench')
@@ -73,9 +74,7 @@ class TBM:
             subprocess.run(["gcc","-Wno-int-conversion","-O2","-o","tinymembench","tinymem-bench.c","util.o","-lm"],cwd=self.path+"/tinymembench")
             print("compiled TINYMEMBENCH")
 
-        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
-        datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-        os.makedirs(self.result_dir, exist_ok=False)
+
         print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
         self.variant="glibc"
         self.tiny_run()

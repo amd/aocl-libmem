@@ -48,7 +48,7 @@ class FBM:
         self.variant="amd"
         self.ranges=self.MYPARSER['ARGS']['range']
         self.core=self.MYPARSER['ARGS']['core_id']
-        self.bench_name='FleeteBench'
+        self.bench_name=self.MYPARSER['ARGS']['bench_name']
         self.last=9
         self.allocator=self.MYPARSER['ARGS']['mem_alloc']
         self.repetitions = self.MYPARSER['ARGS']['repetitions']
@@ -64,6 +64,7 @@ class FBM:
         self.func=self.MYPARSER['ARGS']['func']
         self.LibMemVersion=''
         self.GlibcVersion=''
+        self.result_dir = self.MYPARSER['ARGS']['result_dir']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/fleetbench')
@@ -72,9 +73,6 @@ class FBM:
             subprocess.run(["git","clone","-c","advice.detachedHead=false","-b","v0.2","https://github.com/google/fleetbench.git"],cwd=self.path)
             subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable","--cxxopt=-Wno-changes-meaning"],cwd=self.path+"/fleetbench")
 
-        self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
-        datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-        os.makedirs(self.result_dir, exist_ok=False)
         print("Benchmarking of "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
 
         self.variant="glibc"
