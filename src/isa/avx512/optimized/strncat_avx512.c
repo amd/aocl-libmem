@@ -34,8 +34,6 @@
 It concatenates the n bytes of string `src` to the end of the string `dst`.*/
 static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const char *src, size_t n)
 {
-    register void *ret asm("rax");
-    ret = dst;
     size_t offset = _strlen_avx512(dst);
     size_t len = _strlen_avx512(src);
 
@@ -47,7 +45,6 @@ static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const c
         //copy the entire source string plus the null terminator
         _memcpy_avx512_erms(dst + offset , src, len + 1);
     }
-
     else
     {
         // If the source string is longer than n,
@@ -56,5 +53,5 @@ static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const c
         *(dst + offset + n) = NULL_TERM_CHAR;
     }
 
-    return ret;
+    return dst;
 }

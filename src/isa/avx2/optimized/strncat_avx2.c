@@ -31,8 +31,6 @@
 #define NULL_TERM_CHAR '\0'
 static inline char * __attribute__((flatten)) _strncat_avx2(char *dst, const char *src, size_t n)
 {
-    register void *ret asm("rax");
-    ret = dst;
     size_t offset = _strlen_avx2(dst);
     size_t len = _strlen_avx2(src);
 
@@ -52,5 +50,5 @@ static inline char * __attribute__((flatten)) _strncat_avx2(char *dst, const cha
         _memcpy_avx2(dst + offset , src, n);
         *(dst + offset + n) = NULL_TERM_CHAR;
     }
-    return ret;
+    return dst;
 }

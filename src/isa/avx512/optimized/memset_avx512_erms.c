@@ -43,8 +43,11 @@ static inline void *_memset_avx512_erms(void *mem, int val, size_t size)
     {
         if (likely(size <= ZMM_SZ))
         {
-            mask = ((uint64_t)-1) >> (ZMM_SZ - size);
-            _mm512_mask_storeu_epi8(mem, mask, z0);
+            if (size)
+            {
+                mask = ((uint64_t)-1) >> (ZMM_SZ - size);
+                _mm512_mask_storeu_epi8(mem, mask, z0);
+            }
             return ret;
         }
         _mm512_storeu_si512(mem , z0);
