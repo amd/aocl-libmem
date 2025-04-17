@@ -72,15 +72,22 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                           tbm          TinyMembench
                           fbm          Fleetbench
 
-      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function>
+      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,b,d]
 
                         -x <core_id> : Enter the CPU core on which you want to run the benchmark.
                         -r [start] [end] : start and end size range in Bytes.(Not applicable for Fleetbench)
+                                           Format: NUMBER[UNIT]
+                                           where UNIT can be B, KB, MB, or GB(case insensitive).
+                                           The default unit is Bytes.
                         -t "iter_value"  : increments the start size by "iter_value".
                                            (0 stands for size<<1; other +ve integers stands for incremental iterations.)
                         LibMem_function  : mem and str functions
                                           (memcpy,memmove,memset,memcmp,memchr,
                                           strcpy,strncpy,strcmp,strncmp,strlen,strcat,strncat,strspn,strstr,strchr)
+                        -perf            : Performance report type
+                                          p - Performance analysis for LibMem
+                                          b - Comparison report between LibMem old and new
+                                          d - Defalut report Glibc vs. LibMem
 
       <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -preload <y,n> -i<repetitions> -w<warm_up time>
 
@@ -106,14 +113,14 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     $ ./bench.py -h
 
     Running Google Benchmark
-    $ ./bench.py gbm memcpy -r 8 16 -m u -t "1" -x 16
+    $ ./bench.py gbm memcpy -r 8B 16B -m u -t "1" -x 16
     Runs the Google Benchmark for Un-Cached Mode Memcpy for sizes[8,9,..16] on core -16
 
-    $ ./bench.py gbm memcpy -r 8 32768 -s m -x 16
+    $ ./bench.py gbm memcpy -r 8B 32KB -s m -x 16
     Runs GBM for Cached memcpy with More-cache spill
 
     Running TinyMembench
-    $ ./bench.py tbm strcpy -r 8 4096 -x 47
+    $ ./bench.py tbm strcpy -r 8B 4KB -x 47
     Runs tinymembench for strcpy function fro sizes [8, 16, 32,..4096B] on core - 47
 
     Running Fleetbench

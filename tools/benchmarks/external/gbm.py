@@ -63,6 +63,9 @@ class GBM:
         self.repetitions = self.MYPARSER['ARGS']['repetitions']
         self.warm_up = self.MYPARSER['ARGS']['warm_up']
         self.result_dir = self.MYPARSER['ARGS']['result_dir']
+        if self.perf == 'b':
+            self.old_perf_dir = self.MYPARSER['ARGS']['old_perf_dir']
+            self.new_perf_dir = self.MYPARSER['ARGS']['new_perf_dir']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -113,25 +116,83 @@ class GBM:
             subprocess.run(command_amd,cwd=self.path)
             subprocess.run(command_glibc,cwd=self.path)
 
-        if (self.perf == 'b'):
+        #Default performance analysis
+        if (self.perf == 'd'):
             print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
-            self.variant="glibc"
+            self.variant = "glibc"
+            self.gbm_run()
+            self.variant = "amd"
             self.gbm_run()
 
-        self.variant="amd"
-        self.gbm_run()
-
-        values= subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.result_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
-        self.size_values= [int(val) for val in values]
-        self.amd_throughput_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
-
-        if (self.perf == 'b'):
+            values = subprocess.run(["grep '_mean' gbglibc.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.result_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.size_values = [int(val) for val in values]
+            self.amd_throughput_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
             self.glibc_throughput_values = subprocess.run(["grep '_mean' gbglibc.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
 
-        #Converting the M/s values to G/s
-        self.throughput_converter(self.amd_throughput_values)
+            #Converting the M/s values to G/s
+            self.throughput_converter(self.amd_throughput_values)
+            self.throughput_converter(self.glibc_throughput_values)
+
+            self.gains=[]
+            for value in range(len(self.size_values)):
+                    self.gains.append(str(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
+                            self.glibc_throughput_values[value] )*100))+str('%'))
+
+            #Converting sizes to B,KB,MB for reports
+            self.data_unit()
+            # Open the output file
+            with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
+                    newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
+                        "GAINS"])
+                for size, gthroughput , athroughput, g  in zip(self.size_unit, \
+                        self.glibc_throughput_values,self.amd_throughput_values,self.gains):
+                        writer.writerow([size, gthroughput,athroughput,g])
+
+            self.print_result()
+            return
+
+        if (self.perf == 'b'):
+
+            # Read the gbamd.txt file from old_perf_dir and new_perf_dir
+            values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.old_perf_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.size_values = [int(val) for val in values]
+            self.amd_throughput_old_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.old_perf_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.amd_throughput_new_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.new_perf_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.throughput_converter(self.amd_throughput_old_values)
+            self.throughput_converter(self.amd_throughput_new_values)
+
+            self.gains=[]
+            for value in range(len(self.size_values)):
+                    self.gains.append(str(round (((self.amd_throughput_new_values[value] - self.amd_throughput_old_values[value] )/ \
+                            self.amd_throughput_old_values[value] )*100))+str('%'))
+
+            #Converting sizes to B,KB,MB for reports
+            self.data_unit()
+            # Open the output file
+            with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
+                    newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","LibMem - OLD","LibMem - NEW",\
+                        "GAINS"])
+                for size, othroughput , nthroughput, g  in zip(self.size_unit, \
+                        self.amd_throughput_old_values,self.amd_throughput_new_values,self.gains):
+                        writer.writerow([size, othroughput,nthroughput,g])
+
+            self.print_result()
+            return
+
         if (self.perf == 'p'):
-            print("Performance of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
+            print("Performance analysis for AOCL-LibMem - "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
+            self.variant = "amd"
+            self.gbm_run()
+            values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.result_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.size_values = [int(val) for val in values]
+            self.amd_throughput_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
+            self.throughput_converter(self.amd_throughput_values)
             self.data_unit()
 
             with open(self.result_dir+"/"+"perf_values.csv", "w",\
@@ -143,32 +204,7 @@ class GBM:
                     self.amd_throughput_values):
                     writer.writerow([size,athroughput])
             self.print_result_perf()
-
             return
-
-        self.throughput_converter(self.glibc_throughput_values)
-
-        self.gains=[]
-        for value in range(len(self.size_values)):
-                self.gains.append(str(round (((self.amd_throughput_values[value] - self.glibc_throughput_values[value] )/ \
-                        self.glibc_throughput_values[value] )*100))+str('%'))
-
-        #Converting sizes to B,KB,MB for reports
-        self.data_unit()
-
-        # Open the output file
-        with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
-                newline="") as output_file:
-            writer = csv.writer(output_file)
-            # Write the values to the CSV file
-            writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
-                    "GAINS"])
-            for size, gthroughput , athroughput, g  in zip(self.size_unit, \
-                    self.glibc_throughput_values,self.amd_throughput_values,self.gains):
-                    writer.writerow([size, gthroughput,athroughput,g])
-
-        self.print_result()
-        return
 
     def throughput_converter(self,value):
         for i in range(len(value)):
@@ -198,7 +234,7 @@ class GBM:
         self.size = input_file['Size'].values.tolist()
         self.perf = input_file['Throughput'].values.tolist()
         print("\nPERFORMANCE: "+self.bench_name)
-        print("    SIZE".ljust(8)+"     :  THROUGHPUT")
+        print("    SIZE".ljust(8)+"     :  THROUGHPUT G/s")
         print("    ----------------")
         for x in range(len(self.size)):
                 print("   ",(self.size[x]).ljust(8)+" :"+\
@@ -224,14 +260,12 @@ class GBM:
 
     def gbm_run(self):
 
-        if self.variant =="amd":
+        if self.variant == "amd":
             self.LibMemVersion = subprocess.check_output("file " + LIBMEM_BIN_PATH + \
                 "| awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell =True)
             env['LD_PRELOAD'] = LIBMEM_BIN_PATH
-            if (self.perf == 'b'):
-                print("GBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
-            else:
-                print("GBM : Running Performance Analysis for AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
+            print("GBM : Running Benchmark on AOCL-LibMem "+str(self.LibMemVersion,'utf-8').strip())
+
         else:
             self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
 

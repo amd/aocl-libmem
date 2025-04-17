@@ -56,6 +56,8 @@ class FBM:
         self.glibc_throughput_value=[]
         self.amd_raw=[]
         self.glibc_raw=[]
+        self.amd_old_raw=[]
+        self.amd_new_raw=[]
         self.gains=[]
         self.data=["Google A","Google B","Google D",
                    "Google L","Google M","Google Q",
@@ -65,6 +67,10 @@ class FBM:
         self.LibMemVersion=''
         self.GlibcVersion=''
         self.result_dir = self.MYPARSER['ARGS']['result_dir']
+        self.perf = self.MYPARSER['ARGS']['perf']
+        if self.perf == 'b':
+            self.old_perf_dir = self.MYPARSER['ARGS']['old_perf_dir']
+            self.new_perf_dir = self.MYPARSER['ARGS']['new_perf_dir']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+'/fleetbench')
@@ -73,42 +79,105 @@ class FBM:
             subprocess.run(["git","clone","-c","advice.detachedHead=false","-b","v0.2","https://github.com/google/fleetbench.git"],cwd=self.path)
             subprocess.run(["bazel","build","-c","opt","//fleetbench/libc:mem_benchmark","--cxxopt=-Wno-deprecated-declarations","--cxxopt=-Wno-unused-variable","--cxxopt=-Wno-changes-meaning"],cwd=self.path+"/fleetbench")
 
-        print("Benchmarking of "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
+        #Default performance analysis
+        if (self.perf == 'd'):
+            print("Benchmarking of "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
 
-        self.variant="glibc"
-        self.fbm_run()
-        self.variant="amd"
-        self.fbm_run()
+            self.variant="glibc"
+            self.fbm_run()
+            self.variant="amd"
+            self.fbm_run()
 
-        for i in range(0,self.last):
-            self.glibc_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"glibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
+            for i in range(0,self.last):
+                self.glibc_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"glibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
+                self.amd_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
+
+            self.amd_raw=[item[0] for item in self.amd_raw]
+            self.glibc_raw=[item[0] for item in self.glibc_raw]
+
+            #Converting the M/s values to G/s
+            self.amd_throughput_value=self.throughput_converter(self.amd_raw)
+            self.glibc_throughput_value=self.throughput_converter(self.glibc_raw)
+
+            self.gains=[]
+            for value in range(len(self.amd_throughput_value)):
+                    self.gains.append(str(round (((self.amd_throughput_value[value] - self.glibc_throughput_value[value] )/ \
+                            self.glibc_throughput_value[value] )*100))+str('%'))
+
+            # Open the output file
+            with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
+                    newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
+                        "GAINS"])
+                for size, gthroughput , athroughput, g  in zip(self.data, \
+                        self.glibc_throughput_value,self.amd_throughput_value,self.gains):
+                        writer.writerow([size, gthroughput,athroughput,g])
+
+            self.print_result()
+            return True
+
+        if (self.perf == 'b'):
+
+            # Read the fb_amd.txt files from old_perf_dir and new_perf_dir
+            for i in range(0,self.last):
+                self.amd_old_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.old_perf_dir, capture_output=True, text=True).stdout.splitlines())
+                self.amd_new_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.new_perf_dir, capture_output=True, text=True).stdout.splitlines())
+
+            self.amd_old_raw = [item[0] for item in self.amd_old_raw]
+            self.amd_new_raw = [item[0] for item in self.amd_new_raw]
+
+            #Converting the M/s values to G/s
+            self.amd_old_throughput=self.throughput_converter(self.amd_old_raw)
+            self.amd_new_throughput=self.throughput_converter(self.amd_new_raw)
+
+            self.gains=[]
+            for value in range(len(self.amd_old_throughput)):
+                    self.gains.append(str(round (((self.amd_new_throughput[value] - self.amd_old_throughput[value] )/ \
+                            self.amd_old_throughput[value] )*100))+str('%'))
+
+            # Open the output file
+            with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
+                    newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","LibMem - OLD","LibMem - NEW",\
+                        "GAINS"])
+                for size, othroughput , nthroughput, g  in zip(self.data, \
+                         self.amd_old_throughput,self.amd_new_throughput,self.gains):
+                        writer.writerow([size, othroughput, nthroughput, g])
+
+            self.print_result()
+            return True
+
+        if (self.perf == 'p'):
+            print("Performance analysis for AOCL-LibMem - "+str(self.func)+" for DATA Distributions["+str(self.data[0])+"-"+str(self.data[-1])+"] on "+str(self.bench_name))
+            self.variant="amd"
+            self.fbm_run()
+
+            for i in range(0,self.last):
+                self.amd_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
+
             self.amd_raw.append(subprocess.run(["sed", "-n", r"/mean/{s/.*bytes_per_second=\([^ ]*\).*/\1/p;q}", "fb_"+str(i)+"amd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines())
+            self.amd_raw=[item[0] for item in self.amd_raw]
 
-        self.amd_raw=[item[0] for item in self.amd_raw]
-        self.glibc_raw=[item[0] for item in self.glibc_raw]
+            #Converting the M/s values to G/s
+            self.amd_throughput_value=self.throughput_converter(self.amd_raw)
 
-        #Converting the M/s values to G/s
-        self.amd_throughput_value=self.throughput_converter(self.amd_raw)
-        self.glibc_throughput_value=self.throughput_converter(self.glibc_raw)
+            # Open the output file
+            with open(self.result_dir+"/"+\
+                      "perf_values.csv", "w",\
+                    newline="") as output_file:
+                writer = csv.writer(output_file)
+                # Write the values to the CSV file
+                writer.writerow(["Size","Throughput"])
+                for size, athroughput in zip(self.data, \
+                        self.amd_throughput_value):
+                        writer.writerow([size, athroughput])
 
-        self.gains=[]
-        for value in range(len(self.amd_throughput_value)):
-                self.gains.append(str(round (((self.amd_throughput_value[value] - self.glibc_throughput_value[value] )/ \
-                        self.glibc_throughput_value[value] )*100))+str('%'))
-
-        # Open the output file
-        with open(self.result_dir+"/"+str(self.bench_name)+"throughput_values.csv", "w",\
-                newline="") as output_file:
-            writer = csv.writer(output_file)
-            # Write the values to the CSV file
-            writer.writerow(["Size","Glibc-"+str(self.GlibcVersion,'utf-8').strip(),"LibMem-"+str(self.LibMemVersion,'utf-8').strip(),\
-                    "GAINS"])
-            for size, gthroughput , athroughput, g  in zip(self.data, \
-                    self.glibc_throughput_value,self.amd_throughput_value,self.gains):
-                    writer.writerow([size, gthroughput,athroughput,g])
-
-        self.print_result()
-        return True
+            self.print_result_perf()
+            return True
 
     def throughput_converter(self,value):
         print(type(value))
@@ -122,6 +191,21 @@ class FBM:
                 self.value /= 1000
                 value[i]=float(self.value)
         return value
+
+    def print_result_perf(self):
+        input_file = read_csv(self.result_dir+"/"+"perf_values.csv")
+        self.size = input_file['Size'].values.tolist()
+        self.perf = input_file['Throughput'].values.tolist()
+        print("\nPERFORMANCE: "+self.bench_name)
+        print("    SIZE".ljust(8)+"     :  THROUGHPUT G/s")
+        print("    ----------------")
+        for x in range(len(self.size)):
+                print("   ",(self.size[x]).ljust(8)+" :"+\
+                    (str(self.perf[x])).rjust(6))
+
+
+        print("\n*** Test reports copied to directory ["+self.result_dir+"] ***\n")
+        return True
 
     def print_result(self):
         input_file = read_csv(self.result_dir+"/"+str(self.bench_name)+\

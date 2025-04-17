@@ -95,6 +95,48 @@ def get_prefetch_aggressiveness_level(bits):
     }
     return levels.get(bits, 'Unknown')
 
+def parse_size_with_unit(size_str):
+    """
+    Parse a string representing a size with units (B, KB, MB, GB) and convert to bytes.
+    Examples: '8B', '16KB', '9MB', '1GB'
+
+    Args:
+        size_str (str): A string representing size with unit
+
+    Returns:
+        int: Size in bytes
+
+    Raises:
+        argparse.ArgumentTypeError: If the format is invalid
+    """
+    # Define pattern to match number followed by optional unit
+    pattern = r'^(\d+)(?:([KMGT]?B))?$'
+    match = re.match(pattern, size_str, re.IGNORECASE)
+
+    if not match:
+        raise argparse.ArgumentTypeError(
+            f"Invalid size format: {size_str}. Expected format: NUMBER[UNIT] "
+            "where UNIT is one of B, KB, MB, GB (case insensitive)"
+        )
+
+    value, unit = match.groups()
+    value = int(value)
+    # If SIZE is negative or zero, raise an error
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"Size must be a positive integer: {size_str}")
+
+    # Convert to bytes based on unit
+    if unit is None or unit.upper() == 'B':
+        return value
+    elif unit.upper() == 'KB':
+        return value * 1024
+    elif unit.upper() == 'MB':
+        return value * 1024 * 1024
+    elif unit.upper() == 'GB':
+        return value * 1024 * 1024 * 1024
+    else:
+        raise argparse.ArgumentTypeError(f"Unknown unit: {unit}")
+
 class Bench:
     """
     The object of this class will run the specified benchmark framework
@@ -195,10 +237,10 @@ def collect_system_info(output_file, core_id):
                 f.write(f"  Prefetch Aggressiveness Profile: {msr_data['PrefetchAggressivenessProfile']} ({prefetch_level})\n")
                 f.write(f"  Master Enable (to enable Prefetch Aggressiveness Profiles): {'Enabled' if msr_data['MasterEnable'] == '1' else 'Disabled'}\n")
                 f.write(f"  UpDown Prefetcher (the prefetcher that uses memory access history to determine whether to fetch the next or previous line into the L2 cache): {'Enabled' if msr_data['UpDown'] == '1' else 'Disabled'}\n")
-                f.write(f"  L2 Stream Prefetcher (the prefetcher that uses history of memory access patterns to fetch additional sequential lines into L2 cache): {'Enabled' if msr_data['L2Stream'] == '1' else 'Disabled'}\n")
-                f.write(f"  L1 Region Prefetcher (the prefetcher that uses memory access history to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Region'] == '1' else 'Disabled'}\n")
-                f.write(f"  L1 Stride Prefetcher (prefetcher that uses memory access history of individual instructions to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Stride'] == '1' else 'Disabled'}\n")
-                f.write(f"  L1 Stream Prefetcher (the stream prefetcher that uses history of memory access patterns to fetch additional sequential lines into L1 cache): {'Enabled' if msr_data['L1Stream'] == '1' else 'Disabled'}\n")
+                f.write(f"  L2 Stream Prefetcher (the prefetcher that uses history of memory access patterns to fetch additional sequential lines into L2 cache): {'Enabled' if msr_data['L2Stream'] == '0' else 'Disabled'}\n")
+                f.write(f"  L1 Region Prefetcher (the prefetcher that uses memory access history to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Region'] == '0' else 'Disabled'}\n")
+                f.write(f"  L1 Stride Prefetcher (prefetcher that uses memory access history of individual instructions to fetch additional lines into L1 cache): {'Enabled' if msr_data['L1Stride'] == '0' else 'Disabled'}\n")
+                f.write(f"  L1 Stream Prefetcher (the stream prefetcher that uses history of memory access patterns to fetch additional sequential lines into L1 cache): {'Enabled' if msr_data['L1Stream'] == '0' else 'Disabled'}\n")
             else:
                 f.write("Failed to retrieve Prefetch information.\n")
         else:
@@ -241,7 +283,8 @@ def main():
     available_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
-    parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM')
+    parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM',
+                                     epilog="See './bench.py [gbm, tbm, fbm] -h' for more information on a specific benchmark")
 
     # Create subparsers for different benchmarking tools
     subparsers = parser.add_subparsers(dest='benchmark', required=True)
@@ -253,10 +296,19 @@ def main():
                             type=str, choices = libmem_funcs,default="memcpy")
 
     common_parser.add_argument("-r", "--range", nargs = 2, help="range of data\
-                                lengths to be benchmarked.\
-                                Memory functions [8 - 32MB]\
-                                String functions [8 - 4KB]",
-                            type=int)
+                                lengths to be benchmarked. Format: NUMBER[UNIT]\
+                                where UNIT is optional and can be B, KB, MB, or GB (case insensitive).\
+                                Examples: '8B', '16KB', '9MB', '1GB'\
+                                Memory functions [8B - 32MB]\
+                                String functions [8B - 4KB]\
+                                Memory functions can be benchmarked upto 1GB",
+                            type=parse_size_with_unit)
+    common_parser.add_argument("-perf", help = "performance runs for LibMem.\
+                            Default is performance benchmarking comparison. \
+                            p - Performance analysis for LibMem.\
+                            b - Comparison report between old and new LibMem runs.\
+                            d - Defalut report Glibc vs LibMem.",
+                            type = str, choices = ['p', 'b','d'], default = 'd')
 
     common_parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default is shift left\
@@ -273,7 +325,7 @@ def main():
                                 cache info, bios info, etc.", action="store_true")
 
     # Subparser for GBM with additional options
-    gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GBM Benchmarking Tool')
+    gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GoogleBench Benchmarking Tool')
     group = gbm_parser.add_mutually_exclusive_group()
     gbm_parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
                             c - cached, u - un-cached",\
@@ -308,15 +360,13 @@ def main():
     gbm_parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
                           type = str, choices = ['y', 'n'], default = 'y')
 
-    gbm_parser.add_argument("-perf", help = "performance runs for LibMem.\
-                            Default is benchmarking mode against system Libc",
-                            type = str, choices = ['p', 'b'], default = 'b')
+
 
     # Subparser for TBM
-    tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TBM Benchmarking Tool')
+    tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TinyMembench Benchmarking Tool')
 
     # Subparser for FBM
-    fbm_parser = subparsers.add_parser('fbm', parents=[common_parser], help='FBM Benchmarking Tool')
+    fbm_parser = subparsers.add_parser('fbm', parents=[common_parser], help='Fleetbench Benchmarking Tool')
 
     fbm_parser.add_argument("-mem_alloc", help="specify the memory allocator for FleetBench",
                                type=str, choices=['tcmalloc', 'glibc'], default='glibc')
@@ -350,6 +400,30 @@ def main():
     # Create result directory
     os.makedirs(args.result_dir, exist_ok=False)
 
+    # Prompt for two directory paths when -perf b option is used
+    if hasattr(args, 'perf') and args.perf == 'b':
+        print("\nPerformance comparison mode (Old vs New LibMem) selected.")
+        print("Enter paths to directories containing perf_values.csv files:")
+
+        # Get path to first directory (old version)
+        old_dir_path = input("Enter path to OLD LibMem perf_values.csv directory: ").strip()
+        while not os.path.isdir(old_dir_path):
+            print(f"Error: Directory '{old_dir_path}' does not exist or is not accessible.")
+            old_dir_path = input("Enter path to OLD LibMem perf_values.csv directory: ").strip()
+
+        # Get path to second directory (new version)
+        new_dir_path = input("Enter path to NEW LibMem perf_values.csv directory: ").strip()
+        while not os.path.isdir(new_dir_path):
+            print(f"Error: Directory '{new_dir_path}' does not exist or is not accessible.")
+            new_dir_path = input("Enter path to NEW LibMem perf_values.csv directory: ").strip()
+
+        # Store the paths in args for later use
+        args.old_perf_dir = old_dir_path
+        args.new_perf_dir = new_dir_path
+
+        print(f"Using OLD LibMem perf_values.csv from: {old_dir_path}")
+        print(f"Using NEW LibMem perf_values.csv from: {new_dir_path}")
+
     if getattr(args, 'system_info', False):
         # Create a timestamped output file for system info
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -360,9 +434,15 @@ def main():
     # Set the default range based on the func argument
     if args.range is None:
         if args.func in libmem_string:
-            args.range = [8, 4096]
+            args.range = [8, 4096]  # 8B to 4KB for string functions
         else:
-            args.range = [8, 32 * 1024 * 1024]
+            args.range = [8, 32 * 1024 * 1024]  # 8B to 32MB for memory functions
+
+    # Check if the range is valid
+    if args.range[0] > args.range[1] :
+        raise argparse.ArgumentTypeError(
+            f"The first size must be less than or equal to the second size: {args.range[0]} < {args.range[1]}"
+        )
 
     return vars(args)
 
