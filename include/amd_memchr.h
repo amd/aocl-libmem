@@ -24,6 +24,7 @@
  */
 #ifndef _MEMCHR_H_
 #define _MEMCHR_H_
+#include "almem_defs.h"
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -33,14 +34,14 @@ extern "C" {
 typedef void * (*amd_memchr_fn)(const void *, int, size_t);
 
 //Micro architecture specifc implementations.
-extern void * __memchr_zen1(const void *, int, size_t);
-extern void * __memchr_zen2(const void *, int, size_t);
-extern void * __memchr_zen3(const void *, int, size_t);
-extern void * __memchr_zen4(const void *, int, size_t);
-extern void * __memchr_zen5(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen1(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen2(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen3(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen4(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen5(const void *, int, size_t);
 
 //System solution which takes in system config and  threshold values.
-extern void * __memchr_system(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_system(const void *, int, size_t);
 
 #ifdef __cplusplus
 }

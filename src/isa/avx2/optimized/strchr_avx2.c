@@ -25,7 +25,7 @@
 #include <stddef.h>
 #include "logger.h"
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include "zen_cpu_info.h"
 
 static inline char * __attribute__((flatten)) _strchr_avx2(const char *str, int c)

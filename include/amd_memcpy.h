@@ -24,6 +24,7 @@
  */
 #ifndef _MEMCPY_H_
 #define _MEMCPY_H_
+#include "almem_defs.h"
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -33,42 +34,42 @@ extern "C" {
 typedef void* (*amd_memcpy_fn)(void *, const void*, size_t);
 
 //Micro architecture specifc implementations.
-extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen4(void *dest,const void *src, size_t size);
-extern void * __memcpy_zen5(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen1(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen2(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen4(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen5(void *dest,const void *src, size_t size);
 
 //System solution which takes in system config and  threshold values.
-extern void * __memcpy_system(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_system(void *dest,const void *src, size_t size);
 
 #ifdef ALMEM_TUNABLES
 //Generic solution which takes in user threshold values.
-extern void * __memcpy_threshold(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_threshold(void *dest,const void *src, size_t size);
 
 //CPU Feature:AVX2 and Alignment specifc implementations.
-extern void * __memcpy_avx2_unaligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_aligned_store(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx2_nt_store(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_unaligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_aligned_load(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_aligned_store(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_nt(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_nt_load(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx2_nt_store(void *dest,const void *src, size_t size);
 
 //CPU Feature:AVX512 and Alignment specifc implementations.
-extern void * __memcpy_avx512_unaligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_aligned_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_aligned_store(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_nt(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_nt_load(void *dest,const void *src, size_t size);
-extern void * __memcpy_avx512_nt_store(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_unaligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_aligned_load(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_aligned_store(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_nt(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_nt_load(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_avx512_nt_store(void *dest,const void *src, size_t size);
 
 //CPU Feature:ERMS and Alignment specifc implementations.
-extern void * __memcpy_erms_b_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_w_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_d_aligned(void *dest,const void *src, size_t size);
-extern void * __memcpy_erms_q_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_erms_b_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_erms_w_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_erms_d_aligned(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_erms_q_aligned(void *dest,const void *src, size_t size);
 #endif
 
 #ifdef __cplusplus

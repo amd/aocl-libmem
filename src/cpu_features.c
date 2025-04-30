@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -24,7 +24,9 @@
  */
 #include "zen_cpu_info.h"
 
-void __get_cpu_features(cpuid_registers *cpuid_regs)
+HIDDEN_SYMBOL cpu_info zen_info;
+
+static inline void __get_cpu_features(cpuid_registers *cpuid_regs)
 {
     asm volatile
     (
@@ -32,4 +34,70 @@ void __get_cpu_features(cpuid_registers *cpuid_regs)
      :"=a"(cpuid_regs->eax), "=b"(cpuid_regs->ebx), "=c"(cpuid_regs->ecx), "=d"(cpuid_regs->edx)
      :"0"(cpuid_regs->eax), "2"(cpuid_regs->ecx)
     );
+}
+
+static inline bool is_amd()
+{
+    cpuid_registers cpuid_regs;
+
+    cpuid_regs.eax= 0x0;
+    cpuid_regs.ecx = 0;
+    __get_cpu_features(&cpuid_regs);
+    if ((cpuid_regs.ebx ^ 0x68747541) |
+            (cpuid_regs.edx ^ 0x69746E65) |
+                 (cpuid_regs.ecx ^ 0x444D4163))
+    {
+        return false;
+    }
+    return true;
+}
+
+static inline void get_cpu_capabilities()
+{
+    cpuid_registers cpuid_regs;
+
+    cpuid_regs.eax= 0x7;
+    cpuid_regs.ecx = 0;
+    __get_cpu_features(&cpuid_regs);
+
+    if (cpuid_regs.ebx & AVX512_MASK)
+    {
+        zen_info.zen_cpu_features.avx512 = ENABLED;
+        LOG_INFO("CPU feature AVX512 Enabled\n");
+    }
+    if (cpuid_regs.ebx & AVX2_MASK)
+    {
+        zen_info.zen_cpu_features.avx2 = ENABLED;
+        LOG_INFO("CPU feature AVX2 Enabled\n");
+    }
+    if (cpuid_regs.ebx & ERMS_MASK)
+    {
+        zen_info.zen_cpu_features.erms = ENABLED;
+        LOG_INFO("CPU feature ERMS Enabled\n");
+    }
+    if (cpuid_regs.edx & FSRM_MASK)
+    {
+        zen_info.zen_cpu_features.fsrm = ENABLED;
+        LOG_INFO("CPU feature FSRM Enabled\n");
+    }
+    if (cpuid_regs.ecx & MOVDIRI_MASK)
+    {
+        zen_info.zen_cpu_features.movdiri = ENABLED;
+        LOG_INFO("CPU feature MOVDIRI Enabled\n");
+    }
+    if (cpuid_regs.ecx & VPCLMULQDQ_MASK)
+    {
+        zen_info.zen_cpu_features.vpclmul = ENABLED;
+        LOG_INFO("CPU feature VPCLMULQDQ Enabled\n");
+    }
+    if (cpuid_regs.ecx & RDPID_MASK)
+    {
+        zen_info.zen_cpu_features.rdpid = ENABLED;
+        LOG_INFO("CPU feature RDPID Enabled\n");
+    }
+    if (cpuid_regs.ecx & RDSEED_MASK)
+    {
+        zen_info.zen_cpu_features.rdseed = ENABLED;
+        LOG_INFO("CPU feature RDSEED Enabled\n");
+    }
 }

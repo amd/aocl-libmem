@@ -25,7 +25,7 @@
 
 #include "../../isa/avx512/optimized/memmove_avx512_erms.c"
 
-void * __attribute__((flatten)) __memmove_zen5(void * __restrict dst,
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen5(void * __restrict dst,
                              const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
@@ -34,5 +34,5 @@ void * __attribute__((flatten)) __memmove_zen5(void * __restrict dst,
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memmove(void *, const void *, size_t) __attribute__((weak,
-                        alias("__memmove_zen5"), visibility("default")));
+                        alias("__memmove_zen5")));
 #endif

@@ -24,6 +24,7 @@
  */
 #ifndef _STRCPY_H_
 #define _STRCPY_H_
+#include "almem_defs.h"
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -33,14 +34,14 @@ extern "C" {
 typedef char * (*amd_strcpy_fn)(char *, const char *);
 
 //Micro architecture specifc implementations.
-extern char * __strcpy_zen1(char *,const char *);
-extern char * __strcpy_zen2(char *,const char *);
-extern char * __strcpy_zen3(char *,const char *);
-extern char * __strcpy_zen4(char *,const char *);
-extern char * __strcpy_zen5(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen1(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen2(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen3(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen4(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen5(char *,const char *);
 
 //System solution which takes in system config.
-extern char * __strcpy_system(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_system(char *,const char *);
 
 #ifdef __cplusplus
 }

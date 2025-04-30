@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,10 +23,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "./optimized/strlen_avx512.c"
-size_t __attribute__((flatten)) __strlen_avx512(const char *str)
+HIDDEN_SYMBOL size_t __attribute__((flatten)) __strlen_avx512(const char *str)
 {
     LOG_INFO("\n");
     return _strlen_avx512(str);
 }
 size_t strlen(const char *) __attribute__((weak,
-                        alias("__strlen_avx512"), visibility("default")));
+                        alias("__strlen_avx512")));

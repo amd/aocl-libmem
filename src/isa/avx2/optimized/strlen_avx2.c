@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -26,7 +26,7 @@
 #include "logger.h"
 #include <stdint.h>
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include <zen_cpu_info.h>
 
 static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)

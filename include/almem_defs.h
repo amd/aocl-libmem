@@ -45,6 +45,29 @@
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 
+#define __ALMEM_CONCAT2(x,y)    x##_##y
+#define __ALMEM_CONCAT(x,y)     __ALMEM_CONCAT2(x,y)
+
+#define __ALMEM_PREFIX(x)       __##x
+
+#ifndef ALWAYS_INLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define ALWAYS_INLINE __attribute__((always_inline))
+#else
+// Fallback for other compilers (may not guarantee inlining)*/
+#define ALWAYS_INLINE inline
+#endif
+#endif
+
+#ifndef HIDDEN_SYMBOL
+#if defined(__GNUC__) || defined(__clang__)
+#define HIDDEN_SYMBOL __attribute__((visibility("hidden")))
+#else
+// Define as empty for compilers that don't support this attribute
+#define HIDDEN_SYMBOL
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

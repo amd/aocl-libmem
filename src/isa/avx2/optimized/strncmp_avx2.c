@@ -26,7 +26,7 @@
 #include "logger.h"
 #include <stdint.h>
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include "zen_cpu_info.h"
 
 static inline int  _strncmp_ble_ymm(const char *str1, const char *str2, uint8_t size)

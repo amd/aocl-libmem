@@ -25,15 +25,11 @@
 #ifndef _LIBMEM_H_
 #define _LIBMEM_H_
 
+#include "almem_defs.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "libmem_impls.h"
-#define __ALMEM_CONCAT2(x,y)    x##_##y
-#define __ALMEM_CONCAT(x,y)     __ALMEM_CONCAT2(x,y)
-
-#define __ALMEM_PREFIX(x)       __##x
 
 typedef enum{
     MEMCPY,
@@ -138,7 +134,7 @@ typedef void (*func_ptr)(void);
     }
 
 // Tunable Dispatching Table
-func_ptr libmem_tun_impls[TUN_FUNC_COUNT][TUN_VARIANT_COUNT] =
+HIDDEN_SYMBOL func_ptr libmem_tun_impls[TUN_FUNC_COUNT][TUN_VARIANT_COUNT] =
 {
     add_tun_func_variants(memcpy),
     add_tun_func_variants(mempcpy),
@@ -168,7 +164,7 @@ func_ptr libmem_tun_impls[TUN_FUNC_COUNT][TUN_VARIANT_COUNT] =
 
 
 // CPU Dispatching Table
-func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
+HIDDEN_SYMBOL func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
 {
     add_cpu_func_variants(memcpy),
     add_cpu_func_variants(mempcpy),

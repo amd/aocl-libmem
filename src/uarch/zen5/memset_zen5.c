@@ -25,7 +25,7 @@
 
 #include "../../isa/avx512/optimized/memset_avx512_erms.c"
 
-void * __attribute__((flatten)) __memset_zen5(void *mem, int val, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memset_zen5(void *mem, int val, size_t size)
 {
     LOG_INFO("\n");
     return _memset_avx512_erms(mem, val, size);
@@ -33,5 +33,5 @@ void * __attribute__((flatten)) __memset_zen5(void *mem, int val, size_t size)
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memset(void *, int, size_t) __attribute__((weak,
-                        alias("__memset_zen5"), visibility("default")));
+                        alias("__memset_zen5")));
 #endif

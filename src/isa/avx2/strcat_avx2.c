@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,10 +23,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "./optimized/strcat_avx2.c"
-char * __attribute__((flatten)) __strcat_avx2(char *dst, const char *src)
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strcat_avx2(char *dst, const char *src)
 {
     LOG_INFO("\n");
     return _strcat_avx2(dst, src);
 }
 char *strcat(char *, const char *) __attribute__((weak,
-                        alias("__strcat_avx2"), visibility("default")));
+                        alias("__strcat_avx2")));

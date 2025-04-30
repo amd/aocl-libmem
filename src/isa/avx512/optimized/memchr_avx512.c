@@ -26,7 +26,7 @@
 #include <immintrin.h>
 #include "logger.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 
 /* This function is an optimized version of memchr using AVX-512 instructions.
 It scans  the initial `size` bytes of the `mem` area for the first instance of `val`. */

@@ -27,7 +27,7 @@
 #include "threshold.h"
 #include <stdint.h>
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include "zen_cpu_info.h"
 
 /* This function is an optimized version of strncmp using AVX-512 instructions.

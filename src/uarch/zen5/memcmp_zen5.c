@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -25,7 +25,7 @@
 
 #include "../../isa/avx512/optimized/memcmp_avx512.c"
 
-int __attribute__((flatten)) __memcmp_zen5(const void *mem1, const void *mem2, size_t size)
+HIDDEN_SYMBOL int __attribute__((flatten)) __memcmp_zen5(const void *mem1, const void *mem2, size_t size)
 {
     LOG_INFO("\n");
     return _memcmp_avx512(mem1, mem2, size);
@@ -33,5 +33,5 @@ int __attribute__((flatten)) __memcmp_zen5(const void *mem1, const void *mem2, s
 
 #ifndef ALMEM_DYN_DISPATCH
 int memcmp(const void *, const void *, size_t) __attribute__((weak,
-                        alias("__memcmp_zen5"), visibility("default")));
+                        alias("__memcmp_zen5")));
 #endif

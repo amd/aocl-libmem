@@ -1,4 +1,4 @@
-/* Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -22,10 +22,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "logger.h"
-#include "zen_cpu_info.h"
 
-void get_cache_info(cpu_info *zen_info)
+#include "cpu_features.c"
+
+static inline void get_cache_info(cpu_info *zen_info)
 {
     cpuid_registers cpuid_regs;
 

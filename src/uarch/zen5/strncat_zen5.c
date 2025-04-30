@@ -23,12 +23,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "../../isa/avx512/optimized/strncat_avx512.c"
-char * __attribute__((flatten)) __strncat_zen5(char *dst, const char *src, size_t n)
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strncat_zen5(char *dst, const char *src, size_t n)
 {
     LOG_INFO("\n");
     return _strncat_avx512(dst, src, n);
 }
 #ifndef ALMEM_DYN_DISPATCH
 char *strncat(char *, const char *, size_t) __attribute__((weak,
-                        alias("__strncat_zen5"), visibility("default")));
+                        alias("__strncat_zen5")));
 #endif

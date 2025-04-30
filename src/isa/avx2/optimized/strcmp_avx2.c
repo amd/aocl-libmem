@@ -26,7 +26,7 @@
 #include "logger.h"
 #include <stdint.h>
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include "zen_cpu_info.h"
 
 #define PAGE_SZ         4096

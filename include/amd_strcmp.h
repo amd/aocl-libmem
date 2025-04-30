@@ -24,6 +24,7 @@
  */
 #ifndef _STRCMP_H_
 #define _STRCMP_H_
+#include "almem_defs.h"
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -33,14 +34,14 @@ extern "C" {
 typedef int (*amd_strcmp_fn)(const char *, const char *);
 
 //Micro architecture specifc implementations.
-extern int __strcmp_zen1(const char *,const char *);
-extern int __strcmp_zen2(const char *,const char *);
-extern int __strcmp_zen3(const char *,const char *);
-extern int __strcmp_zen4(const char *,const char *);
-extern int __strcmp_zen5(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_zen1(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_zen2(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_zen3(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_zen4(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_zen5(const char *,const char *);
 
 //System solution which takes in system config.
-extern int __strcmp_system(const char *,const char *);
+HIDDEN_SYMBOL extern int __strcmp_system(const char *,const char *);
 
 #ifdef __cplusplus
 }

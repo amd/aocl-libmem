@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,12 +23,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "../../isa/avx2/optimized/strstr_avx2.c"
-char * __attribute__((flatten)) __strstr_zen3(const char *haystack, const char *needle)
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strstr_zen3(const char *haystack, const char *needle)
 {
     LOG_INFO("\n");
     return _strstr_avx2(haystack, needle);
 }
 #ifndef ALMEM_DYN_DISPATCH
 char *strstr(const char *, const char *) __attribute__((weak,
-                        alias("__strstr_zen3"), visibility("default")));
+                        alias("__strstr_zen3")));
 #endif

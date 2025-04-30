@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -25,7 +25,7 @@
 #include "logger.h"
 #include "threshold.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include <immintrin.h>
 #include <stddef.h>
 

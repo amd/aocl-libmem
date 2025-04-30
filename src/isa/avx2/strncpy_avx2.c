@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -25,11 +25,11 @@
 
 #include "./optimized/strncpy_avx2.c"
 
-char * __attribute__((flatten)) __strncpy_avx2(char *dst, const char *src, size_t size)
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_avx2(char *dst, const char *src, size_t size)
 {
     LOG_INFO("\n");
     return _strncpy_avx2(dst, src, size);
 }
 
 char *strncpy(char *, const char *, size_t) __attribute__((weak,
-                        alias("__strncpy_avx2"), visibility("default")));
+                        alias("__strncpy_avx2")));

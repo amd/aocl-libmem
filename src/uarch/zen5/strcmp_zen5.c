@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -25,7 +25,7 @@
 
 #include "../../isa/avx512/optimized/strcmp_avx512.c"
 
-int __attribute__((flatten)) __strcmp_zen5(const char *str1, const char *str2)
+HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen5(const char *str1, const char *str2)
 {
     LOG_INFO("\n");
     return _strcmp_avx512(str1, str2);
@@ -33,5 +33,5 @@ int __attribute__((flatten)) __strcmp_zen5(const char *str1, const char *str2)
 
 #ifndef ALMEM_DYN_DISPATCH
 int strcmp(const char *, const char *) __attribute__((weak,
-                        alias("__strcmp_zen5"), visibility("default")));
+                        alias("__strcmp_zen5")));
 #endif

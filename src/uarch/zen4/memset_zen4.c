@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -26,13 +26,13 @@
 #include "logger.h"
 #include "threshold.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include <stddef.h>
 #include <immintrin.h>
 
 extern cpu_info zen_info;
 
-void * __attribute__((flatten)) __memset_zen4(void * mem, int  val, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memset_zen4(void * mem, int  val, size_t size)
 {
     __m512i z0;
     __m256i y0;
@@ -107,5 +107,5 @@ void * __attribute__((flatten)) __memset_zen4(void * mem, int  val, size_t size)
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memset(void *, int, size_t) __attribute__((weak,
-                        alias("__memset_zen4"), visibility("default")));
+                        alias("__memset_zen4")));
 #endif

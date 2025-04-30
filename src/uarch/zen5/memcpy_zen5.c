@@ -25,7 +25,7 @@
 
 #include "../../isa/avx512/optimized/memcpy_avx512_erms.c"
 
-void *__memcpy_zen5(void *dst, const void *src, size_t size)
+HIDDEN_SYMBOL void *__memcpy_zen5(void *dst, const void *src, size_t size)
 {
     LOG_INFO("\n");
     return _memcpy_avx512_erms(dst, src, size);
@@ -33,5 +33,5 @@ void *__memcpy_zen5(void *dst, const void *src, size_t size)
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memcpy(void *, const void *, size_t) __attribute__((weak,
-                        alias("__memcpy_zen5"), visibility("default")));
+                        alias("__memcpy_zen5")));
 #endif

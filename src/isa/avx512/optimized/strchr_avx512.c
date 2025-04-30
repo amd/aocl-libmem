@@ -25,7 +25,7 @@
 #include <stddef.h>
 #include "logger.h"
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include <zen_cpu_info.h>
 
 /* This function is an optimized version of strchr using AVX-512 instructions.

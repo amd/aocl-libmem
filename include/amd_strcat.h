@@ -24,6 +24,7 @@
  */
 #ifndef _STRCAT_H_
 #define _STRCAT_H_
+#include "almem_defs.h"
 #include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
@@ -32,14 +33,14 @@ extern "C" {
 typedef char * (*amd_strcat_fn)(char *, const char *);
 
 //Micro architecture specifc implementations.
-extern char * __strcat_zen1(char *,const char *);
-extern char * __strcat_zen2(char *,const char *);
-extern char * __strcat_zen3(char *,const char *);
-extern char * __strcat_zen4(char *,const char *);
-extern char * __strcat_zen5(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen1(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen2(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen3(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen4(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen5(char *,const char *);
 
 //System solution which takes in system config.
-extern char * __strcat_system(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_system(char *,const char *);
 
 #ifdef __cplusplus
 }

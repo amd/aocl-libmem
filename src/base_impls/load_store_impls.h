@@ -27,7 +27,7 @@
 #define _LIBMEM_LOAD_STORE_IMPLS_H_
 
 #include <immintrin.h>
-#include "alm_defs.h"
+#include "almem_defs.h"
 
 #define CACHE_LINE_SZ 64
 

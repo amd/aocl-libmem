@@ -25,7 +25,7 @@
 #include "logger.h"
 #include "threshold.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 #include <immintrin.h>
 #include <stddef.h>
 #include "../../../base_impls/memset_erms_impls.h"

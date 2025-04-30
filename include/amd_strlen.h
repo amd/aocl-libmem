@@ -24,6 +24,7 @@
  */
 #ifndef _STRLEN_H_
 #define _STRLEN_H_
+#include "almem_defs.h"
 #include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
@@ -32,14 +33,14 @@ extern "C" {
 typedef size_t (*amd_strlen_fn)(const char *);
 
 //Micro architecture specifc implementations.
-extern size_t __strlen_zen1(const char *);
-extern size_t __strlen_zen2(const char *);
-extern size_t __strlen_zen3(const char *);
-extern size_t __strlen_zen4(const char *);
-extern size_t __strlen_zen5(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_zen1(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_zen2(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_zen3(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_zen4(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_zen5(const char *);
 
 //System solution which takes in system config.
-extern size_t __strlen_system(const char *);
+HIDDEN_SYMBOL extern size_t __strlen_system(const char *);
 
 #ifdef __cplusplus
 }

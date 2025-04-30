@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,18 +30,18 @@
 
 extern config active_operation_cfg;
 extern config active_threshold_cfg;
-user_cfg user_config;
+HIDDEN_SYMBOL user_cfg user_config;
 
 extern char **environ;
 extern char **_dl_argv;
 
-char ** get_environ() {
+static inline char ** get_environ() {
     int argc = *(int*)(_dl_argv - 1);
     char **my_environ = (char**)(_dl_argv + argc + 1);
     return my_environ;
 }
 
-int string_compare(char *str1, char *str2)
+static inline int string_compare(char *str1, char *str2)
 {
 	while(*str1 && *(str1++) == *(str2++));
 	return (*(unsigned char *)str1 - *(unsigned char *)str2);

@@ -26,7 +26,7 @@
 #include "threshold.h"
 #include "../../../base_impls/load_store_impls.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 
 extern cpu_info zen_info;
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -27,11 +27,11 @@
 #include "threshold.h"
 #include "../../base_impls/load_store_impls.h"
 #include "zen_cpu_info.h"
-#include "alm_defs.h"
+#include "almem_defs.h"
 
 extern cpu_info zen_info;
 
-void * __attribute__((flatten)) __memcpy_zen4(void * __restrict dst, \
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memcpy_zen4(void * __restrict dst, \
                         const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
@@ -116,5 +116,5 @@ void * __attribute__((flatten)) __memcpy_zen4(void * __restrict dst, \
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memcpy(void *, const void *, size_t) __attribute__((weak,
-                        alias("__memcpy_zen4"), visibility("default")));
+                        alias("__memcpy_zen4")));
 #endif
