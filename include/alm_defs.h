@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -33,6 +33,14 @@
 #define ALL_BITS_SET            ((uint64_t)-1)
 #define LOWER_BIT_SET           ((uint64_t)1)
 #define NULL_MASK               0x0
+#define CACHE_LINE_OFFSET       (1 << 5)
+#define AVX2_VEC_4_OFFSET       (1 << 6)
+#define AVX512_VEC_4_OFFSET     (1 << 7)
+#define AVX2_VEC_4_SZ           (1 << 7)
+#define AVX512_VEC_4_SZ         (1 << 8)
+#define AVX512_VEC_OFFSET       (1 << 6)
+#define ALL_BITS_SET_64         0xFFFFFFFFFFFFFFFF
+#define NULL_TERM_CHAR         '\0'
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)

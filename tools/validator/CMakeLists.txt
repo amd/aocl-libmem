@@ -1,4 +1,4 @@
-# Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -32,64 +32,62 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/tools/validator/CTestTestfile.cmake
   DESTINATION ${CMAKE_BINARY_DIR}/test)
 
 add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/libmem_validator.c)
+
+target_compile_options(libmem_validator PRIVATE -Wall -Wextra -O0)
 target_link_libraries(libmem_validator m)
 
 # Enable testing
 enable_testing()
 
-# Check L2cache sizes using a command line utility
-execute_process(
-    COMMAND bash -c "lscpu --caches | grep 'L2' | awk '{print $2}'"
-    OUTPUT_VARIABLE LSCPU_OUTPUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+set(DETECT_FEATURE 2)
+set(AVX2 0)
+set(AVX512 3)
+set(DETECT_CPU_VENDOR  4)
+set(DETECT_ARCH_TYPE   1)
+set(ARCH_ZEN5 5)
+set(REQ_TYPE_CACHE 3)
+set(L1_DCACHE_CORE 1)
+set(L2_CACHE_CORE  2)
+set(L3_CACHE_CCX   3)
+set(AMD_CPU 1)
+set(CPU_FEATURES AVX512)
 
-if(LSCPU_OUTPUT MATCHES "([0-9]+)M")
-    string(REGEX REPLACE "([0-9]+)M" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
-    math(EXPR L2_CACHE_SIZE "${LSCPU_OUTPUT} * 1024 * 1024")
+set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
+set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
 
-elseif(LSCPU_OUTPUT MATCHES "([0-9]+)K")
-    string(REGEX REPLACE "([0-9]+)K" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
-    math(EXPR L2_CACHE_SIZE "${LSCPU_OUTPUT} * 1024")
+#Detect the CPU Vendor
+try_run(CPU_VENDOR COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_CPU_VENDOR})
 
-else()
-    set(L2_CACHE_SIZE 1048320)
+if (${CPU_VENDOR} MATCHES ${AMD_CPU})
+    set(CPU "AMD")
 endif()
 
-# Convert LSCPU_OUTPUT to an integer
-math(EXPR LSCPU_OUTPUT_INT "${L2_CACHE_SIZE}")
-
-# Calculate start and end sizes
-#1MB +- 256 L2 Cahce [Zen3 and Zen4]
-math(EXPR L2TH_START "${LSCPU_OUTPUT_INT} - 256")
-math(EXPR L2TH_END "${LSCPU_OUTPUT_INT} + 256")
-
-# Check L3cache sizes using a command line utility
-execute_process(
-    COMMAND bash -c "lscpu --caches | grep 'L3' | awk '{print $2}'"
-    OUTPUT_VARIABLE LSCPU_OUTPUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-if(LSCPU_OUTPUT MATCHES "([0-9]+)M")
-    string(REGEX REPLACE "([0-9]+)M" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
-    math(EXPR L3_CACHE_SIZE "${LSCPU_OUTPUT} * 1024 * 1024")
-
-elseif(LSCPU_OUTPUT MATCHES "([0-9]+)K")
-    string(REGEX REPLACE "([0-9]+)K" "\\1" LSCPU_OUTPUT ${LSCPU_OUTPUT})
-    math(EXPR L3_CACHE_SIZE "${LSCPU_OUTPUT} * 1024")
+# Detect CPU features
+set(FEATURE AVX512)
+try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
+if (HAS_${FEATURE})
+    #AVX512 supported
+    SET(ISA "AVX512")
+    #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
+    target_compile_definitions(libmem_validator PRIVATE AVX512_FEATURE_ENABLED)
+    #Detect if ZEN5 CPU, for new threshold checks
+    try_run(IS_ZEN5 COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_ARCH_TYPE})
+    if (${IS_ZEN5} MATCHES ${ARCH_ZEN5})
+        SET(ARCH "ZEN5")
+    endif()
 
 else()
-    set(L3_CACHE_SIZE 33554432)
+    SET(FEATURE AVX2)
+    try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
+        if (HAS_${FEATURE})
+            #AVX2 supported
+            SET(ISA "AVX2")
+        endif()
 endif()
-
-# Convert LSCPU_OUTPUT to an integer
-math(EXPR LSCPU_OUTPUT_INT "${L3_CACHE_SIZE}")
-
-# Calculate start and end sizes
-#24MB +- 256 3/4th of L3 Cache [Zen4]
-math(EXPR L3TH_START "${LSCPU_OUTPUT_INT} * 3 / 4 - 256")
-math(EXPR L3TH_END "${LSCPU_OUTPUT_INT} * 3 / 4  + 256")
 
 # Define test values
 set(PAGE_SIZE 4096)    #4KB
@@ -99,9 +97,11 @@ set(MAX_TIMEOUT 12000) #Timout set to 200Mins for Memcmp
 set(LIBMEM_PATH ${CMAKE_INSTALL_PREFIX}/lib/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
-    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strstr" "strspn")
+    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strncat" "strstr" "strspn" "strchr")
 
-set(memory_threshold_func "memcpy" "memmove" "mempcpy")
+#Threshold specific functions
+set(load_store_func "memcpy" "mempcpy" "memmove")
+set(store_func "memset")
 
 ##ITERATOR TESTING
 #[0,1,2...4096B]
@@ -200,49 +200,265 @@ foreach(pattern IN LISTS supp_func)
     endforeach()
 endforeach()
 
-#Threshold boundary checks for memory functions
-set(size_values "")
-while(${L2TH_START} LESS_EQUAL ${L2TH_END})
-    list(APPEND size_values ${L2TH_START})
-    math(EXPR L2TH_START "${L2TH_START} + 1")
-endwhile()
+##THRESHOLD TESTING FOR AMD-CPUS
+if(CPU STREQUAL "AMD")
+    #L2 Cache info, rep-movs threshold check for ZEN5 arch
+    try_run(L2_CACHE COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L2_CACHE_CORE})
+    #L2_CACHE returned is a multiple of 512KB
+    math(EXPR L2_CACHE "${L2_CACHE} * 512 *1024")
 
-foreach(pattern IN LISTS memory_threshold_func)
-    string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
-    foreach(size ${size_values})
-        set(test_name "${sanitized_pattern}_thresholdL2_${size}B")
-        add_test(
-            NAME "${test_name}"
-            COMMAND env LD_PRELOAD=${LIBMEM_PATH}
-            ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
-        )
-        set_tests_properties(
-            "${sanitized_pattern}_thresholdL2_${size}B"
-            PROPERTIES
-            FAIL_REGULAR_EXPRESSION "ERROR"
-        )
+    #L3 Cache info
+    try_run(L3_CACHE COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L3_CACHE_CCX})
+    #L3_CACHE returned is a multiple of MB
+    math(EXPR L3_CACHE "${L3_CACHE} * 1024 * 1024")
+    #3/4th of L3 Cache = NT_THRSHOLD
+    math(EXPR NT_TH "${L3_CACHE} * 3/4")
+
+    if(ISA STREQUAL "AVX512")
+        math(EXPR L2_CACHE_TH_STRT "${L2_CACHE} - 512")
+        math(EXPR L2_CACHE_TH_END "${L2_CACHE} + 512")
+        math(EXPR NT_TH_STRT "${NT_TH} - 512")
+        math(EXPR NT_TH_END "${NT_TH} + 512")
+        #Generating Threshold Value sizes using shift
+        set(SHIFT 0 1 2 3 4 5 6 7 8 9)
+
+    elseif (ISA STREQUAL "AVX2")
+        math(EXPR L2_CACHE_TH_STRT "${L2_CACHE} - 128")
+        math(EXPR L2_CACHE_TH_END "${L2_CACHE} + 128")
+        math(EXPR NT_TH_STRT "${NT_TH} - 128")
+        math(EXPR NT_TH_END "${NT_TH} + 128")
+        set(SHIFT 0 1 2 3 4 5 6 7)
+
+    else()
+        message(FALTAL_ERROR "SKIPPING Threshold validation")
+    endif()
+
+    set(VALUES "")
+    # Generate powers of two using left shift and append to VALUES
+    foreach(shift IN LISTS SHIFT)
+        math(EXPR value "1 << ${shift}")
+        list(APPEND VALUES ${value})
     endforeach()
-endforeach()
-
-set(size_values "")
-while(${L3TH_START} LESS_EQUAL ${L3TH_END})
-    list(APPEND size_values ${L3TH_START})
-    math(EXPR L3TH_START "${L3TH_START} + 1")
-endwhile()
-
-foreach(pattern IN LISTS memory_threshold_func)
-    string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
-    foreach(size ${size_values})
-        set(test_name "${sanitized_pattern}_thresholdL3_${size}B")
-        add_test(
-            NAME "${test_name}"
-            COMMAND env LD_PRELOAD=${LIBMEM_PATH}
-            ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
-        )
-        set_tests_properties(
-            "${sanitized_pattern}_thresholdL3_${size}B"
-            PROPERTIES
-            FAIL_REGULAR_EXPRESSION "ERROR"
-        )
+    # Initialize the list to hold the size values
+    set(size_values "")
+    # Increment L2_CACHE_TH_STRT by each value in VALUES
+    foreach(value IN LISTS VALUES)
+        # Use a temporary variable to hold the incremented value
+        math(EXPR temp_value "${L2_CACHE_TH_STRT} + ${value}")
+        # Check if the incremented value is within the threshold range
+        if(temp_value LESS_EQUAL ${L2_CACHE})
+            list(APPEND size_values ${temp_value})
+        endif()
     endforeach()
-endforeach()
+
+    foreach(value IN LISTS VALUES)
+    # Use a temporary variable to hold the incremented value
+        math(EXPR temp_value "${L2_CACHE} + ${value}")
+        if(temp_value LESS_EQUAL ${L2_CACHE_TH_END})
+            list(APPEND size_values ${temp_value})
+        endif()
+    endforeach()
+
+    foreach(pattern IN LISTS load_store_func)
+        string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+        foreach(size ${size_values})
+            set(test_name "${sanitized_pattern}_thresholdL2_${size}B")
+            add_test(
+                NAME "${test_name}"
+                COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+            )
+            set_tests_properties(
+                "${sanitized_pattern}_thresholdL2_${size}B"
+                PROPERTIES
+                FAIL_REGULAR_EXPRESSION "ERROR"
+            )
+        endforeach()
+    endforeach()
+
+    set(size_values "")
+    # Increment NT_TH_STRT by each value in VALUES
+    foreach(value IN LISTS VALUES)
+        # Use a temporary variable to hold the incremented value
+        math(EXPR temp_value "${NT_TH_STRT} + ${value}")
+        # Check if the incremented value is within the threshold range
+        if(temp_value LESS_EQUAL ${NT_TH})
+            list(APPEND size_values ${temp_value})
+        endif()
+    endforeach()
+
+    foreach(value IN LISTS VALUES)
+    # Use a temporary variable to hold the incremented value
+        math(EXPR temp_value "${NT_TH} + ${value}")
+        if(temp_value LESS_EQUAL ${NT_TH_END})
+            list(APPEND size_values ${temp_value})
+        endif()
+    endforeach()
+
+    foreach(pattern IN LISTS load_store_func)
+        string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+        foreach(size ${size_values})
+            set(test_name "${sanitized_pattern}_threshold_nt_${size}B")
+            add_test(
+                NAME "${test_name}"
+                COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+            )
+            set_tests_properties(
+                "${sanitized_pattern}_threshold_nt_${size}B"
+                PROPERTIES
+                FAIL_REGULAR_EXPRESSION "ERROR"
+            )
+        endforeach()
+    endforeach()
+
+    if (ARCH STREQUAL "ZEN5")
+        #LOAD-STORE function specific threshold testing for ZEN5
+        try_run(ALIGNED_VEC COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L1_DCACHE_CORE})
+        #L1_DCACHE returned is a multiple of KB
+        #updating the threshold to (L1_DCACHE >> 1) + 2 KB for load-store functions
+        math(EXPR ALIGNED_VEC_CPY "(${ALIGNED_VEC} * 1024 / 2) + 2048")
+        set(ALIGNED_VEC_CPY_TH "${ALIGNED_VEC_CPY}")
+        math(EXPR ALIGNED_VEC_CPY_TH_STRT "${ALIGNED_VEC_CPY_TH} - 512")
+        math(EXPR ALIGNED_VEC_CPY_TH_END  "${ALIGNED_VEC_CPY_TH} + 512")
+
+        #Generating Threshold Value sizes using shift
+        set(SHIFT 0 1 2 3 4 5 6 7 8 9)
+
+        set(size_values "")
+        # Increment ALIGNED_VEC_CPY_TH_STRT by each value in VALUES
+        foreach(value IN LISTS VALUES)
+            # Use a temporary variable to hold the incremented vale
+            math(EXPR temp_value "${ALIGNED_VEC_CPY_TH_STRT} + ${value}")
+            # Check if the incremented value is within the threshold range
+            if(temp_value LESS_EQUAL ${ALIGNED_VEC_CPY_TH})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        foreach(value IN LISTS VALUES)
+        # Use a temporary variable to hold the incremented value
+            math(EXPR temp_value "${ALIGNED_VEC_CPY_TH} + ${value}")
+            if(temp_value LESS_EQUAL ${ALIGNED_VEC_CPY_TH_END})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        #Generate and add the aligned_vector tests
+        foreach(pattern IN LISTS load_store_func)
+            string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+            foreach(size ${size_values})
+                set(test_name "${sanitized_pattern}_aligned_vector_${size}B")
+                add_test(
+                    NAME "${test_name}"
+                    COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                    ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+                )
+                set_tests_properties(
+                    "${sanitized_pattern}_aligned_vector_${size}B"
+                    PROPERTIES
+                    FAIL_REGULAR_EXPRESSION "ERROR"
+                )
+            endforeach()
+        endforeach()
+
+        #STORE function specific threshold testing for ZEN5
+        #using L1_DCACHE for store function
+        math(EXPR ALIGNED_VEC_SET "${ALIGNED_VEC} * 1024")
+        set(ALIGNED_VEC_SET_TH "${ALIGNED_VEC_SET}")
+        math(EXPR ALIGNED_VEC_SET_TH_STRT "${ALIGNED_VEC_SET_TH} - 512")
+        math(EXPR ALIGNED_VEC_SET_TH_END  "${ALIGNED_VEC_SET_TH} + 512")
+        #Generating Threshold Value sizes using shift
+        set(SHIFT 0 1 2 3 4 5 6 7 8 9)
+
+        set(size_values "")
+        # Increment ALIGNED_VEC_SET_TH_STRT by each value in VALUES
+        foreach(value IN LISTS VALUES)
+            # Use a temporary variable to hold the incremented val
+            math(EXPR temp_value "${ALIGNED_VEC_SET_TH_STRT} + ${value}")
+            # Check if the incremented value is within the threshold range
+            if(temp_value LESS_EQUAL ${ALIGNED_VEC_SET_TH})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        foreach(value IN LISTS VALUES)
+        # Use a temporary variable to hold the incremented value
+            math(EXPR temp_value "${ALIGNED_VEC_SET_TH} + ${value}")
+            if(temp_value LESS_EQUAL ${ALIGNED_VEC_SET_TH_END})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        #Generate and add the aligned_vector tests
+        foreach(pattern IN LISTS store_func)
+            string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+            foreach(size ${size_values})
+                set(test_name "${sanitized_pattern}_aligned_vector_${size}B")
+                add_test(
+                    NAME "${test_name}"
+                    COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                    ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+                )
+                set_tests_properties(
+                    "${sanitized_pattern}_aligned_vector_${size}B"
+                    PROPERTIES
+                    FAIL_REGULAR_EXPRESSION "ERROR"
+                )
+            endforeach()
+        endforeach()
+
+        #NON-temporal threshold testing for STORE function
+        set(NT_TH "${L3_CACHE}")
+        math(EXPR NT_TH_STRT "${NT_TH} - 512")
+        math(EXPR NT_TH_END "${NT_TH} + 512")
+        set(SHIFT 0 1 2 3 4 5 6 7 8 9)
+        set(VALUES "")
+        # Generate powers of two using left shift and append to VALUES
+        foreach(shift IN LISTS SHIFT)
+            math(EXPR value "1 << ${shift}")
+            list(APPEND VALUES ${value})
+        endforeach()
+        set(size_values "")
+        # Increment NT_TH_STRT by each value in VALUES
+        foreach(value IN LISTS VALUES)
+            # Use a temporary variable to hold the incremented value
+            math(EXPR temp_value "${NT_TH_STRT} + ${value}")
+            # Check if the incremented value is within the threshold range
+            if(temp_value LESS_EQUAL ${NT_TH})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        foreach(value IN LISTS VALUES)
+        # Use a temporary variable to hold the incremented value
+            math(EXPR temp_value "${NT_TH} + ${value}")
+            if(temp_value LESS_EQUAL ${NT_TH_END})
+                list(APPEND size_values ${temp_value})
+            endif()
+        endforeach()
+
+        #Generate and add the threshold_nt tests
+        foreach(pattern IN LISTS store_func)
+        string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+        foreach(size ${size_values})
+            set(test_name "${sanitized_pattern}_threshold_nt_${size}B")
+            add_test(
+                NAME "${test_name}"
+                COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                ${VALIDATOR_EXEC} ${pattern} ${size} 0 0 1
+            )
+            set_tests_properties(
+                "${sanitized_pattern}_threshold_nt_${size}B"
+                PROPERTIES
+                FAIL_REGULAR_EXPRESSION "ERROR"
+            )
+        endforeach()
+    endforeach()
+
+    endif()
+
+endif()

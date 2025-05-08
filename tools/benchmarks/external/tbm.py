@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -32,6 +32,7 @@ import argparse
 import re
 import csv
 import datetime
+import filecmp
 from statistics import mean
 from libmem_defs import *
 
@@ -62,9 +63,15 @@ class TBM:
             subprocess.run(["git","clone", "https://github.com/ssvb/tinymembench.git"],cwd=self.path)
             subprocess.run(["make"],cwd=self.path+"/tinymembench")
             os.system("cp ../tools/benchmarks/external/tinybench/tinymem-bench.c ../tools/benchmarks/external/tinybench/tinymembench/")
-            subprocess.run(["gcc","-O2","-o","tinymembench","tinymem-bench.c",\
-                    "util.o","asm-opt.o","x86-sse2.o","-lm"],cwd=self.path+"/tinymembench")
+            subprocess.run(["gcc","-Wno-int-conversion","-O2","-o","tinymembench","tinymem-bench.c",\
+                    "util.o","-lm"],cwd=self.path+"/tinymembench")
             print("prepared TINYMEMBENCH")
+
+        # Compare files, compile only when the file is modified
+        if not filecmp.cmp(self.path+"/tinymembench/tinymem-bench.c", self.path+"/tinymem-bench.c", shallow=False):
+            os.system("cp ../tools/benchmarks/external/tinybench/tinymem-bench.c ../tools/benchmarks/external/tinybench/tinymembench/")
+            subprocess.run(["gcc","-Wno-int-conversion","-O2","-o","tinymembench","tinymem-bench.c","util.o","-lm"],cwd=self.path+"/tinymembench")
+            print("compiled TINYMEMBENCH")
 
         self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' + \
         datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
@@ -151,7 +158,7 @@ class TBM:
             self.ranges[0] = 1
 
         with open(self.result_dir+'/'+str(self.variant)+'.txt', 'w') as f:
-            subprocess.run(['taskset', '-c',str(self.core),'numactl','-C'+str(self.core),'./tinymembench',str(self.func),\
+            subprocess.run(['taskset', '-c',str(self.core),'./tinymembench',str(self.func),\
             str(self.ranges[0]),str(self.ranges[1]), str(self.iterator)],cwd=self.path+"/tinymembench",\
                 env=env, stdout=f)
 

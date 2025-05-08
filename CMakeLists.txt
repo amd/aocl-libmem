@@ -1,4 +1,4 @@
-# Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -30,9 +30,9 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 # set the project name and version
-set(LIBMEM_VERSION_STRING 5.0)
+set(LIBMEM_VERSION_STRING 5.1.0)
 
-project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C DESCRIPTION
+project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C CXX DESCRIPTION
                         "Library of AMD optimized string/memory functions")
 
 string(TIMESTAMP BUILD_DATE "%Y%m%d")
@@ -42,59 +42,53 @@ set(LIBMEM_BUILD_VERSION_STR
 
 add_definitions(-DLIBMEM_BUILD_VERSION="${LIBMEM_BUILD_VERSION_STR}")
 
-set(DEFAULT_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 
 set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
 
-option(ENABLE_LOGGING "Enable Logger" OFF)
+option(ALMEM_DYN_DISPATCH "CPU Dispatching" OFF)
 
-option(ENABLE_TUNABLES "Enable user input" OFF)
+option(ALMEM_ISA "ISA_TYPE" OFF)
 
-option(ENABLE_GCOV "Enable Code Coverage" OFF)
+option(ALMEM_LOGGING "Enable Logger" OFF)
 
-if (ENABLE_LOGGING)
-add_definitions(-DENABLE_LOGGER)
+option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
+
+option(ALMEM_GCOV "Enable Code Coverage" OFF)
+
+if (ALMEM_LOGGING)
+add_definitions(-DALMEM_LOGGER)
 # uncomment the below for debug logs, LOG_LEVEL=DEBUG.
 #add_definitions(-DLOG_LEVEL=4)
 endif ()
 
-option(ALMEM_ARCH "ISA_ARCH_TYPE" ON)
+if (ENABLE_TUNABLES) #retaining for backward compatibility
+    set(ALMEM_TUNABLES ON)
+endif()
 
-execute_process(COMMAND bash "-c" "lscpu | grep erms"
-        RESULT_VARIABLE ERMS_FEATURE OUTPUT_QUIET)
-
-if (NOT ${ERMS_FEATURE})
-    #uncomment after addng ERMS support for all funcs
-    #add_definitions(-DERMS_FEATURE_ENABLED)
-    message("ERMS Feature Enabled on Build machine.")
+#reset ISA for invalid options
+if (NOT (${ALMEM_ISA} STREQUAL "avx2" OR ${ALMEM_ISA} STREQUAL "avx512"))
+    if (${ALMEM_ISA} MATCHES "avx")
+        message("InValid ISA option; Going ahead with next feasible option")
+    endif ()
+    set(ALMEM_ISA "")
 endif ()
 
-execute_process(COMMAND bash "-c" "lscpu | grep avx512"
-        RESULT_VARIABLE AVX512_FEATURE OUTPUT_QUIET)
+if (ALMEM_ISA) #ISA has precedence over DYN_DISPATCH
+    if (ALMEM_DYN_DISPATCH)
+        message(WARNING "ISA has precedence over DYN_DISPATCH; Disabling Dynamic CPU dispatching...")
+        set(ALMEM_DYN_DISPATCH OFF)
+    endif ()
+    if (ALMEM_TUNABLES)
+        message(WARNING "ISA has precedence over TUNABLES; Disabling TUNABLES option...")
+        set(ALMEM_TUNABLES OFF)
+    endif()
+endif()
 
-if (NOT ${AVX512_FEATURE})
-    message("AVX512 Feature Enabled on Build machine.")
-    if (NOT ${ALMEM_ARCH} STREQUAL "avx2")
-        message("Setting Arch to AVX512")
-        set(ALMEM_ARCH  "avx512")
-    endif ()
-endif ()
-
-if (ALMEM_ARCH MATCHES "avx512")
-    set(AVX512_FEATURE_AVAILABLE true)
-    add_definitions(-DAVX512_FEATURE_ENABLED)
-    if (${AVX512_FEATURE})
-        message("Cross-Compiling for AVX512 Arch...")
-    else ()
-        message("Native-Compiling for AVX512 Arch...")
-    endif ()
-else ()
-    if (NOT ${AVX512_FEATURE})
-        message("Cross-Compiling for AVX2 Arch...")
-    else ()
-        message("Native-Compiling for AVX2 Arch...")
-    endif ()
-endif ()
+if (ALMEM_TUNABLES)
+    set(ALMEM_DYN_DISPATCH ON)
+endif()
 
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-23 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,17 +30,17 @@
 extern "C" {
 #endif
 
+#include <zen_cpu_info.h>
 #include <stdint.h>
 
 static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "cld\n\t"
     "rep movsb"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -48,13 +48,12 @@ static inline void * __erms_movsb(void *dst, const void * src, size_t len)
 static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $1, %%rcx\n\t"
     "cld\n\t"
     "rep movsw"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -62,13 +61,12 @@ static inline void * __erms_movsw(void *dst, const void * src, size_t len)
 static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $2, %%rcx\n\t"
     "cld\n\t"
     "rep movsd"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -76,13 +74,12 @@ static inline void * __erms_movsd(void *dst, const void * src, size_t len)
 static inline void * __erms_movsq(void *dst, const void * src, size_t len)
 {
     asm volatile (
-    "movq %%rdi, %%rax\n\t"
     "sar $3, %%rcx\n\t"
     "cld\n\t"
     "rep movsq"
-    : "=a"(dst)
+    :
     : "D"(dst), "S"(src), "c"(len)
-    : "memory"
+    : "memory", "cc"
     );
     return dst;
 }
@@ -141,13 +138,15 @@ static inline void * __erms_movsq_last_byte(void *dst, const void * src, size_t 
 static inline void * __erms_movsb_back(void *dst, const void * src, size_t len)
 {
     asm volatile (
+    "movq %%rdi, %%rax\n\t"
     "std\n\t"
-    "rep movsb"
+    "rep movsb\n\t"
+    "cld"
     :
     : "D"(dst + len - 1), "S"(src + len - 1), "c"(len)
     : "memory"
     );
-    return dst + 1;
+    return dst;
 }
 
 static inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
@@ -155,12 +154,13 @@ static inline void * __erms_movsw_back(void *dst, const void * src, size_t len)
     asm volatile (
     "sar $1, %%rcx\n\t"
     "std\n\t"
-    "rep movsw"
+    "rep movsw\n\t"
+    "cld"
     :
-    : "D"(dst + len - 2), "S"(src + len - 2), "c"(len)
+    : "D"(dst + len - WORD_SZ), "S"(src + len - WORD_SZ), "c"(len)
     : "memory"
     );
-    return dst + 1;
+    return dst;
 }
 
 static inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
@@ -168,12 +168,13 @@ static inline void * __erms_movsd_back(void *dst, const void * src, size_t len)
     asm volatile (
     "sar $2, %%rcx\n\t"
     "std\n\t"
-    "rep movsd"
+    "rep movsd\n\t"
+    "cld"
     :
-    : "D"(dst + len - 4), "S"(src + len - 4), "c"(len)
+    : "D"(dst + len - DWORD_SZ), "S"(src + len - DWORD_SZ), "c"(len)
     : "memory"
     );
-    return dst + 1;
+    return dst;
 }
 
 static inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
@@ -181,12 +182,13 @@ static inline void * __erms_movsq_back(void *dst, const void * src, size_t len)
     asm volatile (
     "sar $3, %%rcx\n\t"
     "std\n\t"
-    "rep movsq"
+    "rep movsq\n\t"
+    "cld"
     :
-    : "D"(dst + len - 8), "S"(src + len - 8), "c"(len)
+    : "D"(dst + len - QWORD_SZ), "S"(src + len - QWORD_SZ), "c"(len)
     : "memory"
     );
-    return dst + 1;
+    return dst;
 }
 
 #ifdef __cplusplus

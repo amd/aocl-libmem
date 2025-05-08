@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-24 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+typedef int (*amd_memcmp_fn)(const void *, const void*, size_t);
+
 //Micro architecture specifc implementations.
 extern int __memcmp_zen1(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_zen2(const void *mem1,const void *mem2, size_t size);
@@ -40,6 +42,7 @@ extern int __memcmp_zen5(const void *mem1,const void *mem2, size_t size);
 //System solution which takes in system config and  threshold values.
 extern int __memcmp_system(const void *mem1,const void *mem2, size_t size);
 
+#ifdef ALMEM_TUNABLES
 //Generic solution which takes in user threshold values.
 extern int __memcmp_threshold(const void *mem1,const void *mem2, size_t size);
 
@@ -52,7 +55,6 @@ extern int __memcmp_avx2_nt(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx2_nt_load(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx2_nt_store(const void *mem1,const void *mem2, size_t size);
 
-#ifdef AVX512_FEATURE_ENABLED
 //CPU Feature:AVX512 and Alignment specifc implementations.
 extern int __memcmp_avx512_unaligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx512_aligned(const void *mem1,const void *mem2, size_t size);
@@ -61,16 +63,13 @@ extern int __memcmp_avx512_aligned_store(const void *mem1,const void *mem2, size
 extern int __memcmp_avx512_nt(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx512_nt_load(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_avx512_nt_store(const void *mem1,const void *mem2, size_t size);
-#endif
 
 //CPU Feature:ERMS and Alignment specifc implementations.
 extern int __memcmp_erms_b_aligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_erms_w_aligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_erms_d_aligned(const void *mem1,const void *mem2, size_t size);
 extern int __memcmp_erms_q_aligned(const void *mem1,const void *mem2, size_t size);
-
-extern int (*_memcmp_variant)(const void *, const void *, size_t);
-
+#endif
 
 #ifdef __cplusplus
 }

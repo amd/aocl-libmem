@@ -1,5 +1,5 @@
 """
- Copyright (C) 2023-24 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -42,6 +42,8 @@ class GBM:
         self.MYPARSER = self.ARGS["ARGS"]
         self.func=self.MYPARSER['ARGS']['func']
         self.align = str(self.MYPARSER['ARGS']['align'])
+        self.spill = str(self.MYPARSER['ARGS']['spill'])
+        self.page = str(self.MYPARSER['ARGS']['page'])
         self.path="../tools/benchmarks/external/gbench/"
         self.variant=""
         self.isExist=""
@@ -59,6 +61,9 @@ class GBM:
         self.GlibcVersion=''
         self.size_unit=[]
         self.perf = self.MYPARSER['ARGS']['perf']
+        self.preload = self.MYPARSER['ARGS']['preload']
+        self.repetitions = self.MYPARSER['ARGS']['repetitions']
+        self.warm_up = self.MYPARSER['ARGS']['warm_up']
 
     def __call__(self):
         self.isExist=os.path.exists(self.path+"/benchmark")
@@ -75,9 +80,47 @@ class GBM:
 
         self.result_dir = 'out/'+self.bench_name+'/'+self.func + '/' \
                 + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        command = [
+                    "g++",
+                    "-Wno-deprecated-declarations",
+                    "gbench.cpp",
+                    "-isystem", "benchmark/include",
+                    "-mclflushopt",
+                    ]
+
+        linker_flags = [
+                        "-Lbenchmark/build/src",
+                        "-lbenchmark",
+                        "-lpthread",
+                    ]
+        #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
+        if AVX512_FEATURE_ENABLED:
+            command.insert(1, "-DAVX512_FEATURE_ENABLED")
+
         os.makedirs(self.result_dir, exist_ok=False)
 
-        subprocess.run(["g++","-Wno-deprecated-declarations","gbench.cpp","-isystem","benchmark/include","-Lbenchmark/build/src","-lbenchmark","-lpthread","-o","googlebench"],cwd=self.path)
+        #If PRELOAD option is enabled,set the output file name
+        if self.preload == 'y':
+            command.extend(linker_flags + ["-o", "googlebench"])
+
+        #If static build, set the output file name
+        else:
+            #Generate the command for running LibMem by adding libmem static flags
+            command_amd = command.copy()
+            command_amd.extend(["-L" + LIBMEM_ARCHIVE_PATH,"-l:libaocl-libmem.a"] + linker_flags + ["-o", "googlebench_amd"])
+
+            #Generate the command for running Glibc by adding glibc static flags
+            command_glibc = command.copy()
+            command_glibc.extend(["-static-libgcc","-static-libstdc++"] + linker_flags + ["-o", "googlebench_glibc"])
+
+        if self.preload == 'y':
+            subprocess.run(command,cwd=self.path)
+
+        else:
+            #Compile and generate the executables
+            subprocess.run(command_amd,cwd=self.path)
+            subprocess.run(command_glibc,cwd=self.path)
+
         if (self.perf == 'b'):
             print("Benchmarking of "+str(self.func)+" for size range["+str(self.ranges[0])+"-"+str(self.ranges[1])+"] on "+str(self.bench_name))
             self.variant="glibc"
@@ -86,11 +129,12 @@ class GBM:
         self.variant="amd"
         self.gbm_run()
 
-        values= subprocess.run(["awk", "/^.*CACHED/ { print $1 }", "gbamd.txt"], cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
-        self.size_values= [val.split('/')[1] for val in values]
-        self.amd_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbamd.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+        values= subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '/[0-9]+_mean' | grep -Eo '[0-9]+'"], cwd=self.result_dir,shell = True, capture_output=True, text=True).stdout.splitlines()
+        self.size_values= [int(val) for val in values]
+        self.amd_throughput_values = subprocess.run(["grep '_mean' gbamd.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
+
         if (self.perf == 'b'):
-            self.glibc_throughput_values = subprocess.run(["grep", "-Eo", r"[0-9]+(\.[0-9]+)?[MG]/s", "gbglibc.txt"],cwd=self.result_dir, capture_output=True, text=True).stdout.splitlines()
+            self.glibc_throughput_values = subprocess.run(["grep '_mean' gbglibc.txt | grep -Eo '[0-9]+(\\.[0-9]+)?[GM]/s'"],cwd=self.result_dir, shell = True, capture_output=True, text=True).stdout.splitlines()
 
         #Converting the M/s values to G/s
         self.throughput_converter(self.amd_throughput_values)
@@ -206,6 +250,9 @@ class GBM:
             self.ranges[0] = 1
 
         with open(self.result_dir+'/gb'+str(self.variant)+'.txt','w') as g:
-            subprocess.run(["taskset", "-c", str(self.core),"numactl","-C"+str(self.core),"./googlebench","--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            if self.preload == 'y':
+                subprocess.run(["taskset", "-c", str(self.core),"./googlebench","--benchmark_repetitions="+str(self.repetitions),"--benchmark_min_warmup_time="+str(self.warm_up),"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,env=env,check=True,stdout =g,stderr=subprocess.PIPE)
+            else:
+                 subprocess.run(["taskset", "-c", str(self.core),"./googlebench"+"_"+self.variant,"--benchmark_repetitions="+str(self.repetitions),"--benchmark_min_warmup_time="+str(self.warm_up),"--benchmark_counters_tabular=true",str(self.func),str(self.memory_operation),str(self.ranges[0]),str(self.ranges[1]), str(self.iterator),str(self.align)],cwd=self.path,check=True,stdout =g,stderr=subprocess.PIPE)
 
         return

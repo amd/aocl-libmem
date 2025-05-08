@@ -66,20 +66,56 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
 ## Running Bench framework
 
-    $ ./bench.py <benchmark_name> <memory_function> -m <mode> -x<core_id> -r [start] [end] -t "<iterator_value>" -i<iterations>
-        <benchmark_name>  = gbm, tbm, fbm.
-        <memory_function> = memcpy,memset,memmove,memcmp,strcpy,strncpy.
-        -m <Mode>         = c,u(GBM)
-        -x <core_id>      = Enter the CPU core on which you want to run the benchmark.
-        -r [start] [end]  = start and end size range in Bytes.(Not applicable for Fleetbench)
-        -t "iter_value"   = increments the start size by "value".(0 stands for size<<1; other +ve integers stands for incremental iterations.)
-        -i <iterations>   = specify the no.of iterations.
+    $ ./bench.py <benchmark_name> <common_options> <benchmark_specific_options>
+      <benchmark_name>  = {gbm,tbm,fbm}
+                          gbm          Googlebench
+                          tbm          TinyMembench
+                          fbm          Fleetbench
 
-    Example:
-    Running Google BenchMark framework
-    $ ./bench.py gbm memcpy -r 8 16 -m c -t "1" -x 16
-    Runs the Google Benchmark for Cached Mode Memcpy for sizes[8,9,..16] on core -16
+      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function>
 
+                        -x <core_id> : Enter the CPU core on which you want to run the benchmark.
+                        -r [start] [end] : start and end size range in Bytes.(Not applicable for Fleetbench)
+                        -t "iter_value"  : increments the start size by "iter_value".
+                                           (0 stands for size<<1; other +ve integers stands for incremental iterations.)
+                        LibMem_function  : mem and str functions
+                                          (memcpy,memmove,memset,memcmp,memchr,
+                                          strcpy,strncpy,strcmp,strncmp,strlen,strcat,strncat,strspn,strstr,strchr)
 
+      <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -preload <y,n> -i<repetitions> -w<warm_up time>
+
+                            -m <c, u>    : cached  & uncached behaviour
+                            -a <a, u, d> : aligned (src and dst alignment are equal)
+                                           un-alinged (src and str alignment are NOT equal)
+                                           default alignment is random.
+                            -s <l, m>    : Less spill and more spill (applicable with align mode only)
+                            -p <x, t>    : Page-cross and Page-Tail scenario
+                          -preload <y,n> : Running with LD_PRELOAD option = y & Running with static binaries = n
+                          -i<repetitions>: Number of repetitions for consistent performance runs
+                        -w<warm_up time> : Minimum Warmup time in seconds.
+                        NOTE: -a and -p are mutually exclusive options
+
+      <FBM_specific_option> = -mem_alloc <tcmalloc, glibc> -i<repetitions>
+                              -mem_alloc : Specify the memory allocator(default = glibc)
+                          -i<repetitions>: Number of repetitions for consistent performance runs(default = 100)
+
+      <TBM_specific_option> = None
+
+    Examples:
     Benchmark Help option
     $ ./bench.py -h
+
+    Running Google Benchmark
+    $ ./bench.py gbm memcpy -r 8 16 -m u -t "1" -x 16
+    Runs the Google Benchmark for Un-Cached Mode Memcpy for sizes[8,9,..16] on core -16
+
+    $ ./bench.py gbm memcpy -r 8 32768 -s m -x 16
+    Runs GBM for Cached memcpy with More-cache spill
+
+    Running TinyMembench
+    $ ./bench.py tbm strcpy -r 8 4096 -x 47
+    Runs tinymembench for strcpy function fro sizes [8, 16, 32,..4096B] on core - 47
+
+    Running Fleetbench
+    $ ./bench.py fbm memset -x 47 -i 100
+    Runs fleetbench for memset benchmarking on core - 47 for 100 iterations

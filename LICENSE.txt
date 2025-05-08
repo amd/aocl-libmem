@@ -1,8 +1,9 @@
-This summary and the license information provided below is for reference purposes and is not intended to be a comprehensive list of all copyright notices or license terms and conditions applicable to AOCL-LibMem Library version 5.0.  Please refer to the source code files in AOCL-LibMem Library version 5.0 for all copyrights and licenses.
+This summary and the license information provided below is for reference purposes and is not intended to be a comprehensive list of all copyright notices or license terms and conditions applicable to AOCL-LibMem Library.  Please refer to the source code files in AOCL-LibMem Library for all copyrights and licenses.
+
 AMD copyrighted code (BSD-3-clause)
 Copyright Statements
 Copyright (C) 2008-2022,Advanced Micro Devices, Inc. All rights reserved.
-Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2022-2025, Advanced Micro Devices, Inc. All rights reserved.
 License Text http://spdx.org/licenses/BSD-3-Clause
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
