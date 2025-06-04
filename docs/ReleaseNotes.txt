@@ -1,6 +1,6 @@
 (C) 2022-25 Advanced Micro Devices, Inc. All Rights Reserved.
 
-AMD Memory/String Library - AOCL-LibMem Release Notes 5.0.1
+AMD Memory/String Library - AOCL-LibMem Release Notes 5.1.1
 ---------------------------------------------------------
 
 AMD AOCL-LibMem Contents
@@ -17,11 +17,5 @@ b) This library also provides tunables for the user to choose specific
 implementation of the function as per the application requirements.
 
 
-Highlights of AMD AOCL-LibMem version 5.0.1
+Highlights of AMD AOCL-LibMem version 5.1.1
 --------------------------------------------
- * Added support for new function
-    -strchr
-    -strncat
- * Optimized strlen-AVX2
- * TBM bug fix
- * Added dynamic dispatcher support
