@@ -38,9 +38,6 @@ import sys
 
 sys.path.insert(0, '../tools/benchmarks/external')
 import GetParser as ParserConfig
-from gbm import GBM
-from fbm import FBM
-from tbm import TBM
 
 def check_root_access():
     try:
@@ -137,6 +134,145 @@ def parse_size_with_unit(size_str):
     else:
         raise argparse.ArgumentTypeError(f"Unknown unit: {unit}")
 
+class BaseBench:
+    """Base class containing common benchmarking functionality"""
+
+    def __init__(self, **kwargs):
+        # Initialize common version tracking
+        self.LibMemVersion = ''
+        self.GlibcVersion = ''
+        self.size_unit = []
+        self.gains = []
+
+        # Initialize common arguments if provided
+        if kwargs:
+            self.ARGS = kwargs
+            self.MYPARSER = self.ARGS["ARGS"]
+
+            # Common attributes from command line
+            self.func = self.MYPARSER['ARGS']['func']
+            self.ranges = self.MYPARSER['ARGS']['range']
+            self.core = self.MYPARSER['ARGS']['core_id']
+            self.bench_name = self.MYPARSER['ARGS']['bench_name']
+            self.result_dir = self.MYPARSER['ARGS']['result_dir']
+            self.perf = self.MYPARSER['ARGS']['perf']
+            self.bestperf = self.MYPARSER['ARGS'].get('best_performance', False)
+
+            # Initialize common properties
+            self.size_values = []
+            self.variant = "amd"  # Default variant
+
+            # Performance comparison directories
+            if self.perf in ['c', 'b']:
+                self.old_perf_dir = self.MYPARSER['ARGS']['old_perf_dir']
+                self.new_perf_dir = self.MYPARSER['ARGS']['new_perf_dir']
+
+    def throughput_converter(self, value):
+        """Convert throughput values from M/s to G/s where applicable"""
+        for i in range(len(value)):
+            if 'M/s' in value[i]:
+                value[i] = float(value[i].replace('M/s', ''))
+                value[i] = round(value[i] / 1000, 5)
+            elif 'G/s' in value[i]:
+                value[i] = float(value[i].replace('G/s', ''))
+        return value
+
+    def _convert_throughput_fbm(self, value):
+        """Convert FleetBench throughput values to consistent G/s format"""
+        converted_values = []
+        for val in value:
+            if 'G/s' in val:
+                # Already in G/s, just extract the numeric value
+                numeric_val = float(val.replace('G/s', ''))
+                converted_values.append(numeric_val)
+            else:
+                # Assume M/s, convert to G/s
+                numeric_val = float(val.replace('M/s', ''))
+                converted_values.append(numeric_val / 1000)
+        return converted_values
+
+    def data_unit(self):
+        """Convert sizes from bytes to appropriate units (B, KB, MB)"""
+        self.size_unit = []
+        for size in self.size_values:
+            # Convert string to int if necessary
+            size_int = int(size) if isinstance(size, str) else size
+            if size_int < 1024:
+                self.size_unit.append(f"{size_int}B")
+            elif size_int < 1048576:
+                self.size_unit.append(f"{size_int // 1024}KB")
+            else:
+                self.size_unit.append(f"{size_int // 1048576}MB")
+
+    def calculate_gains(self, new_values, old_values):
+        """Calculate percentage gains between two sets of values"""
+        gains = []
+        for i in range(len(new_values)):
+            if old_values[i] != 0:
+                gain = round(((new_values[i] - old_values[i]) / old_values[i]) * 100)
+                gains.append(f"{gain}%")
+            else:
+                gains.append("N/A")
+        return gains
+
+    def write_comparison_csv(self, filename, headers, data_rows):
+        """Write comparison results to CSV file"""
+        with open(filename, "w", newline="") as output_file:
+            writer = csv.writer(output_file)
+            writer.writerow(headers)
+            for row in data_rows:
+                writer.writerow(row)
+
+    def get_version_strings(self):
+        """Get formatted version strings for LibMem and Glibc"""
+        # Ensure versions are retrieved if not already set
+        if not hasattr(self, 'GlibcVersion') or not self.GlibcVersion:
+            try:
+                import subprocess
+                self.GlibcVersion = subprocess.check_output("ldd --version | awk '/ldd/{print $NF}'", shell=True)
+            except:
+                self.GlibcVersion = "Unknown"
+
+        if not hasattr(self, 'LibMemVersion') or not self.LibMemVersion:
+            try:
+                import subprocess
+                import sys
+                import os
+                # Add the test directory to path to import libmem_defs
+                test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../test")
+                if test_dir not in sys.path:
+                    sys.path.insert(0, test_dir)
+                from libmem_defs import LIBMEM_BIN_PATH
+                self.LibMemVersion = subprocess.check_output("file " + LIBMEM_BIN_PATH + \
+                    "| awk -F 'so.' '/libaocl-libmem.so/{print $3}'", shell=True)
+            except:
+                self.LibMemVersion = "Unknown"
+
+        # Convert to string and clean up
+        if isinstance(self.GlibcVersion, bytes):
+            glibc_version = self.GlibcVersion.decode('utf-8').strip()
+        else:
+            glibc_version = str(self.GlibcVersion).strip()
+
+        if isinstance(self.LibMemVersion, bytes):
+            libmem_version = self.LibMemVersion.decode('utf-8').strip()
+        else:
+            libmem_version = str(self.LibMemVersion).strip()
+
+        # Handle empty strings
+        glibc_version = glibc_version if glibc_version else "Unknown"
+        libmem_version = libmem_version if libmem_version else "Unknown"
+
+        return glibc_version, libmem_version
+
+    def print_result(self):
+        """Print benchmark results - to be implemented by subclasses"""
+        pass
+
+    def print_result_perf(self):
+        """Print performance-only results - to be implemented by subclasses"""
+        pass
+
 class Bench:
     """
     The object of this class will run the specified benchmark framework
@@ -146,18 +282,22 @@ class Bench:
     def __init__(self, **kwargs):
         self.ARGS = kwargs
         self.MYPARSER = self.ARGS["ARGS"]
-        #print(self.MYPARSER)
 
     def __call__(self, *args, **kwargs):
+        # Import benchmark classes dynamically to avoid circular imports
         if(self.MYPARSER['benchmark']=='tbm'):
+            from tbm import TBM
             TBM_execute = TBM(ARGS=self.ARGS, class_obj=self)
             TBM_execute() #Status:Success/Failure
         elif(self.MYPARSER['benchmark']=='gbm'):
+            from gbm import GBM
             GBM_execute = GBM(ARGS=self.ARGS, class_obj=self)
             GBM_execute() #Status:Success/Failure
         elif(self.MYPARSER['benchmark']=='fbm'):
+            from fbm import FBM
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
+
 libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp']
 libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
 libmem_funcs = libmem_memory + libmem_string
@@ -305,10 +445,11 @@ def main():
                             type=parse_size_with_unit)
     common_parser.add_argument("-perf", help = "performance runs for LibMem.\
                             Default is performance benchmarking comparison. \
-                            p - Performance analysis for LibMem.\
-                            b - Comparison report between old and new LibMem runs.\
+                            l - Performance analysis for LibMem.\
+                            g - Performance analysis for Glibc only.\
+                            c - Comparison report between old and new LibMem runs.\
                             d - Defalut report Glibc vs LibMem.",
-                            type = str, choices = ['p', 'b','d'], default = 'd')
+                            type = str, choices = ['l', 'g', 'c','d'], default = 'd')
 
     common_parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
                             given range of data sizes. Default is shift left\
@@ -323,6 +464,9 @@ def main():
 
     common_parser.add_argument("-sys", "--system_info", help = "logs system_info details like cpu freq,\
                                 cache info, bios info, etc.", action="store_true")
+
+    common_parser.add_argument("-bestperf", "--best_performance", help = "runs benchmark 3 times and selects \
+                                the best throughput for each size from those iterations", action="store_true")
 
     # Subparser for GBM with additional options
     gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GoogleBench Benchmarking Tool')
@@ -400,8 +544,8 @@ def main():
     # Create result directory
     os.makedirs(args.result_dir, exist_ok=False)
 
-    # Prompt for two directory paths when -perf b option is used
-    if hasattr(args, 'perf') and args.perf == 'b':
+    # Prompt for two directory paths when -perf c option is used
+    if hasattr(args, 'perf') and args.perf == 'c':
         print("\nPerformance comparison mode (Old vs New LibMem) selected.")
         print("Enter paths to directories containing perf_values.csv files:")
 

@@ -72,7 +72,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                           tbm          TinyMembench
                           fbm          Fleetbench
 
-      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,b,d]
+      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,g,b,d] -bestperf
 
                         -x <core_id> : Enter the CPU core on which you want to run the benchmark.
                         -r [start] [end] : start and end size range in Bytes.(Not applicable for Fleetbench)
@@ -85,9 +85,12 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                                           (memcpy,memmove,memset,memcmp,memchr,
                                           strcpy,strncpy,strcmp,strncmp,strlen,strcat,strncat,strspn,strstr,strchr)
                         -perf            : Performance report type
-                                          p - Performance analysis for LibMem
-                                          b - Comparison report between LibMem old and new
+                                          l - Performance analysis for LibMem
+                                          g - Performance analysis for Glibc
+                                          c - Comparison report between LibMem old and new
                                           d - Defalut report Glibc vs. LibMem
+                        -bestperf        : Runs benchmark 3 times and selects the best throughput
+                                          for each size from those iterations (specific to GBM and TBM)
 
       <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -preload <y,n> -i<repetitions> -w<warm_up time>
 
