@@ -108,13 +108,19 @@ set(_CC_Warning_Flags -Wall -Wextra -Werror -Wunused-macros -Wundef)
 # Compiler Exempted Warning flags
 set(_CC_Exempted_Warning_Flags -Wno-unused-function)
 # Compiler Optimization flags
-set(_CC_Optimization_Flags -O3 -mcmodel=small -fvisibility=hidden -flto)
+set(_CC_Optimization_Flags -O3 -mcmodel=small -flto=auto)
 # Compiler Code Generation flags
 set(_CC_Code_Gen_Flags -fno-common)
+# Code block alignment flags
+set(_CC_Code_Alignment_Flags -falign-loops=64 -falign-functions=64)
+# Label and Jump alignment compiler options are not supported in Clang
+if (NOT ${CMAKE_C_COMPILER_ID}  STREQUAL "Clang")
+    list(APPEND _CC_Code_Alignment_Flags -falign-labels=64 -falign-jumps=64:16:8)
+endif ()
 # Linker flag for IFUNC symbol binding support
 set(_CC_Shared_Flags -Wl,-Bsymbolic)
 
-set(_CC_Flags ${_CC_Warning_Flags} ${_CC_Exempted_Warning_Flags} ${_CC_Optimization_Flags} ${_CC_Code_Gen_Flags})
+set(_CC_Flags ${_CC_Warning_Flags} ${_CC_Exempted_Warning_Flags} ${_CC_Optimization_Flags} ${_CC_Code_Gen_Flags} ${_CC_Code_Alignment_Flags})
 
 add_compile_options(${_CC_Flags})
 

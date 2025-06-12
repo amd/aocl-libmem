@@ -54,13 +54,11 @@ static inline void *__load_store_ble_zmm_vec(void *store_addr, const void *load_
     __m512i z0, z1;
     __mmask64 mask;
 
-    if (size)
-    {
-        mask = ((uint64_t)-1) >> (VEC_SZ_AVX512 - size);
-        z1 = _mm512_setzero_epi32();
-        z0 =  _mm512_mask_loadu_epi8(z1 ,mask, load_addr);
-        _mm512_mask_storeu_epi8(store_addr, mask, z0);
-    }
+    mask = _bzhi_u64((uint64_t)-1, (uint8_t)size);
+    z1 = _mm512_setzero_epi32();
+    z0 =  _mm512_mask_loadu_epi8(z1 ,mask, load_addr);
+    _mm512_mask_storeu_epi8(store_addr, mask, z0);
+
     return store_addr;
 }
 

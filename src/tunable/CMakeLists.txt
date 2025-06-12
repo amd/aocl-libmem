@@ -39,7 +39,7 @@ foreach(tunable ${tune_list})
     add_library(lib_${tunable} OBJECT ${TUNABLE_SRC_FILES})
     target_include_directories(lib_${tunable} PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-    set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mlzcnt)
+    set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mbmi2 -mlzcnt -mno-vzeroupper)
     if (${tunable} MATCHES avx512)
         list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
     elseif (${tunable} MATCHES avx2)

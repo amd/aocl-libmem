@@ -44,30 +44,25 @@ static inline void * __attribute__((flatten))_memcpy_avx512_erms(void *dst, cons
 
     if (likely(size <= 2 * ZMM_SZ)) //128B
     {
-        if (likely(size <= ZMM_SZ))
-        {
-            if (likely(size < YMM_SZ))
-                return __load_store_le_2ymm_vec(dst, src, (uint8_t)size);
-            // masked load-store
+	if (likely(size <= ZMM_SZ))
             return __load_store_ble_zmm_vec(dst, src, (uint8_t)size);
-        }
-        // head-tail load-stores
-        __load_store_le_2zmm_vec(dst, src, (uint8_t)size);
+
+       __load_store_le_2zmm_vec(dst, src, (uint8_t)size);
         return ret;
     }
     // head-tail load-stores
     else if (likely(size <= 8 * ZMM_SZ)) //512B
     {
-    if (size <= 4 * ZMM_SZ) //256B
+        if (likely(size <= 4 * ZMM_SZ)) //256B
         {
-            __load_store_le_4zmm_vec(dst, src, (uint16_t)size);
+	    __load_store_le_4zmm_vec(dst, src, (uint16_t)size);
             return ret;
         }
         __load_store_le_8zmm_vec(dst, src, (uint16_t)size);
         return ret;
     }
     // aligned vector stores
-    else if (likely(size < 26 * 1024)) //(zen_info.zen_cache_info.l1d_per_core >> 1) + 2 * 1024
+    else if (likely(size < (zen_info.zen_cache_info.l1d_per_core >> 1) + 2 * 1024))
     {
         // handle the first 4xVEC irrespective of alignment
         __load_store_4zmm_vec(dst, src, 0);
@@ -80,7 +75,6 @@ static inline void * __attribute__((flatten))_memcpy_avx512_erms(void *dst, cons
 
         // remaining data to be copied
         uint16_t rem_data = size - offset;
-
         // data vector blocks to be copied
         uint8_t rem_vecs = ((rem_data) >> 6) + !!(rem_data & (0x3F));
         // load-store blocks based on leftout vectors
@@ -102,26 +96,13 @@ static inline void * __attribute__((flatten))_memcpy_avx512_erms(void *dst, cons
                 // handle the tail with last 1xVEC load-stores
                 __load_store_zmm_vec(dst, src, size - ZMM_SZ);
         }
+	    return ret;
     }
     // rep-movs
-    else if (size <= (zen_info.zen_cache_info.l2_per_core))
+    else if (size < (zen_info.zen_cache_info.l3_per_ccx))
     {
         __erms_movsb(dst, src, size);
-    }
-    // aligned vector stores
-    else if (size < __nt_start_threshold)
-    {
-        // handle the first 8xVEC irrespective of alignment
-        __load_store_8zmm_vec(dst, src, 0);
-
-        // align the store address
-        offset =  8 * ZMM_SZ -  ((size_t)dst & (ZMM_SZ - 1));
-
-        // loop over 4xVEC temporal aligned stores with prefetch
-        __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
-
-        // handle the tail with last 4-vec load-stores
-        __load_store_4zmm_vec(dst, src, size - 4 * ZMM_SZ);
+	    return ret;
     }
     else
     {
