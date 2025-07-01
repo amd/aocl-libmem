@@ -41,36 +41,26 @@ static inline void *_memset_avx512_erms(void *mem, int val, size_t size)
     z0 = _mm512_set1_epi8(val);
     if (likely(size <= 2 * ZMM_SZ))
     {
-        if (likely(size <= ZMM_SZ))
+        if (likely(size >  ZMM_SZ))
         {
-            if (size)
-            {
-                mask = ((uint64_t)-1) >> (ZMM_SZ - size);
-                _mm512_mask_storeu_epi8(mem, mask, z0);
-            }
-            return ret;
+            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
         }
-        _mm512_storeu_si512(mem , z0);
-        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        mask = _bzhi_u64((uint64_t)-1, (uint8_t)size);
+        _mm512_mask_storeu_epi8(mem, mask, z0);
         return ret;
     }
-    else if (likely(size <= 8 * ZMM_SZ))
+
+    else if (size <= 4 * ZMM_SZ)
     {
         _mm512_storeu_si512(mem , z0);
-        _mm512_storeu_si512(mem + ZMM_SZ, z0);
-        if (likely(size <= 4 * ZMM_SZ))
+        if (size > 2 * ZMM_SZ)
         {
-            _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+            _mm512_storeu_si512(mem + ZMM_SZ, z0);
             _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+            _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
             return ret;
         }
 
-        _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
-
-        _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
         _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
         return ret;
     }
@@ -80,45 +70,63 @@ static inline void *_memset_avx512_erms(void *mem, int val, size_t size)
     _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
     _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
 
-    // adjust offset to vector alignment
-    offset = 4 * ZMM_SZ - ((uintptr_t)mem & (ZMM_SZ - 1));
-
-    // temporal aligned stores upto L1 cache per Core
-    if (size <= __repstore_start_threshold)
+    offset = 4 * ZMM_SZ;
+    if (size > 8 * ZMM_SZ)
     {
-        while (offset < (size - 4 * ZMM_SZ))
+        // adjust offset to vector alignment
+        offset -= ((uintptr_t)mem & (ZMM_SZ - 1));
+
+        // temporal aligned stores upto L2 cache per Core
+        if (size < __repstore_start_threshold)
         {
-            _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
-            _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
-            _mm512_store_si512(mem + offset + 2 * ZMM_SZ, z0);
-            _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
-            offset += 4 * ZMM_SZ;
+            do
+            {
+                _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
+                _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
+                _mm512_store_si512(mem + offset + 2 * ZMM_SZ, z0);
+                _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
+                offset += 4 * ZMM_SZ;
+            } while (offset < (size - 4 * ZMM_SZ));
         }
-    }
-
-    // rep-stores for sizes upto L3 cache per CCX
-    else if (size <= __repstore_stop_threshold)
-    {
-        __erms_stosb(mem + offset, val, size - offset);
-        return ret;
-    }
-    // non-temporal stores for sizes above L3 cache per CCX
-    else
-    {
-        while (offset < (size - 4 * ZMM_SZ))
+        // rep-stores for sizes upto L3 cache per CCX
+        else if (size <= __repstore_stop_threshold)
         {
-            _mm512_stream_si512(mem + offset + 0 * ZMM_SZ, z0);
-            _mm512_stream_si512(mem + offset + 1 * ZMM_SZ, z0);
-            _mm512_stream_si512(mem + offset + 2 * ZMM_SZ, z0);
-            _mm512_stream_si512(mem + offset + 3 * ZMM_SZ, z0);
-            offset += 4 * ZMM_SZ;
+                __erms_stosb(mem + offset, val, size - offset);
+                return ret;
         }
+        // non-temporal stores for sizes above L3 cache per CCX
+        else
+        {
+            do
+            {
+                _mm512_stream_si512(mem + offset + 0 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 1 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 2 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 3 * ZMM_SZ, z0);
+                offset += 4 * ZMM_SZ;
+            } while (offset < (size - 4 * ZMM_SZ));
+        }
+        if (offset == size)
+            return ret;
     }
-    // unaligned stores of the tail 4xVECs
-    _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
-    _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
-    _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
-    _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
 
+    // handle the tail part
+    uint16_t rem_data = size - offset;
+    uint8_t rem_vecs = ((rem_data) >> 6) + !!(rem_data & (0x3F));
+    // store blocks based on leftout vectors
+    switch (rem_vecs)
+    {
+        case 4:
+            _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
+            __attribute__ ((fallthrough));
+        case 3:
+            _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
+            __attribute__ ((fallthrough));
+        case 2:
+            _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+            __attribute__ ((fallthrough));
+        case 1:
+            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+    }
     return ret;
 }

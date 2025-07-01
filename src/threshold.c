@@ -42,7 +42,7 @@ static inline void compute_sys_thresholds(cpu_info *zen_info)
         zen_info->zen_thresholds.repmov_stop_threshold = \
                     zen_info->zen_cache_info.l2_per_core;
         zen_info->zen_thresholds.repstore_start_threshold = \
-                    zen_info->zen_cache_info.l1d_per_core;
+                    zen_info->zen_cache_info.l2_per_core;
         zen_info->zen_thresholds.repstore_stop_threshold = \
                     zen_info->zen_cache_info.l3_per_ccx;
     }
