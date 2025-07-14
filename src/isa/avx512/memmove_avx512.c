@@ -23,14 +23,20 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "./optimized/memmove_avx512.c"
+#ifndef MEMMOVE_AVX512
+#define MEMMOVE_AVX512
+
+#include "logger.h"
+#include "./optimized/memcpy_impl_avx512.c"
 
 HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_avx512(void * __restrict dst,
                   const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-    return _memmove_avx512(dst, src, size);
+    return _memcpy_avx512(dst, src, size);
 }
 
 void *memmove(void *, const void *, size_t) __attribute__((weak,
                         alias("__memmove_avx512")));
+
+#endif // MEMMOVE_AVX512

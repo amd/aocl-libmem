@@ -23,7 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "./optimized/memcpy_avx512.c"
+#include "logger.h"
+#include "./optimized/memcpy_impl_avx512.c"
 
 HIDDEN_SYMBOL void * __attribute__((flatten)) __memcpy_avx512(void * __restrict dst,
                   const void * __restrict src, size_t size)

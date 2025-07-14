@@ -23,16 +23,21 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../../isa/avx512/optimized/memmove_avx512_erms.c"
+#ifndef MEMMOVE_AVX512_ERMS
+#define MEMMOVE_AVX512_ERMS
+
+#include "logger.h"
+#include "../../isa/avx512/optimized/memcpy_impl_avx512.c"
 
 HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen5(void * __restrict dst,
                              const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-    return _memmove_avx512_erms(dst, src, size);
+    return _memcpy_avx512_erms(dst, src, size);
 }
 
 #ifndef ALMEM_DYN_DISPATCH
 void *memmove(void *, const void *, size_t) __attribute__((weak,
                         alias("__memmove_zen5")));
 #endif
+#endif // MEMMOVE_AVX512_ERMS

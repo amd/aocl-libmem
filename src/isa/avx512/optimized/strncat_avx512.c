@@ -27,7 +27,7 @@
 #include "logger.h"
 #include <stdint.h>
 #include "strlen_avx512.c"
-#include "memcpy_avx512_erms.c"
+#include "memcpy_impl_avx512.c"
 #define NULL_TERM_CHAR '\0'
 
 /* This function is an optimized version of strncat using AVX-512 instructions.

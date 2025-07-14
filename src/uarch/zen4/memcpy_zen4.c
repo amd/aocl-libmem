@@ -24,94 +24,13 @@
  */
 
 #include "logger.h"
-#include "threshold.h"
-#include "../../base_impls/load_store_impls.h"
-#include "zen_cpu_info.h"
-#include "almem_defs.h"
-
-extern cpu_info zen_info;
+#include "memcpy_impl_zen4.c"
 
 HIDDEN_SYMBOL void * __attribute__((flatten)) __memcpy_zen4(void * __restrict dst, \
                         const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-
-    register void *ret asm("rax");
-    ret = dst;
-
-    if (likely(size <= 2 * ZMM_SZ)) //128B
-    {
-        if ((size < ZMM_SZ))
-        {
-            return __load_store_ble_zmm_vec(dst, src, (uint8_t)size);
-        }
-        __load_store_le_2zmm_vec(dst, src, (uint8_t)size);
-        return ret;
-    }
-
-    if (size <= 8 * ZMM_SZ) //512B
-    {
-        __load_store_le_8ymm_vec(dst, src, (uint16_t)size);
-        if (size <= 4 * ZMM_SZ) //256B
-        {
-            return ret;
-        }
-        __load_store_le_8ymm_vec(dst + 4 * YMM_SZ, src + 4 * YMM_SZ, (uint16_t)size - 8 * YMM_SZ);
-        return ret;
-    }
-    __load_store_le_8zmm_vec(dst, src, 8 * ZMM_SZ);
-
-    size_t offset = 8 * ZMM_SZ;
-
-    if (size > 16 * ZMM_SZ)
-    {
-        uint8_t dst_align = ((size_t)dst & (ZMM_SZ - 1));
-        offset -= dst_align;
-
-        //Aligned Load and Store addresses
-        if ((((size_t)src & (ZMM_SZ - 1)) == dst_align))
-        {
-            // 4-ZMM registers
-            if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
-            {
-                offset = __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-            // 4-YMM registers with prefetch
-            else if (size < __nt_start_threshold)
-            {
-                offset = __aligned_load_and_store_4ymm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-            // Non-temporal 8-ZMM registers with prefetch
-            else
-            {
-                offset = __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-        }
-        //Unalgined Load/Store addresses: force-align store address to ZMM size
-        else
-        {
-            if (size < __nt_start_threshold)
-            {
-                offset = __unaligned_load_aligned_store_8ymm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-            else
-            {
-                offset = __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-        }
-    }
-    uint16_t rem_data = size - offset;
-    uint8_t rem_vecs = ((rem_data & 0x3C0) >> 6) + !!(rem_data & (0x3F));
-    if (rem_vecs > 4)
-            __load_store_le_8zmm_vec(dst + size - 8 * ZMM_SZ, src + size - 8 * ZMM_SZ, 8 * ZMM_SZ);
-    else if (rem_vecs > 2)
-            __load_store_le_4zmm_vec(dst + size - 4 * ZMM_SZ, src + size - 4 * ZMM_SZ, 4 * ZMM_SZ);
-    else if (rem_vecs == 2)
-            __load_store_le_2zmm_vec(dst + size - 2 * ZMM_SZ, src + size - 2 * ZMM_SZ, 2 * ZMM_SZ);
-    else
-            __load_store_zmm_vec(dst + size - ZMM_SZ, src + size -  ZMM_SZ, 0);
-
-    return ret;
+    return _memcpy_zen4_impl(dst, src, size);
 }
 
 #ifndef ALMEM_DYN_DISPATCH

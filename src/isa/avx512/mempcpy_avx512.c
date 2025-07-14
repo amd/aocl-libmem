@@ -23,13 +23,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "./optimized/mempcpy_avx512.c"
+#include "logger.h"
+#include "./optimized/memcpy_impl_avx512.c"
 
 HIDDEN_SYMBOL void * __attribute__((flatten)) __mempcpy_avx512(void * __restrict dst,
                   const void * __restrict src, size_t size)
 {
     LOG_INFO("\n");
-    return _mempcpy_avx512(dst, src, size);
+
+    void *ret = dst + size;
+    _memcpy_avx512(dst, src, size);
+    return ret;
 }
 
 void *mempcpy(void *, const void *, size_t) __attribute__((weak,

@@ -23,7 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../../isa/avx512/optimized/memcpy_avx512_erms.c"
+#include "logger.h"
+#include "../../isa/avx512/optimized/memcpy_impl_avx512.c"
 
 HIDDEN_SYMBOL void *__memcpy_zen5(void *dst, const void *src, size_t size)
 {
