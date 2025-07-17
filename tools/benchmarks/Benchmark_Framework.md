@@ -82,7 +82,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                         -t "iter_value"  : increments the start size by "iter_value".
                                            (0 stands for size<<1; other +ve integers stands for incremental iterations.)
                         LibMem_function  : mem and str functions
-                                          (memcpy,memmove,memset,memcmp,memchr,
+                                          (memcpy,memmove,memset,memcmp,memchr,mempcpy
                                           strcpy,strncpy,strcmp,strncmp,strlen,strcat,strncat,strspn,strstr,strchr)
                         -perf            : Performance report type
                                           l - Performance analysis for LibMem

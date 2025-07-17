@@ -208,15 +208,16 @@
  /*
   * Copyright © 2011 Siarhei Siamashka <siarhei.siamashka@gmail.com>
   *
-@@ -20,7 +45,6 @@
-  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+@@ -21,6 +46,8 @@
   * DEALINGS IN THE SOFTWARE.
   */
--
+
++// Enable GNU extensions to declare mempcpy() and other non-standard functions.
++#define _GNU_SOURCE
  #include <string.h>
  #include <stdint.h>
  #include <stdio.h>
-@@ -28,73 +52,70 @@
+@@ -28,73 +55,70 @@
  #include <math.h>
  #include <sys/time.h>
  
@@ -308,7 +309,7 @@
          loopcount = 0;
          innerloopcount = 1;
          t1 = gettime();
-@@ -114,23 +135,30 @@
+@@ -114,23 +138,30 @@
              }
              else
              {
@@ -344,7 +345,7 @@
          if (s0 > 2)
          {
              s = sqrt((s0 * s2 - s1 * s1) / (s0 * (s0 - 1)));
-@@ -138,7 +166,6 @@
+@@ -138,7 +169,6 @@
                  break;
          }
      }
@@ -352,7 +353,7 @@
      if (maxspeed > 0 && s / maxspeed * 100. >= 0.1)
      {
          printf("%s%-52s : %8.1f MB/s (%.1f%%)\n", indent_prefix, description,
-@@ -150,42 +177,66 @@
+@@ -150,42 +180,70 @@
      }
      return maxspeed;
  }
@@ -399,6 +400,10 @@
 -};
 -
 +    return memcmp(dst, src, size);
++}
++int mempcpy_wrapper(int64_t *dst, int64_t *src, size_t size)
++{
++    mempcpy(dst, src, size);
 +}
 +int strcpy_wrapper(int64_t *dst, int64_t *src, size_t size)
 +{
@@ -447,7 +452,7 @@
  void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                       int size, int blocksize, const char *indent_prefix,
                       bench_info *bi)
-@@ -199,391 +250,105 @@
+@@ -199,391 +257,106 @@
          bi++;
      }
  }
@@ -729,6 +734,7 @@
 -        printf("%10d : %6.1f ns          /  %6.1f ns \n", (1 << nbits),
 -            min_t * 1000000000. / count,  min_t2 * 1000000000. / count);
 +    {"memcpy", 0, memcpy_wrapper},
++    {"mempcpy", 0, mempcpy_wrapper},
 +    {"memmove", 0, memmove_wrapper},
 +    {"memset", 0, memset_wrapper},
 +    {"memcmp", 0, memcmp_wrapper},
