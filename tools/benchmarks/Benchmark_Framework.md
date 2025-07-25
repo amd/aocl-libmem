@@ -92,7 +92,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                         -bestperf        : Runs benchmark 3 times and selects the best throughput
                                           for each size from those iterations (specific to GBM and TBM)
 
-      <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -preload <y,n> -i<repetitions> -w<warm_up time>
+      <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -o <overlap> -preload <y,n> -i<repetitions> -w<warm_up time>
 
                             -m <c, u>    : cached  & uncached behaviour
                             -a <a, u, d> : aligned (src and dst alignment are equal)
@@ -100,6 +100,8 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                                            default alignment is random.
                             -s <l, m>    : Less spill and more spill (applicable with align mode only)
                             -p <x, t>    : Page-cross and Page-Tail scenario
+                            -o <f, b, d> : [Memmove only]Forward overlap, Backward overlap and Default overlap
+                                          (Default is 'd',both forward and backward overlaps)
                           -preload <y,n> : Running with LD_PRELOAD option = y & Running with static binaries = n
                           -i<repetitions>: Number of repetitions for consistent performance runs
                         -w<warm_up time> : Minimum Warmup time in seconds.

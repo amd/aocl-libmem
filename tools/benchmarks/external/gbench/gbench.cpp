@@ -49,6 +49,8 @@
 #define CACHELINE_MULTIPLE      6
 #define BUFFER                  1
 #define CONCAT_BUFFER           2
+#define OVERLAP_BUFFER          3
+#define CACHE_LINE_SZ           64
 
 #define CLFLUSHOPT(addr, cacheline_iters) \
     _mm_clflushopt((void *)((uintptr_t)(addr) + (cacheline_iters) * CL_SIZE))
@@ -322,7 +324,9 @@ public:
         }
         TearDown(alignment);
         Bench_Result(state);
-    }void string_setup(std::string& accept, int size, std::string& s)
+    }
+
+    void string_setup(std::string& accept, int size, std::string& s)
     {
         size_t accept_len = ceil(sqrt(size));
         accept = generate_random_string(accept_len);
@@ -345,7 +349,6 @@ public:
         }
         return random_string;
     }
-
 
     template <typename MemFunction, typename... Args>
     void strRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
@@ -430,7 +433,6 @@ public:
         TearDown(alignment);
     Bench_Result(state);
     }
-
 
     template <typename MemFunction, typename... Args>
     void strlenRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
@@ -543,7 +545,7 @@ public:
                 state.ResumeTiming();
             }
         }
-    Bench_Result(state);
+        Bench_Result(state);
     }
 
     template <typename MemFunction, typename... Args>
@@ -592,6 +594,7 @@ public:
         TearDown(alignment);
         Bench_Result(state);
     }
+
     template <typename MemFunction, typename... Args>
     void strchrRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
@@ -614,6 +617,62 @@ public:
                 }while (cacheline_iters--);
                 state.ResumeTiming();
                 benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
+            }
+        }
+        TearDown(alignment);
+    Bench_Result(state);
+    }
+
+    template <typename MemFunction, typename... Args>
+    void memOverlapBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
+        int size = state.range(0);
+        SetUp(size, alignment, spill, page, false, OVERLAP_BUFFER);
+
+        char* dst_ptr = (char*)dst_alnd + rand()% size + 1;
+        char* src_ptr = (char*)dst_ptr + rand()% size + 1;
+        if(mode == CACHED)
+        {
+            if (overlap_type == 'f')
+            {
+                for (auto _ : state) {
+                    //Forward Overlap: dst < src
+                    benchmark::DoNotOptimize(func(dst_ptr, src_ptr, size));
+                }
+            }
+            else if (overlap_type == 'b')
+            {
+                for (auto _ : state) {
+                    //Backward Overlap: dst > src
+                    benchmark::DoNotOptimize(func(src_ptr, dst_ptr, size));
+                }
+            }
+            else
+            {
+                //Both Forward and Backward overlap
+                for (auto _ : state) {
+                    benchmark::DoNotOptimize(func(dst_ptr, src_ptr, size));
+                    benchmark::DoNotOptimize(func(src_ptr, dst_ptr, size));
+                }
+            }
+        }
+
+        else {
+            for (auto _ : state) {
+                state.PauseTiming();
+                uint32_t cacheline_iters = OVERLAP_BUFFER * size >> CACHELINE_MULTIPLE;
+                do {
+                    CLFLUSHOPT(dst_alnd, cacheline_iters);
+                } while (cacheline_iters--);
+                state.ResumeTiming();
+                if (overlap_type == 'f')
+                    benchmark::DoNotOptimize(func(dst_ptr, src_ptr, size));
+                else if (overlap_type == 'b')
+                    benchmark::DoNotOptimize(func(src_ptr, dst_ptr, size));
+                else
+                {
+                    benchmark::DoNotOptimize(func(dst_ptr, src_ptr, size));
+                    benchmark::DoNotOptimize(func(src_ptr, dst_ptr, size));
+                }
             }
         }
         TearDown(alignment);
@@ -668,6 +727,12 @@ void runMiscStringBenchmark(benchmark::State& state, MemoryMode mode, char align
     fixture.strchrRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
 }
 
+template <typename MemFunction, typename... Args>
+void runMemoryOverlapBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
+    MemoryFixture fixture;
+    fixture.memOverlapBenchmark(state, mode, alignment, spill, page, func, name, overlap_type, args...);
+}
+
 MemData functionList[] = {
     REGISTER_MEM_FUNCTION(memcpy),
     REGISTER_MEM_FUNCTION(mempcpy),
@@ -714,13 +779,14 @@ enum class Parameters
     iterations,         // argv[5]
     align,              // argv[6]
     cache_spill,        // argv[7]
-    page                // argv[8]
+    page,               // argv[8]
+    overlap             // argv[9]
 };
 
 int main(int argc, char** argv) {
     ::benchmark::Initialize(&argc, argv);
     srand(time(NULL));
-    char mode='c', alignment = 'd', spill = 'l', page = 'n';
+    char mode='c', alignment = 'd', spill = 'l', page = 'n', overlap = 'd';
     unsigned int size_start, size_end, iter = 0;
     std::string func;
 
@@ -744,16 +810,17 @@ int main(int argc, char** argv) {
         spill= *argv[static_cast<int>(Parameters::cache_spill)];
 
     if(argv[static_cast<int>(Parameters::page)]!=NULL)
-        spill= *argv[static_cast<int>(Parameters::page)];
+        page= *argv[static_cast<int>(Parameters::page)];
+
+    if(argv[static_cast<int>(Parameters::overlap)]!=NULL)
+        overlap= *argv[static_cast<int>(Parameters::overlap)];
 
     std::cout<<"FUNCTION: "<<func<<" MODE: "<<mode<<std::endl;
     std::cout<<"SIZE: "<<size_start<<" "<<size_end<<std::endl;
 
-    MemoryMode operation;
-    if( mode == 'u')
-        operation = UNCACHED;
-    else
-        operation = CACHED;
+    //Determine the memory mode
+    MemoryMode operation = (mode == 'u') ? UNCACHED : CACHED;
+    std::string _Mode = (operation == UNCACHED) ? "_UNCACHED" : "_CACHED";
 
     auto memoryBenchmark = [&](benchmark::State& state) {
         for (const auto &MemData : functionList) {
@@ -810,62 +877,44 @@ int main(int argc, char** argv) {
             }
         }
     };
-    //Register Benchmark
-    std::string _Mode;
-    if(operation == UNCACHED)
-        _Mode="_UNCACHED";
-    else
-        _Mode="_CACHED";
 
-    if(iter == 0)
-    {
-
-        if (func.compare(0, 3, "mem") == 0)
-        {
-            if(func.compare(0, 4, "mems")== 0 || func.compare(0, 5, "memch")== 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), Misc_memoryBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-            else
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), memoryBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
+    auto memoryOverlapBenchmark = [&](benchmark::State& state) {
+        for (const auto &MemData : functionList) {
+            if (func == MemData.functionName && func == "memmove") {
+                char actual_overlap = overlap;
+                runMemoryOverlapBenchmark(state, operation, alignment, spill, page, MemData.functionPtr, MemData.functionName, actual_overlap);
+            }
         }
-        else if(func.compare(0, 3, "str") == 0)
-        {
-            if(func.compare(0, 4, "strn") == 0 )
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), string_n_Benchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-            else if(func.compare(0, 4, "strl") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-            else if(func.compare(0, 6, "strstr") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-            else if(func.compare(0, 6, "strchr") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), misc_string_Benchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-            else
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->Range(size_start, size_end);
-        }
-    }
-    //Iterative Benchmark
-    else
-    {
-        if (func.compare(0, 3, "mem") == 0)
-        {
-            if(func.compare(0, 4, "mems")== 0 || func.compare(0, 5, "memch")== 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), Misc_memoryBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-            else
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), memoryBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
+    };
 
-        }
-        else if(func.compare(0, 3, "str") == 0)
-        {
-            if(func.compare(0, 4, "strn") == 0 )
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), string_n_Benchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-            else if(func.compare(0, 4, "strl") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), strlenBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-            else if(func.compare(0, 6, "strstr") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), substrBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-            else if(func.compare(0, 6, "strchr") == 0)
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), misc_string_Benchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
-            else
-                benchmark::RegisterBenchmark((func + _Mode).c_str(), stringBenchmark)->RangeMultiplier(2)->DenseRange(size_start, size_end, iter);
+    //Register benchmark
+    auto registerBenchmark = [&](auto benchmarkFunction, const std::string& suffix = "") {
+        std::string benchName = func + suffix + _Mode;
+        auto benchmark = benchmark::RegisterBenchmark(benchName.c_str(), benchmarkFunction)->RangeMultiplier(2);
+        return (iter == 0) ? benchmark->Range(size_start, size_end) : benchmark->DenseRange(size_start, size_end, iter);
+    };
 
+     if (func.compare(0, 3, "mem") == 0) {
+        if (func.compare(0, 4, "mems") == 0 || func.compare(0, 5, "memch") == 0) {
+            registerBenchmark(Misc_memoryBenchmark);
+        } else if (func == "memmove") {
+            registerBenchmark(memoryOverlapBenchmark, "_overlap");
+        } else {
+            registerBenchmark(memoryBenchmark);
+        }
+    } else if (func.compare(0, 3, "str") == 0) {
+        if (func.compare(0, 4, "strn") == 0) {
+            registerBenchmark(string_n_Benchmark);
+        } else if (func.compare(0, 4, "strl") == 0) {
+            registerBenchmark(strlenBenchmark);
+        } else if (func.compare(0, 6, "strstr") == 0) {
+            registerBenchmark(substrBenchmark);
+        } else if (func.compare(0, 6, "strchr") == 0) {
+            registerBenchmark(misc_string_Benchmark);
+        } else {
+            registerBenchmark(stringBenchmark);
         }
     }
+
     ::benchmark::RunSpecifiedBenchmarks();
 }

@@ -492,6 +492,19 @@ def main():
                                 m - more_spill, default is no-spill",\
                                 type = str, choices = ['l', 'm',],  default = 'n')
 
+    # Only add the overlap argument for memmove function
+    class OverlapAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            # This will only be called if the argument is actually provided
+            if 'func' in namespace and namespace.func != 'memmove':
+                parser.error("The -o/--overlap option can only be used with the memmove function")
+            setattr(namespace, self.dest, values)
+
+    gbm_parser.add_argument("-o", "--overlap", help = "choose the overlapping behavior for memmove only: \
+                                f - forward overlap, b - backward overlap, d - both (default)",\
+                                type = str, choices = ['f', 'b', 'd'], default = 'd',
+                                action=OverlapAction)
+
     gbm_parser.add_argument("-i", "--repetitions", help = "Number of repitations for\
                             performance measurement. Default value is \
                             set to 10 iterations.",
@@ -503,8 +516,6 @@ def main():
 
     gbm_parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
                           type = str, choices = ['y', 'n'], default = 'y')
-
-
 
     # Subparser for TBM
     tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TinyMembench Benchmarking Tool')
