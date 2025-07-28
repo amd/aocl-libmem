@@ -32,6 +32,7 @@
 #include <immintrin.h>
 #include <math.h>
 #include <algorithm>
+#include <new> //for std::align_val_t
 
 #define MIN_PRINTABLE_ASCII     32
 #define MAX_PRINTABLE_ASCII     127
@@ -51,6 +52,42 @@
 
 #define CLFLUSHOPT(addr, cacheline_iters) \
     _mm_clflushopt((void *)((uintptr_t)(addr) + (cacheline_iters) * CL_SIZE))
+
+//Function to allocate aligned memory for src and dst buffers with error handling
+//alignement: alignment values are (CL_SZIE, PAGE_SIZE)
+//allocSize: The size for the 'src' allocation
+//buffMultiplier: The multiplier for the 'dst' allocation (buffMultipler * allocSize)
+//srcPtrVar: The variable (e.g., 'src') to store the allocated source pointer
+//dstPtrVar: The variable (e.g., 'dst') to store the allocated destination pointer
+
+void allocateAlignedBuffers(size_t alignment, size_t allocSize, size_t buffMultiplier, char*& srcPtrVar, char*& dstPtrVar) {
+    // Initialize pointers to nullptr for safe cleanup in case of partial allocation failure
+    srcPtrVar = nullptr;
+    dstPtrVar = nullptr;
+
+    try {
+        std::align_val_t currentAlignmentVal = static_cast<std::align_val_t>(alignment);
+
+        // Allocate memory for the source buffer with specified alignment
+        srcPtrVar = static_cast<char*>(operator new(allocSize, currentAlignmentVal));
+
+        // Allocate memory for the destination buffer with specified alignment
+        dstPtrVar = static_cast<char*>(operator new(buffMultiplier * allocSize, currentAlignmentVal));
+    } catch (const std::bad_alloc& e) {
+        std::cerr << "Memory allocation failed: " << e.what() << std::endl;
+
+        // Clean up any memory that was successfully allocated before the exception
+        if (srcPtrVar) {
+            operator delete(srcPtrVar, static_cast<std::align_val_t>(alignment));
+        }
+
+        if (dstPtrVar) {
+            operator delete(dstPtrVar, static_cast<std::align_val_t>(alignment));
+        }
+
+        exit(EXIT_FAILURE); // Terminate
+    }
+}
 
 enum MemoryMode {
     CACHED,
@@ -125,7 +162,6 @@ public:
         size_t adj_size = size;
         unsigned int src_offset, dst_offset, adj_offset = 0, page_offset = 0;
         uint32_t src_alnmnt, dst_alnmnt, alnmnt = 0;
-
         switch(page)
         {
             case 'x': //Page_cross
@@ -136,18 +172,7 @@ public:
                     adj_size = page_size + size;
                     adj_offset = page_size - page_offset;
 
-                    if (posix_memalign((void**)&src, page_size, adj_size) != 0)
-                    {
-                        std::cout<<"SRC Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
-
-                    if (posix_memalign((void**)&dst, page_size, buff * adj_size) != 0)
-                    {
-                        free(src);
-                        std::cout<<"DST Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
+                    allocateAlignedBuffers(page_size, adj_size, buff, src, dst);
 
                     src_alnd = src + adj_offset;
                     dst_alnd = dst + adj_offset;
@@ -160,19 +185,7 @@ public:
                         page_offset = page_size - (size + 1);
 
                     adj_offset = page_offset;
-
-                    if (posix_memalign((void**)&src, page_size, adj_size) != 0)
-                    {
-                        std::cout<<"SRC Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
-
-                    if (posix_memalign((void**)&dst, page_size, buff * adj_size) != 0)
-                    {
-                        free(src);
-                        std::cout<<"DST Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
+                    allocateAlignedBuffers(page_size, adj_size, buff, src, dst);
                     src_alnd = src + adj_offset;
                     dst_alnd = dst + adj_offset;
                     break;
@@ -185,19 +198,7 @@ public:
                         adj_size = size + CL_SIZE;
                         alnmnt = (rand() % CL_SPILL_OFFSET) + 1;
                     }
-                    if (posix_memalign((void**)&src, page_size, adj_size) != 0)
-                    {
-                        std::cout<<"SRC Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
-
-                    if (posix_memalign((void**)&dst, page_size, buff * adj_size) != 0)
-                    {
-                        free(src);
-                        std::cout<<"DST Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
-
+                    allocateAlignedBuffers(page_size, adj_size, buff, src, dst);
                     if (spill == 'm')
                         aln_adj = CL_SIZE - alnmnt;
 
@@ -210,18 +211,7 @@ public:
 
             case 'u': //Unaligned allocation
                     adj_size = size + CL_SIZE;
-                    if (posix_memalign((void**)&src, page_size, adj_size) != 0)
-                    {
-                        std::cout<<"SRC Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
-
-                    if (posix_memalign((void**)&dst, page_size, buff * adj_size) != 0)
-                    {
-                        free(src);
-                        std::cout<<"DST Memory allocation failed."<<std::endl;
-                        exit(-1);
-                    }
+                    allocateAlignedBuffers(page_size, adj_size, buff, src, dst);
 
                     src_alnmnt = (rand() % CL_SPILL_OFFSET) + 1;
 
@@ -244,21 +234,13 @@ public:
                     }
                     break;
 
-            default: //Random allocation
-                        src = new char[size];
-                        dst = new char[buff * size];
+            default: //Default allocation
+                        allocateAlignedBuffers(CL_SIZE, size, buff, src, dst);
                         src_alnd = src;
                         dst_alnd = dst;
+
         }
 
-        //chck for buffer allocation
-        if (src == nullptr || dst == nullptr)
-        {
-            free(src);
-            free(dst);
-            std::cerr<< "Memory Allocation Failed!\n";
-            exit(-1);
-        }
         if (isStringOperation)
         {
             memset(src_alnd, 'x', size);
@@ -272,9 +254,16 @@ public:
         }
     }
 
-    void TearDown() {
-        delete[] src;
-        delete[] dst;
+    void TearDown(char alignment) {
+        std::align_val_t alignment_del;
+        if (alignment =='d')
+            alignment_del = static_cast<std::align_val_t>(CL_SIZE);
+        else
+            alignment_del = static_cast<std::align_val_t>(sysconf(_SC_PAGESIZE));
+
+        operator delete(src, alignment_del);
+        operator delete(dst, alignment_del);
+
     }
 
     template <typename MemFunction, typename... Args>
@@ -303,7 +292,7 @@ public:
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
             }
         }
-        TearDown();
+        TearDown(alignment);
 
         Bench_Result(state);
     }
@@ -331,7 +320,7 @@ public:
                 benchmark::DoNotOptimize(func(src_alnd, 'x', size));
             }
         }
-        TearDown();
+        TearDown(alignment);
         Bench_Result(state);
     }void string_setup(std::string& accept, int size, std::string& s)
     {
@@ -438,7 +427,7 @@ public:
                 }
             }
         }
-        TearDown();
+        TearDown(alignment);
     Bench_Result(state);
     }
 
@@ -466,7 +455,7 @@ public:
                 benchmark::DoNotOptimize(func((char*)src_alnd));
             }
         }
-        TearDown();
+        TearDown(alignment);
     Bench_Result(state);
     }
 
@@ -510,7 +499,7 @@ public:
                 benchmark::DoNotOptimize(strstr(haystack_nomatch.c_str(), needle.c_str()));
                 benchmark::DoNotOptimize(strstr(haystack_avg.c_str(), needle.c_str()));
             }
-            TearDown();
+            TearDown(alignment);
         }
         else
         {
@@ -550,7 +539,7 @@ public:
 
                 benchmark::DoNotOptimize(strstr(haystack.c_str(), needle.c_str()));
                 state.PauseTiming();
-                TearDown();
+                TearDown(alignment);
                 state.ResumeTiming();
             }
         }
@@ -600,7 +589,7 @@ public:
                 benchmark::DoNotOptimize(func((char*)dst_alnd, (char*)src_alnd, size));
             }
         }
-        TearDown();
+        TearDown(alignment);
         Bench_Result(state);
     }
     template <typename MemFunction, typename... Args>
@@ -627,7 +616,7 @@ public:
                 benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
             }
         }
-        TearDown();
+        TearDown(alignment);
     Bench_Result(state);
     }
 
