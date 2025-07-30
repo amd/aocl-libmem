@@ -35,7 +35,7 @@
 #define YMM_SZ                  32
 #define ZMM_SZ                  64
 #define NULL_TERM_CHAR         '\0'
-#define NULL_STRING            ((uint8_t *)"\0")
+#define NULL_STRING            ""
 #define SINGLE_CHAR_STRING     ((uint8_t *)"A")
 #define MIN_PRINTABLE_ASCII     32
 #define MAX_PRINTABLE_ASCII     126
@@ -103,6 +103,22 @@ char *test_memchr( const char *src, int ch, size_t len)
         if(src[n] == ch)
             return (void*)&src[n];
     return NULL;
+}
+
+uint8_t *test_memcpy(uint8_t *dst, const uint8_t *src, size_t n)
+{
+    void *val = dst;
+    while(n--)
+        *dst++ = *src++;
+    return val;
+}
+
+int test_memcmp(const uint8_t *s1, const uint8_t *s2, size_t n)
+{
+    for(size_t i = 0; i < n; i++)
+        if(s1[i] != s2[i])
+            return (int)s1[i] - (int)s2[i];
+    return 0;
 }
 
 char *test_strcat_common(char *dst, const char *src, size_t n) {
@@ -717,7 +733,12 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     //special case to handle size ZERO with NULL buff.
     if (size == 0)
     {
-      return ;
+      char dst[]="?";// size 2 dst with ?\0
+      strcpy(dst,(char*)NULL_STRING);
+      if (*dst != NULL_TERM_CHAR)
+         printf("ERROR:[Validation] for size(%lu): expected - %p"\
+                        ", actual - %p\n", size, NULL_STRING, dst);
+      return;
     }
 
     buff = alloc_buffer(&buff_head, &buff_tail, size + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
@@ -963,10 +984,12 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     int validation1_passed = 1, validation2_passed = 1;
     int exp_ret = 0;
 
-    //special case to handle size ZERO with NULL buff inputs.
+    //special case to handle size ZERO with NULL string inputs.
     if (size == 0)
-    {
-        ret = strcmp((char*)buff, (char*)buff);
+    {   
+        char *src = NULL_STRING;
+        char *dst = NULL_STRING;
+        ret = strcmp(dst, src);
         if (ret != exp_ret)
             printf("ERROR:[RETURN] value mismatch for size(%lu): expected - %d"\
                         ", actual - %d\n", size, exp_ret, ret);
@@ -1165,7 +1188,7 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
 static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
-    uint8_t *buff = NULL, *buff_head = SINGLE_CHAR_STRING, *buff_tail = NULL_STRING;
+    uint8_t *buff = NULL, *buff_head = SINGLE_CHAR_STRING, *buff_tail = (uint8_t*)NULL_STRING;
     uint8_t *str2_alnd_addr = NULL, *str1_alnd_addr = NULL;
     size_t index;
     int ret = 0;
@@ -1488,8 +1511,19 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
     size_t index;
     char *ret = NULL;
 
-    if(size == 0) //For Null expected behaviour is SEGFAULT
+    if(size == 0) //src is null string with extra bytes
     {
+        uint8_t src[] = {NULL_TERM_CHAR,'?','?'};
+        uint8_t dst[] = {'!',NULL_TERM_CHAR,'!','!'};
+        uint8_t dst_before[sizeof(dst)];
+        test_memcpy(dst_before, dst,sizeof(dst));
+        strcat((char*)dst, (char*)src);
+        if (test_memcmp(dst_before,dst,sizeof(dst)) != 0)
+        {
+           printf("ERROR:[VALIDATION] failure for size(%lu): dst buffer modified \n", size);
+
+        }
+
         return;
     }
     str1_buff = alloc_buffer(&buff_head, &buff_tail,2 * size + NULL_BYTE, DEFAULT);
@@ -1769,7 +1803,7 @@ static inline void strstr_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *haystack = SINGLE_CHAR_STRING, *needle = NULL_STRING, *page_alnd_addr = NULL;
+    uint8_t *haystack = SINGLE_CHAR_STRING, *needle = (uint8_t*)NULL_STRING, *page_alnd_addr = NULL;
     char *res;
     size_t needle_len = 0;
 
@@ -1894,7 +1928,7 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
                                                  uint32_t str1_alnmnt)
 {
     uint8_t *buff = NULL, *buff_head, *buff_tail;
-    uint8_t *s = SINGLE_CHAR_STRING, *accept = NULL_STRING, *page_alnd_addr = NULL;
+    uint8_t *s = SINGLE_CHAR_STRING, *accept = (uint8_t*)NULL_STRING, *page_alnd_addr = NULL;
     size_t res, expected;
     size_t accept_len = 0;
 
