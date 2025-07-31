@@ -122,17 +122,16 @@ set(_CC_Shared_Flags -Wl,-Bsymbolic)
 
 set(_CC_Flags ${_CC_Warning_Flags} ${_CC_Exempted_Warning_Flags} ${_CC_Optimization_Flags} ${_CC_Code_Gen_Flags} ${_CC_Code_Alignment_Flags})
 
+if(ALMEM_GCOV)
+  list(APPEND _CC_Flags -fprofile-arcs -ftest-coverage)
+endif()
+
 add_compile_options(${_CC_Flags})
 
 # Compiler exceptions
 if ((${CMAKE_C_COMPILER_ID}  STREQUAL "Clang") AND ALMEM_TUNABLES)
     add_definitions(-DALMEM_CMPSD_CLANG_WORKAROUND)
 endif ()
-
-if(ALMEM_GCOV AND ALMEM_LOGGING)
-  target_compile_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
-  target_link_options(${PROJECT_NAME} PUBLIC -fprofile-arcs  -ftest-coverage)
-endif()
 
 # Add source files
 set(SOURCE_FILES libmem.c)
