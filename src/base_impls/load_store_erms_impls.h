@@ -38,8 +38,8 @@ static inline void * __erms_movsb(void *dst, const void * src, size_t len)
     asm volatile (
     "cld\n\t"
     "rep movsb"
+    : "+D" (dst), "+S" (src), "+c" (len)
     :
-    : "D"(dst), "S"(src), "c"(len)
     : "memory", "cc"
     );
     return dst;
@@ -51,8 +51,8 @@ static inline void * __erms_movsw(void *dst, const void * src, size_t len)
     "sar $1, %%rcx\n\t"
     "cld\n\t"
     "rep movsw"
+    : "+D" (dst), "+S" (src), "+c" (len)
     :
-    : "D"(dst), "S"(src), "c"(len)
     : "memory", "cc"
     );
     return dst;
@@ -64,8 +64,8 @@ static inline void * __erms_movsd(void *dst, const void * src, size_t len)
     "sar $2, %%rcx\n\t"
     "cld\n\t"
     "rep movsd"
+    : "+D" (dst), "+S" (src), "+c" (len)
     :
-    : "D"(dst), "S"(src), "c"(len)
     : "memory", "cc"
     );
     return dst;
@@ -77,8 +77,8 @@ static inline void * __erms_movsq(void *dst, const void * src, size_t len)
     "sar $3, %%rcx\n\t"
     "cld\n\t"
     "rep movsq"
+    : "+D"(dst), "+S"(src), "+c"(len)
     :
-    : "D"(dst), "S"(src), "c"(len)
     : "memory", "cc"
     );
     return dst;
