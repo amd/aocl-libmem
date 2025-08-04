@@ -41,20 +41,19 @@ static inline size_t __attribute__((flatten)) _strlen_avx512(const char *str)
     // Initialize a zeroed AVX-512 register for comparisons
     z0 = _mm512_setzero_epi32();
 
-    // Calculate the offset to align the source pointer to 64 bytes
-    offset = (uintptr_t)str & (ZMM_SZ - 1);
-
     // Handle cases where start of string is close to the end of a memory page
     if (unlikely(((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ -1) & (uintptr_t)str))))
     {
         z6 = _mm512_set1_epi8(0xff);
+
+        // Calculate the offset to align the source pointer to 64 bytes
+        offset = (uintptr_t)str & (ZMM_SZ - 1);
         //Mask to load only the valid bytes from the string without crossing the page boundary
-        __mmask64 mask = ((uint64_t)-1) >> offset;
-        z1 = _mm512_mask_loadu_epi8(z6 ,mask, str);
+        __mmask64 mask = UINT64_MAX >> offset;
+        z1 = _mm512_mask_loadu_epi8(z6, mask, str);
         ret = _mm512_cmpeq_epu8_mask(z1, z0);
         if (ret)
             return _tzcnt_u64(ret);
-
     }
     // Load first 64 bytes from `str` into z1 and check for null terminator
     else
@@ -63,6 +62,7 @@ static inline size_t __attribute__((flatten)) _strlen_avx512(const char *str)
         ret = _mm512_cmpeq_epu8_mask(z1, z0);
         if (ret)
             return _tzcnt_u64(ret);
+        offset = (uintptr_t)str & (ZMM_SZ - 1);
     }
 
     // Adjust the offset to align with cache line for the next load operation
