@@ -214,7 +214,7 @@ static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, con
             if(match)
                 break;
             __attribute__ ((fallthrough));
-        case 0:
+        default:
             offset = size - ZMM_SZ;
             z3 = _mm512_loadu_si512(str1 + offset);
             z4 = _mm512_loadu_si512(str2 + offset);

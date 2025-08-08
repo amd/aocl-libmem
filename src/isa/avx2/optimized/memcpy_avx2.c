@@ -53,11 +53,12 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
     // Adjust alignment to 4 VEC alignment
     dst_align = 4 * YMM_SZ - dst_align;
 
+    // Load-Store first 4 VECs
+    __load_store_4ymm_vec(dst, src, 0);
     // Check if the size is less than or equal to the L1D cache size per core
     // Note: The L1D cache size can vary depending on the underlying architecture
     if (size <= zen_info.zen_cache_info.l1d_per_core)
     {
-        __load_store_4ymm_vec(dst, src, 0);
         size_t offset = __unaligned_load_aligned_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, dst_align);
 
         uint16_t rem_data = size - offset;
@@ -77,11 +78,9 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
         }
         return ret;
     }
-    // Load-Store first 4 VECs
-    __load_store_le_4ymm_vec(dst, src, 4 * YMM_SZ);
 
     // Matching alignments of load & store addresses;
-    if (unlikely((((size_t)src & (YMM_SZ - 1)) == dst_align)))
+    if (unlikely((((size_t)src & (YMM_SZ - 1)) == ((size_t)dst & (YMM_SZ - 1)))))
     {
         if (size < __nt_start_threshold)
         {

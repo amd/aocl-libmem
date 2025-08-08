@@ -53,16 +53,11 @@ static inline void *_memset_avx512_erms(void *mem, int val, size_t size)
     else if (size <= 4 * ZMM_SZ)
     {
         _mm512_storeu_si512(mem , z0);
-        if (size > 2 * ZMM_SZ)
-        {
-            _mm512_storeu_si512(mem + ZMM_SZ, z0);
-            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
-            _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
-            return ret;
-        }
-
+        _mm512_storeu_si512(mem + ZMM_SZ, z0);
         _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
         return ret;
+
     }
     // store first 4xVECs irrespective of alignment
     _mm512_storeu_si512(mem , z0);
