@@ -452,7 +452,7 @@
  void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                       int size, int blocksize, const char *indent_prefix,
                       bench_info *bi)
-@@ -199,391 +257,106 @@
+@@ -199,391 +257,110 @@
          bi++;
      }
  }
@@ -926,6 +926,10 @@
 +                    *((char *)dstbuf + bufsize - NULL_BYTE) = NULL_TERM_CHAR;
 +                }
 +            }
++        }
++        if (bench_func[0].description == "memcmp")
++        {
++               memcpy(dstbuf, srcbuf, bufsize);
 +        }
 +        bandwidth_bench(dstbuf, srcbuf, tmpbuf, bufsize, BLOCKSIZE, " ", bench_func);
 +        free(poolbuf);
