@@ -31,6 +31,7 @@
 /* This function is an optimized version of strchr using AVX-512 instructions.
 It finds and returns a pointer to the first occurrence of the character in the string. */
 
+
 static inline char* __attribute__((flatten)) _strchr_avx512(const char *str, int c)
 {
     size_t  offset,  ret;
@@ -53,8 +54,8 @@ static inline char* __attribute__((flatten)) _strchr_avx512(const char *str, int
     {
         z7 = _mm512_set1_epi8(0xff);
         //Mask to load only the valid bytes from the string without crossing the page boundary
-        mask = ((uint64_t)-1) >> offset;
-        z1 = _mm512_mask_loadu_epi8(z7 ,mask, str);
+        mask = _bzhi_u64((uint64_t)-1, ZMM_SZ - offset);
+        z1 = _mm512_mask_loadu_epi8(z7, mask, str);
     }
     // Load first 64 bytes from `str` into z1
     else
@@ -78,6 +79,7 @@ static inline char* __attribute__((flatten)) _strchr_avx512(const char *str, int
     uint8_t cnt_vec = 7;
     while (cnt_vec--)
     {
+        _mm_prefetch(str + offset + ZMM_SZ, _MM_HINT_NTA);
         z1 = _mm512_load_si512(str + offset);
         zxor = _mm512_xor_si512(z1, zch);
         zmin = _mm512_min_epu8(zxor, z1);
