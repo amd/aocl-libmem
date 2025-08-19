@@ -54,7 +54,7 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
     {
         // Load bytes from `src` into z1 with a offsetted mask to avoid crossing the page boundary
         z6 = _mm512_set1_epi8(0xff);
-        mask = ((uint64_t)-1) >> offset;
+        mask = UINT64_MAX >> offset;
         z1 =  _mm512_mask_loadu_epi8(z6 ,mask, src);
 
         // Compare `z1` with zero register to find the null terminator
@@ -64,7 +64,7 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         if (match)
         {
             index =  _tzcnt_u64(match);
-            mask = ((uint64_t)-1) >> (63 - (index));
+            mask = UINT64_MAX >> (63 - (index));
             _mm512_mask_storeu_epi8(dst, mask, z1);
             return ret;
         }
@@ -76,7 +76,7 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
     if (match)
     {
         index =  _tzcnt_u64(match);
-        mask = ((uint64_t)-1) >> (63 - index);
+        mask = UINT64_MAX >> (63 - index);
         _mm512_mask_storeu_epi8(dst, mask, z1);
         return ret;
     }
@@ -121,7 +121,7 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         if (match)
         {
             index =  _tzcnt_u64(match);
-            mask = ((uint64_t)-1) >> (63 - index);
+            mask = UINT64_MAX >> (63 - index);
             _mm512_mask_storeu_epi8(dst + offset, mask, z2);
             return ret;
         }
