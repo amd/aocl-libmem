@@ -30,6 +30,10 @@ After downloading the latest stable release from the git repository, https://git
 
 `Note:` _Binaries can be built based on the cpu ISA features: AVX2 and AVX512 with help of Cmake flag: ALMEM_ARCH. It is recommended not to load/run the AVX512 library on a non-AVX512 machine as it will lead to crash due to unsupported instructions._
 
+`Note:` _IFUNC may only be compatible with the most recent compiler toolchains to manage runtime dependencies effectively._
+
+`Note:` _The dynamic loading library APIs, such as dlopen, dlclose, and dlsym, have been incorporated into Glibc starting from version 2.34.Therefore, if you compile the library on a system using Glibc 2.34 or newer and then execute it on a system with an older version of Glibc,you will encounter runtime issues related to symbol resolution for these functions.To avoid such issues, it is recommended, if you build the library with older version of Glibc (prior to 2.34) then execute it on systems with the same version of Glibc.If built on Glibc 2.34 or newer, ensure that the target system also has Glibc 2.34 or newer._
+
 For detailed instructions on how to configure, build, install, please refer to the AOCL User Guide on https://developer.amd.com/amd-aocl
 
 Upstream repository contains LibMem reference manual that has all the information you need to get started with LibMem, including installation directions, usage examples, and a complete API reference.You may also find a copy of the document here on github.

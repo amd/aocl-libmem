@@ -17,7 +17,7 @@ The AOCL-LibMem Profiler is a powerful tool that provides detailed insights into
 - Python 3.6+
 - BCC Tools (python3-bpfcc)
 - Root privileges (for BPF operations)
-
+- Recommended linux kernel version 5.15 for eBPF tools
 ### Installation
 ```bash
 # Install BCC tools

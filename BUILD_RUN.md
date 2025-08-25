@@ -3,8 +3,9 @@
 ## Requirements
  * **cmake 3.22**
  * **python 3.10**
- * **gcc 12.2.0**
- * **aocc 4.0**
+ * **gcc 14.1.0** (for znver5 support)
+ * **aocc 5.0**
+ * **Glibc 2.34** (for dynamic dispatcher support)
 
 ## Build and Install Procedure:
 ```sh

@@ -19,3 +19,13 @@ implementation of the function as per the application requirements.
 
 Highlights of AMD AOCL-LibMem version 5.1.1
 --------------------------------------------
+* Improved memory and string functions for Zen4 & Zen5 architectures
+* Benchmark and test enhancements
+    - Added support for mempcpy benchmark
+    - Added memmove overlap benchmarks support in GBM
+    - TBM support for memory benchmarking up to 1GB
+    - Added logging system information in benchmark setup
+* Enhanced dynamic dispatcher solution with ifunc based dispatching
+* Enhanced profiler tool to run an executable and also profile address
+  alignment and functions without size arguments(count only).
+* Minor bug fixes
