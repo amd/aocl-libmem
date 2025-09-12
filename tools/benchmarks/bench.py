@@ -471,10 +471,10 @@ def main():
     # Subparser for GBM with additional options
     gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GoogleBench Benchmarking Tool')
     group = gbm_parser.add_mutually_exclusive_group()
-    gbm_parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
-                            c - cached, u - un-cached",\
-                            type = str, choices = ['c', 'u'], \
-                            default = 'c')
+    gbm_parser.add_argument("-m", "--mode", help = "type of cached benchmarking :\
+                            h - hot, c - cold",\
+                            type = str, choices = ['h', 'c'], \
+                            default = 'h')
 
     #Align and Page are mutually_exclusive options
     group.add_argument("-a", "--align", help = "alignemnt of source\
@@ -532,18 +532,14 @@ def main():
                         type = int, default = 100)
     args = parser.parse_args()
 
-    # Ensure memory_operation is set only if mode exists
+    # Set memory_operation for GBM benchmark only
     if hasattr(args, 'mode'):
         args.memory_operation = args.mode
-        if args.memory_operation not in ['c', 'u']:
-            args.memory_operation = 'c'
-    else:
-        args.memory_operation = 'c'
 
     if args.benchmark == 'gbm':
-        args.bench_name = 'GooglBench_Cached'
-        if args.memory_operation == 'u':
-            args.bench_name = 'GooglBench_UnCached'
+        args.bench_name = 'GooglBench_HotCached'
+        if args.memory_operation == 'c':
+            args.bench_name = 'GooglBench_ColdCached'
     elif args.benchmark == 'tbm':
         args.bench_name = 'TinyMemBench'
     elif args.benchmark == 'fbm':

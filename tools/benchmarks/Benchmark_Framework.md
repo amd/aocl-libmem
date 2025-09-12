@@ -37,11 +37,26 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
       pip3 install pandas
       pip3 install numpy
 - FleetBench dependency package
-    - Bazel-version 6 needs to be installed manually
+    - Bazel (any version below 8.0.0) needs to be installed manually
+    - **Note**: FleetBench with Bazel 8.0.0 causes workspace deprecated build issues due to WORKSPACE file migration to Bzlmod
 
-    STEPS for installing Bazel:
+    STEPS for installing Bazel using Bazelisk (Works across all Linux distributions):
 
-    On Ubuntu :
+        $ sudo apt install unzip curl  # For Ubuntu/Debian (use appropriate package manager for other distros)
+        $ curl -LO "https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64"
+        $ chmod +x bazelisk-linux-amd64
+        $ sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
+        $ export USE_BAZEL_VERSION=7.1.2
+        $ bazel --version
+
+    **⚠️ CAUTION**: Setting the Bazel version using bazelisk may reset to the latest version in new terminal sessions. You might need to run `export USE_BAZEL_VERSION=7.1.2` again or add it to your `~/.bashrc` file for persistence:
+
+        $ echo 'export USE_BAZEL_VERSION=7.1.2' >> ~/.bashrc
+        $ source ~/.bashrc
+
+    **Alternative installation methods for specific distributions:**
+
+    On Ubuntu/Debian:
 
         $ sudo apt install curl gnupg
         $ curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
@@ -49,7 +64,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
         $ echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
         $ sudo apt update && sudo apt install bazel
 
-    On CentOS and REHL :
+    On CentOS and RHEL:
 
   1.    Install dependency packages:
 
@@ -94,7 +109,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
       <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -o <overlap> -preload <y,n> -i<repetitions> -w<warm_up time>
 
-                            -m <c, u>    : cached  & uncached behaviour
+                            -m <h, c>    : hot  & cold cache behaviour
                             -a <a, u, d> : aligned (src and dst alignment are equal)
                                            un-alinged (src and str alignment are NOT equal)
                                            default alignment is random.
@@ -118,11 +133,11 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     $ ./bench.py -h
 
     Running Google Benchmark
-    $ ./bench.py gbm memcpy -r 8B 16B -m u -t "1" -x 16
-    Runs the Google Benchmark for Un-Cached Mode Memcpy for sizes[8,9,..16] on core -16
+    $ ./bench.py gbm memcpy -r 8B 16B -m c -t "1" -x 16
+    Runs the Google Benchmark for Cold cache Memcpy for sizes[8,9,..16] on core -16
 
     $ ./bench.py gbm memcpy -r 8B 32KB -s m -x 16
-    Runs GBM for Cached memcpy with More-cache spill
+    Runs GBM for Hot cache memcpy with More-cache spill
 
     Running TinyMembench
     $ ./bench.py tbm strcpy -r 8B 4KB -x 47

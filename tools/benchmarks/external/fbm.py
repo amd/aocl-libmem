@@ -67,13 +67,37 @@ class FBM(BaseBench):
             print("Use -bestperf with 'gbm' or 'tbm' for best performance mode.")
             print("="*80 + "\n")
 
-        # Check if bazel is available
+        # Check if bazel is available and get version
         try:
-            subprocess.run(["bazel", "--version"], capture_output=True, check=True)
+            result = subprocess.run(["bazel", "--version"], capture_output=True, check=True, text=True)
+            bazel_version_output = result.stdout.strip()
+
+            # Extract version number from output (format: "bazel X.Y.Z")
+            version_match = re.search(r'bazel (\d+\.\d+\.\d+)', bazel_version_output)
+            if version_match:
+                version_str = version_match.group(1)
+                version_parts = [int(x) for x in version_str.split('.')]
+                major_version = version_parts[0]
+                minor_version = version_parts[1] if len(version_parts) > 1 else 0
+
+                # Check if version is 8.0.0 or above
+                if major_version >= 8:
+                    print("\n" + "="*80)
+                    print("ERROR: Bazel version 8.0.0 and above causes BUILD failure")
+                    print(f"Current Bazel version: {version_str}")
+                    print("FleetBench is not compatible with Bazel 8.0.0+ due to WORKSPACE deprecation.")
+                    print("Please downgrade to Bazel 7.x refer to Benchmark_Framework.md for installing bazel")
+                    print("="*80 + "\n")
+                    return False
+
+                print(f"Bazel version {version_str} detected - compatible")
+            else:
+                print("Warning: Could not parse Bazel version, proceeding with caution")
+
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("Error: Bazel is not installed or not available in PATH")
             print("Please install bazel to use FleetBench (fbm) benchmark")
-            print("Installation instructions: https://bazel.build/install")
+            print("Installation instructions: Benchmark_Framework.md")
             return False
 
         self.isExist = os.path.exists(self.path + '/fleetbench')
