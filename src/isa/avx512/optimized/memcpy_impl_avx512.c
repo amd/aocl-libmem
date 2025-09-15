@@ -42,7 +42,7 @@ static inline void *_memcpy_avx512(void *__restrict dst,
 
     if (likely(size <= 2 * ZMM_SZ)) //128B
     {
-        if ((size < ZMM_SZ))
+        if (likely(size < ZMM_SZ))
         {
             return __load_store_ble_zmm_vec(dst, src, (uint8_t)size);
         }
@@ -50,6 +50,18 @@ static inline void *_memcpy_avx512(void *__restrict dst,
         return ret;
     }
 
+#ifdef MEMMOVE_AVX512
+    if (likely(size <= 8 * ZMM_SZ)) //512B
+    {
+        if (likely(size <= 4 * ZMM_SZ)) //256B
+        {
+            __load_store_le_4zmm_vec(dst, src, (uint16_t)size);
+            return ret;
+        }
+        __load_store_le_8zmm_vec(dst, src, (uint16_t)size);
+        return ret;
+    }
+#else
     if (size <= 8 * ZMM_SZ) //512B
     {
         __load_store_le_4zmm_vec(dst, src, (uint16_t)size);
@@ -60,6 +72,7 @@ static inline void *_memcpy_avx512(void *__restrict dst,
         __load_store_le_4zmm_vec(dst + 2 * ZMM_SZ, src + 2 * ZMM_SZ, (uint16_t)size - 4 * ZMM_SZ);
         return ret;
     }
+#endif
 
 #ifdef MEMMOVE_AVX512
     // Handle overlapping memory blocks
@@ -108,7 +121,6 @@ static inline void *_memcpy_avx512(void *__restrict dst,
 #endif
 
     __load_store_le_8zmm_vec(dst, src, 8 * ZMM_SZ);
-
     size_t offset = 8 * ZMM_SZ;
 
     if (size > 16 * ZMM_SZ)
