@@ -25,11 +25,14 @@
  POSSIBILITY OF SUCH DAMAGE.
 """
 
-from bcc import BPF
-from bcc.libbcc import lib, bcc_symbol, bcc_symbol_option
-
+# Fix for BCC compatibility with Python 3.10+
+# BCC version 0.12.0 has a bug where it imports MutableMapping from collections
+# instead of collections.abc, which causes ImportError in Python 3.10+
+import sys
+import collections
+import collections.abc
 import ctypes as ct
-import sys, os
+import os
 import time
 import argparse
 import getpass
@@ -37,27 +40,184 @@ import logging
 import subprocess
 import signal
 import tempfile
-import os
 import stat
+import atexit
+import warnings
 from io import StringIO  # For capturing print output
 import datetime  # For timestamping log files
 import platform  # For system information
 import socket    # For hostname information
+
+# Add the system dist-packages path for Python 3.10 to find BCC
+dist_packages_path = '/usr/lib/python3/dist-packages'
+if dist_packages_path not in sys.path:
+    sys.path.insert(0, dist_packages_path)
+
+# Monkey patch to make MutableMapping available in collections module
+if not hasattr(collections, 'MutableMapping'):
+    collections.MutableMapping = collections.abc.MutableMapping
+
+# Global variables for BCC version info (will be set later)
+BCC_VERSION = None
+BCC_NEEDS_CLEANUP_FIX = False
+BPF = None
+bcc_symbol = None
+bcc_symbol_option = None
+lib = None
+my_bcc_symbol_option = None
+
+
+def print_bcc_error_and_exit(error_type, **kwargs):
+    """
+    Print BCC-related error messages and exit
+
+    Args:
+        error_type: 'version_too_old' or 'import_failed'
+        **kwargs: Additional parameters like 'error', 'current_version', 'min_version'
+    """
+    print("")
+
+    if error_type == 'version_too_old':
+        current_version = kwargs.get('current_version', 'Unknown')
+        min_version = kwargs.get('min_version', '0.8.0')
+        print(f"ERROR: BCC version {current_version} is too old.")
+        print(f"Minimum required version: {min_version}")
+    elif error_type == 'import_failed':
+        error = kwargs.get('error', 'Unknown error')
+        print(f"Failed to import BCC: {error}")
+
+    print("")
+    print("Please install BCC for your Linux distribution.")
+    print("See installation instructions in 'profiler.md'")
+    sys.exit(1)
+
+
+def initialize_bcc():
+    """
+    Initialize BCC with version detection and conditional fixes
+
+    Minimum BCC version required: 0.8.0
+    - Versions below 0.8.0 lack essential eBPF features needed for uprobe attachment
+    - Versions 0.8.0 and above support all required functionality
+    - Versions 0.12.0 and below require cleanup error suppression patches
+    """
+    global BCC_VERSION, BCC_NEEDS_CLEANUP_FIX, BPF, bcc_symbol, bcc_symbol_option, lib
+
+    # Minimum required BCC version (must support all eBPF features used by this profiler)
+    MIN_BCC_VERSION = (0, 8, 0)
+
+    # Import BCC with version detection and conditional fixes
+    try:
+        import bcc
+        BCC_VERSION = getattr(bcc, '__version__', 'Unknown')
+        print(f"Detected BCC version: {BCC_VERSION}")
+
+        # Check minimum version requirement
+        if BCC_VERSION != 'Unknown':
+            try:
+                # Parse version string (e.g., "0.12.0" -> (0, 12, 0))
+                version_parts = tuple(map(int, BCC_VERSION.split('.')))
+
+                # Check if version meets minimum requirement
+                if version_parts < MIN_BCC_VERSION:
+                    min_version_str = '.'.join(map(str, MIN_BCC_VERSION))
+                    print_bcc_error_and_exit('version_too_old',
+                                            current_version=BCC_VERSION,
+                                            min_version=min_version_str)
+                else:
+                    min_version_str = '.'.join(map(str, MIN_BCC_VERSION))
+                    print(f"BCC version {BCC_VERSION} meets minimum requirement ({min_version_str})")
+
+            except (ValueError, AttributeError):
+                # If version parsing fails, we can't verify compatibility
+                print(f"WARNING: Could not parse BCC version '{BCC_VERSION}'")
+                print(f"Cannot verify minimum version requirement. Proceeding with caution...")
+        else:
+            # If version is unknown, we can't verify compatibility
+            print("WARNING: BCC version unknown")
+            print("Cannot verify minimum version requirement. Proceeding with caution...")
+
+        # Check if this is a version that needs the cleanup fix
+        BCC_NEEDS_CLEANUP_FIX = False
+        if BCC_VERSION != 'Unknown':
+            try:
+                # Parse version string (e.g., "0.12.0" -> (0, 12, 0))
+                version_parts = tuple(map(int, BCC_VERSION.split('.')))
+                # Versions 0.12.0 and below have cleanup issues
+                if version_parts <= (0, 12, 0):
+                    BCC_NEEDS_CLEANUP_FIX = True
+                    print(f"BCC version {BCC_VERSION} requires cleanup error suppression")
+                else:
+                    print(f"BCC version {BCC_VERSION} should not need cleanup fixes")
+            except (ValueError, AttributeError):
+                # If version parsing fails, assume we need the fix for safety
+                BCC_NEEDS_CLEANUP_FIX = True
+                print(f"Could not parse BCC version '{BCC_VERSION}', applying cleanup fix as precaution")
+        else:
+            # If version is unknown, apply the fix for safety
+            BCC_NEEDS_CLEANUP_FIX = True
+            print("BCC version unknown, applying cleanup fix as precaution")
+
+    except ImportError as e:
+        print_bcc_error_and_exit('import_failed', error=e)
+
+    from bcc import BPF
+    from bcc.libbcc import lib, bcc_symbol, bcc_symbol_option
+
+    # Apply BPF cleanup patch only if needed
+    if BCC_NEEDS_CLEANUP_FIX:
+        print("Applying BCC cleanup error suppression patch...")
+
+        # Monkey patch BPF cleanup to suppress errors
+        original_bpf_cleanup = BPF.cleanup
+
+        def silent_bpf_cleanup(self):
+            """Wrapper around BPF.cleanup that suppresses error output"""
+            try:
+                # Temporarily redirect stderr to suppress cleanup errors
+                old_stderr = sys.stderr
+                with open(os.devnull, 'w') as devnull:
+                    sys.stderr = devnull
+                    try:
+                        original_bpf_cleanup(self)
+                    except:
+                        pass  # Ignore all cleanup errors
+                    finally:
+                        sys.stderr = old_stderr
+            except:
+                pass  # Ignore any other errors
+
+        # Apply the monkey patch
+        BPF.cleanup = silent_bpf_cleanup
+    else:
+        print("BCC cleanup patch not needed for this version")
+
+    return bcc, BPF, lib, bcc_symbol, bcc_symbol_option
+
 LOG = logging.getLogger(__name__)
 
 # Work around a bug in older versions of bcc.libbcc
-if len(bcc_symbol_option._fields_) == 3:
-    LOG.warning("Adding workaround for old libBCC")
-    class patched_bcc_symbol_option(ct.Structure):
-        _fields_ = [
-            ('use_debug_file', ct.c_int),
-            ('check_debug_file_crc', ct.c_int),
-            ('lazy_symbolize', ct.c_int),
-            ('use_symbol_type', ct.c_uint),
-        ]
-    my_bcc_symbol_option = patched_bcc_symbol_option
-else:
-    my_bcc_symbol_option = bcc_symbol_option
+# This affects BCC versions with incomplete bcc_symbol_option structure
+# Note: This check will be performed after BCC is initialized
+def check_libbcc_workaround():
+    """Check if libBCC workaround is needed and apply if necessary"""
+    global my_bcc_symbol_option
+
+    if len(bcc_symbol_option._fields_) == 3:
+        print(f"Applying libBCC workaround for BCC version {BCC_VERSION}")
+        class patched_bcc_symbol_option(ct.Structure):
+            _fields_ = [
+                ('use_debug_file', ct.c_int),
+                ('check_debug_file_crc', ct.c_int),
+                ('lazy_symbolize', ct.c_int),
+                ('use_symbol_type', ct.c_uint),
+            ]
+        my_bcc_symbol_option = patched_bcc_symbol_option
+    else:
+        print(f"libBCC workaround not needed for BCC version {BCC_VERSION}")
+        my_bcc_symbol_option = bcc_symbol_option
+
+    return my_bcc_symbol_option
 
 class FuncInfo():
     STT_GNU_IFUNC = 1 << 10
@@ -130,7 +290,7 @@ class FuncInfo():
         LOG.debug('Got sym name: %s, offset: 0x%x', sym.name, sym.offset)
         LOG.debug("Lookup for func %s returned %d", symname, retval)
         if retval < 0:
-            LOG.error("Failed to resolve symbol %s in module %s. ERRNO: %d", symname, module, ct.get_errno())
+            LOG.debug("Failed to resolve symbol %s as IFUNC in module %s. ERRNO: %d (this is expected for regular symbols)", symname, module, ct.get_errno())
             return None
         else:
             LOG.debug("Resolved symbol: name=%s, offset=0x%x", sym.name, sym.offset)
@@ -373,7 +533,7 @@ def dedup_functions(all_funcs):
 def main():
     TARGET_DIST_FUNCTIONS = [
         # libname, name, symbol, size arg, src arg, dst arg
-        FuncInfo('c', 'memcpy',  'memcpy@@GLIBC_2.14'),
+        FuncInfo('c', 'memcpy',  'memcpy'),
         FuncInfo('c', 'mempcpy', 'mempcpy'),
         FuncInfo('c', 'memcmp',  'memcmp'),
         FuncInfo('c', 'memmove', 'memmove'),
@@ -421,6 +581,12 @@ def main():
         help = 'Check memory alignment of arguments (64-byte boundary)')
 
     args = p.parse_args()
+
+    # Initialize BCC now that we know we need it (not just showing help)
+    bcc, BPF, lib, bcc_symbol, bcc_symbol_option = initialize_bcc()
+
+    # Check and apply libBCC workaround if needed
+    my_bcc_symbol_option = check_libbcc_workaround()
 
     # Configure logging with file output if specified
     log_handlers = [logging.StreamHandler()]
@@ -524,6 +690,7 @@ Runtime Information:
 - OS: {platform.system()} {platform.release()} ({platform.version()})
 - Python: {platform.python_version()}
 - User: {getpass.getuser()}
+- BCC Version: {BCC_VERSION} (cleanup fix: {'enabled' if BCC_NEEDS_CLEANUP_FIX else 'not needed'})
 
 Command-line parameters:
 - Interval: {args.interval} seconds
@@ -636,7 +803,18 @@ Command-line parameters:
     if args.verbose >= 2:
         LOG.debug("Generated BPF program:\n%s", bpf_text)
 
-    b = BPF(text=bpf_text)
+    # Compile the eBPF program with error handling
+    try:
+        LOG.info("Compiling eBPF program...")
+        b = BPF(text=bpf_text)
+        LOG.info("eBPF program compiled successfully")
+    except Exception as e:
+        LOG.error("Failed to compile eBPF program: %s", str(e))
+        LOG.error("Please refer to the installation and troubleshooting guide in 'profiler.md'")
+        if args.verbose >= 2:
+            LOG.error("eBPF program that failed to compile:\n%s", bpf_text)
+
+        sys.exit(1)
 
     # Track successful attachments
     successful_attaches = 0

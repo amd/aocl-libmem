@@ -15,14 +15,156 @@ The AOCL-LibMem Profiler is a powerful tool that provides detailed insights into
 
 ## Requirements
 - Python 3.6+
-- BCC Tools (python3-bpfcc)
+- BCC Tools (python3-bpfcc) version 0.8.0 or higher, preferably higher than 0.8.0 for better compatibility with newer kernels
 - Root privileges (for BPF operations)
-- Recommended linux kernel version 5.15 for eBPF tools
+- Minimum kernel version 4.19.0 for eBPF tools
+- Kernel compatibility:
+  - **Kernel 4.19.0**: Works with BCC 0.8.0
+  - **Kernel 4.20.0+**: May require BCC version higher than 0.8.0 (due to inline_asm compatibility issues)
+  - **Recommended**: Use latest available BCC version for best kernel compatibility
 ### Installation
+
+#### Check Existing BCC version
+Before installing BCC, check if it's already installed and verify the version:
+
+```bash
+# Method 1: Check if BCC via pip
+pip show bcc
+```
+
+```bash
+# Method 2: Check BCC version programmatically
+python3 -c "import collections, collections.abc; collections.MutableMapping = collections.abc.MutableMapping; import bcc; print('BCC version:', bcc.__version__)"
+```
+
+If you see output like "BCC version: = 0.8.0" or higher, BCC installation is not required and you can proceed to use the profiler tool.
+
+> **⚠️ Critical Kernel Compatibility Warning**:
+>
+> **BCC 0.8.0 + Kernel 5.4.0+ = inline_asm Compilation Errors**
+>
+> There is a **known incompatibility** between BCC version 0.8.0 and Linux Kernel 5.4.0 and newer that causes eBPF compilation failures with errors like:
+> - `expected '(' after 'asm'`
+> - `asm_inline not supported`
+> - `Failed to compile eBPF program`
+>
+> **Compatibility Matrix:**
+> - ✅ **Kernel 4.19.0** + BCC 0.8.0: **Confirmed working**
+> - ⚠️ **Kernel 4.20.0 - 5.3.x** + BCC 0.8.0: **Untested (may work, but BCC upgrade recommended)**
+> - ❌ **Kernel 5.4.0+** + BCC 0.8.0: **Confirmed compilation errors (inline_asm issues)**
+> - ✅ **Kernel 5.4.0+** + BCC > 0.8.0: **Confirmed working**
+>
+> **📢 Recommendation:** If you're using Kernel versions between 4.20.0 - 5.3.x, we recommend upgrading to BCC > 0.8.0 for guaranteed compatibility. Update your BCC version to ensure reliable profiler operation.
+>
+> **Quick Fix - Upgrade BCC:**
+> If you encounter BPF compilation failures with inline_asm errors, upgrade to a newer BCC version:
+>
+> **For Debian/Ubuntu:**
+> ```bash
+> # Add backports repository (if not already added)
+> echo "deb http://deb.debian.org/debian buster-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+> sudo apt update
+>
+> # Upgrade to newer BCC version from backports
+> sudo apt install -t buster-backports python3-bpfcc
+> ```
+>
+> **For RHEL/CentOS/Fedora:**
+> ```bash
+> # Enable EPEL repository (if not already enabled)
+> sudo dnf install -y epel-release  # or: sudo yum install epel-release
+>
+> # Update to latest BCC version
+> sudo dnf update python3-bcc  # or: sudo yum update python3-bcc
+> ```
+>
+> **For SUSE/openSUSE:**
+> ```bash
+> # Update to latest BCC version
+> sudo zypper update python3-bcc
+> ```
+>
+> **Alternative for any distribution (using pip):**
+> ```bash
+> # Uninstall system package first
+> sudo apt remove python3-bpfcc  # or: sudo dnf/yum/zypper remove python3-bcc
+>
+> # Install newer version via pip
+> pip3 install --user bcc
+> ```
+>
+> This resolves kernel header compatibility issues and improves overall stability.
+
+#### Method 0: Recommended Method (using pip)
+First, check which BCC versions are available:
+```bash
+# Check available BCC versions
+pip install bcc==
+```
+
+This will show an error with available versions (e.g., 0.1.7, 0.1.8, 0.1.10). Choose the highest available version:
+```bash
+# Install the latest available version from the error output
+pip install bcc==0.1.10
+```
+
+#### Method 1: Install from Distribution Packages
+
+**Ubuntu/Debian (apt):**
+```bash
+sudo apt update
+sudo apt install -y python3-bpfcc
+```
+
+**RHEL/CentOS/Fedora (dnf/yum):**
+```bash
+# For RHEL/CentOS 8+ and Fedora
+sudo dnf install -y python3-bcc
+
+# For older CentOS/RHEL 7
+sudo yum install -y python3-bcc
+```
+
+**SUSE/openSUSE (zypper):**
+```bash
+sudo zypper install -y python3-bcc
+```
+
+#### Method 2: Install from Source (All Distributions)
+```bash
+# Install build dependencies (Ubuntu/Debian)
+sudo apt install -y build-essential cmake git python3-dev \
+    libbpf-dev libelf-dev zlib1g-dev libfl-dev
+
+# Install build dependencies (RHEL/CentOS/Fedora)
+sudo dnf install -y gcc gcc-c++ cmake git python3-devel \
+    libbpf-devel elfutils-libelf-devel zlib-devel flex-devel
+
+# Clone and build BCC (minimum required version 0.8.0)
+git clone https://github.com/iovisor/bcc.git
+cd bcc
+git checkout v0.8.0  # or use latest: git checkout master
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+make -j$(nproc)
+sudo make install
+```
+
+#### Verify Installation
+```bash
+# Check BCC installation
+
+```bash
+# BBC installed via pip
+pip show bcc
+```
+
 ```bash
 # Install BCC tools
 sudo apt-get install -y python3-bpfcc
 ```
+
+**Note:** The profiler requires BCC version 0.8.0 or higher and will automatically detect your version, applying necessary compatibility fixes. If your version is too old, the profiler will display helpful upgrade instructions.
 
 ## Basic Usage
 
@@ -186,3 +328,28 @@ Total function calls: 71760
 - For executables with very short lifetimes, you may need to increase verbosity to debug issues.
 - Memory alignment checking works for both distribution-tracked functions and count-only functions that handle pointers.
 - All memmove() calls will be tracked under memcpy() as Glibc has common implementation for both these functions.
+
+## Troubleshooting
+
+### BPF Compilation Errors
+If you encounter errors like "expected '(' after 'asm'" or "Failed to compile BPF text", this typically indicates a compatibility issue between your BCC version and kernel version. This is commonly seen with BCC 0.8.0 on Kernel 5.4.0 and newer.
+
+**Solutions:**
+1. **Upgrade BCC** using distribution-specific methods (see Compatibility Warning in Installation section above)
+2. **Update kernel headers**:
+   - Debian/Ubuntu: `sudo apt install linux-headers-$(uname -r)`
+   - RHEL/CentOS/Fedora: `sudo dnf install kernel-headers kernel-devel` (or `sudo yum install kernel-headers kernel-devel`)
+   - SUSE/openSUSE: `sudo zypper install kernel-default-devel`
+3. **Check BCC version**: Use the verification commands in the Installation section
+
+### Function Not Found Errors
+Some functions may not be available in all C library versions or may be inlined by the compiler.
+
+### Permission Errors
+Ensure you're running the profiler with `sudo` as BPF operations require root privileges.
+
+### No Data Collected
+If the profiler runs but shows no function calls:
+1. Verify the target process is actively using memory functions
+2. Check that the process hasn't exited before profiling starts
+3. Use verbose mode (`-v`) to see detailed attachment information
