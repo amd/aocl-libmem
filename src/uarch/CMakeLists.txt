@@ -50,7 +50,8 @@ foreach(uarch ${uarch_list})
     else ()
         message(WARNING " *** Compiler doesn't support arch specific flag for zen${uarch} CPU\n"
                         "Proceeding with generic ISA flags... ")
-        if (${HAS_AVX512})
+        # zen4/zen5 always require AVX512, or enable AVX512 if system supports it
+        if (${uarch} GREATER_EQUAL 4 OR ${HAS_AVX512})
             list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
         else ()
             list(APPEND _MODULE_CC_FLAGS -mavx2)
