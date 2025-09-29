@@ -34,6 +34,11 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/tools/validator/CTestTestfile.cmake
 add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/libmem_validator.c)
 
 target_compile_options(libmem_validator PRIVATE -Wall -Wextra -O0)
+option(LIBMEM_VALIDATOR_DEBUG "Enable debug mode for libmem_validator" OFF)
+if(LIBMEM_VALIDATOR_DEBUG)
+    target_compile_definitions(libmem_validator PRIVATE LIBMEM_VALIDATOR_DEBUG=1)
+    message(STATUS "libmem_validator: DEBUG mode enabled")
+endif()
 target_link_libraries(libmem_validator m)
 
 # Enable testing

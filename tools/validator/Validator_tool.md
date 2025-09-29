@@ -7,6 +7,77 @@
    1. Testing with Validator script (build_dir/test $validator.py)
    2. Testing with ctest utility (build_dir/test $ctest)
 
+## Debug Mode for LibMem Validator
+
+The libmem validator supports a debug mode that provides detailed information about the testing process, including vector sizes, function names, and alignment combinations being tested.
+
+### Enabling Debug Mode
+
+To build the validator with debug mode enabled, use the CMake option:
+
+```bash
+# Navigate to your build directory
+cd /path/to/build/directory
+
+# Configure with debug mode enabled
+cmake -DLIBMEM_VALIDATOR_DEBUG=ON .
+
+# Build the project
+make
+```
+
+### Disabling Debug Mode
+
+To build the validator without debug output (normal mode):
+
+```bash
+# Navigate to your build directory
+cd /path/to/build/directory
+
+# Configure with debug mode disabled
+cmake -DLIBMEM_VALIDATOR_DEBUG=OFF .
+
+# Build the project
+make
+```
+
+### Debug Output Information
+
+When debug mode is enabled, the validator will output the following information:
+
+- **VEC_SZ**: Vector size in bytes (32 for AVX2, 64 for AVX512)
+- **Function name**: Which function is being tested
+- **Test size**: The size parameter being validated
+- **Alignment mode**: Whether testing single alignment or all alignment combinations
+- **Individual alignment tests**: Each source/destination alignment combination (when using alignment check mode)
+
+### Example Debug Output
+
+```
+[DEBUG] libmem_validator started
+[DEBUG] VEC_SZ = 64 bytes
+[DEBUG] Function: memcpy
+[DEBUG] Size: 1024
+[DEBUG] Alignment check mode: All alignments
+[DEBUG] Testing alignment - src: 0, dst: 0
+[DEBUG] Testing alignment - src: 0, dst: 1
+[DEBUG] Testing alignment - src: 0, dst: 2
+...
+[DEBUG] Testing alignment - src: 63, dst: 63
+```
+
+### Usage Examples
+
+```bash
+# Test with debug output enabled
+./tools/validator/libmem_validator memcpy 1024 0 0 1
+
+# Test without debug output (clean run)
+./tools/validator/libmem_validator memcpy 1024 0 0 0
+```
+
+**Note**: Debug mode is used only for debugging validator code.
+
 ## 1. Validator script:
 
 - By default the tool checks for validation of standard sizes with source and destination alignment as cache line SIZE . However , for non - standard sizes the user can pass the size range  along with the -t <iterator> value for validating the target sizes with different combinations of source and destination alignment.
