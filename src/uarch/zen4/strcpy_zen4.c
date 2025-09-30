@@ -110,7 +110,7 @@ HIDDEN_SYMBOL char * __attribute__((flatten)) __strcpy_zen4(char *dst, const cha
     // page , this is to avoid crossing a page boundary, which could lead to a page fault if
     // the memory is not mapped. Here it calculates and processes the maximum number of 64-byte
     // vectors that can be handled without the risk of crossing into an adjacent memory page.
-    cnt_vec = 4 - (((uintptr_t)src + offset) & (4 * ZMM_SZ - 1) >> 6);
+    cnt_vec = 4 - ((((uintptr_t)src + offset) & (4 * ZMM_SZ - 1)) >> 6);
     while (cnt_vec--)
     {
         z2 = _mm512_load_si512(src + offset);

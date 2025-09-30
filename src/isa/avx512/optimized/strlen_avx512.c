@@ -83,17 +83,13 @@ static inline size_t __attribute__((flatten)) _strlen_avx512(const char *str)
 
     // Ensure the next 4 * 64B vector loads in the main loop
     // do not cross a page boundary to prevent potential page faults.
-    uint8_t vec_4_offset = (((uintptr_t)str + offset) & (4 * ZMM_SZ - 1) >> 6);
-    if (vec_4_offset)
-    {
-        do
-        {
-            z1 = _mm512_load_si512(str + offset);
-            ret = _mm512_cmpeq_epu8_mask(z1, z0);
-            if (ret)
-                return _tzcnt_u64(ret) + offset;
-            offset += ZMM_SZ;
-        } while (vec_4_offset++ < 4);
+    cnt_vec = 4 - ((((uintptr_t)str + offset) & (4 * ZMM_SZ - 1)) >> 6);
+    while (cnt_vec--) {
+        z1 = _mm512_load_si512(str + offset);
+        ret = _mm512_cmpeq_epu8_mask(z1, z0);
+        if (ret)
+            return _tzcnt_u64(ret) + offset;
+        offset += ZMM_SZ;
     }
 
     // Main loop to process 4 vectors at a time for larger sizes(> 512B)

@@ -35,28 +35,26 @@ indicating the result of the comparison. */
 
 static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, const char *str2)
 {
-    size_t offset1, offset2, offset, mix_offset;
-    __m512i z0, z1, z2, z3, z4, z7;
-    uint64_t  cmp_idx, ret;
-    __mmask64 mask;
+    size_t offset1, offset2, offset;
+    __m512i z0, z1, z2, z3, z4, z_mask;
+    uint64_t  cmp_idx, ret, mask;
 
     // Initialize a zeroed AVX-512 register for comparisons against null terminators
     z0 = _mm512_setzero_epi32 ();
 
     // Handle cases where start of either of the string is close to the end of a memory page
-    if (unlikely(((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ -1) & ((uintptr_t)str1 | (uintptr_t)str2)))))
+    if (unlikely(((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & ((uintptr_t)str1 | (uintptr_t)str2)))))
     {
-        offset1 = (uintptr_t)str1 & (ZMM_SZ - 1); //str1 alignment
-        offset2 = (uintptr_t)str2 & (ZMM_SZ - 1); //str2 alignment
-        z7 = _mm512_set1_epi8(0xff);
-        // Determine which offset is larger and use it for the mixed offset
-        mix_offset = (offset1 >= offset2);
-        offset = (mix_offset)*offset1 | (!mix_offset)*offset2;
-         // Create a mask that will ignore the first 'offset' bytes when loading data
-        mask = ((uint64_t)-1) >> offset;
+        offset1 = (uintptr_t)str1 & (ZMM_SZ - 1);
+        offset2 = (uintptr_t)str2 & (ZMM_SZ - 1);
+        offset = (offset1 >= offset2) ? offset1 : offset2;
+        z_mask = _mm512_set1_epi8(0xff);
 
-        z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
-        z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
+        // Create a mask that will ignore the first 'offset' bytes when loading data
+        mask = UINT64_MAX >> offset;
+
+        z1 =  _mm512_mask_loadu_epi8(z_mask, mask, str1);
+        z2 =  _mm512_mask_loadu_epi8(z_mask, mask, str2);
 
         // Compare the vectors for equality and inequality
         ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
@@ -68,27 +66,31 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
     }
+    // If the strings are not close to the end of a memory page, load the first 64 bytes
     else
     {
-        // If the strings are not close to the end of a memory page, load the first 64 bytes
         z1 = _mm512_loadu_si512(str1);
         z2 = _mm512_loadu_si512(str2);
-        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+
+        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1, z2);
         if (ret)
         {
             cmp_idx = _tzcnt_u64(ret);
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+        else
+        {
+            offset1 = (uintptr_t)str1 & (ZMM_SZ - 1);
+            offset2 = (uintptr_t)str2 & (ZMM_SZ - 1);
+            offset = (offset1 >= offset2) ? offset1 : offset2;
+        }
     }
+    // Adjust the offset to align with cache line for the next load operation
+    offset = ZMM_SZ - offset;
 
-    offset1 = (uintptr_t)str1 & (ZMM_SZ - 1); //str1 alignment
-    offset2 = (uintptr_t)str2 & (ZMM_SZ - 1); //str2 alignment
-
-    //Both str2 and str1 are aligned
+    // Alignement of both the strings is same
     if (offset1 == offset2)
     {
-        // Adjust the offset to align with cache line for the next load operation
-        offset = ZMM_SZ - offset1;
         while (1)
         {
             // Load 64 bytes from each string and compare till we find diff/null
@@ -128,58 +130,94 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
     // Handle the case where alignments of the strings are different
     else
     {
-        // Use masked loads to handle the misalignment
-        size_t mix_offset = 0;
-        z7 = _mm512_set1_epi8(0xff);
-        mix_offset = (offset1 >= offset2);
-        offset = (mix_offset)*offset1 | (!mix_offset)*offset2;
-        mask = ((uint64_t)-1) >> offset;
-
-        z1 =  _mm512_mask_loadu_epi8(z7 ,mask, str1);
-        z2 =  _mm512_mask_loadu_epi8(z7 ,mask, str2);
-
-        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-        if (ret)
+        char *aligned_str, *unaligned_str;
+        if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
         {
-            cmp_idx = _tzcnt_u64(ret);
-            return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+            aligned_str = (char *)str1;
+            unaligned_str = (char *)str2;
         }
-        offset = ZMM_SZ - offset;
-        while(1)
+        else
         {
-            z1 = _mm512_loadu_si512(str1 + offset);
-            z2 = _mm512_loadu_si512(str2 + offset);
-            //Check for NULL
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if (!ret)
+            aligned_str = (char *)str2;
+            unaligned_str = (char *)str1;
+        }
+
+        uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
+        while (1)
+        {
+            while (vecs_in_page >= 4)
             {
-                offset += ZMM_SZ;
-                z3 = _mm512_loadu_si512(str1 + offset);
-                z4 = _mm512_loadu_si512(str2 + offset);
+                z1 = _mm512_load_si512(aligned_str + offset);
+                z2 = _mm512_loadu_si512(unaligned_str + offset);
                 //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
                 if (!ret)
                 {
                     offset += ZMM_SZ;
-                    z1 = _mm512_loadu_si512(str1 + offset);
-                    z2 = _mm512_loadu_si512(str2 + offset);
+                    z3 = _mm512_load_si512(aligned_str + offset);
+                    z4 = _mm512_loadu_si512(unaligned_str + offset);
                     //Check for NULL
-                    ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+                    ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
                     if (!ret)
                     {
                         offset += ZMM_SZ;
-                        z3 = _mm512_loadu_si512(str1 + offset);
-                        z4 = _mm512_loadu_si512(str2 + offset);
+                        z1 = _mm512_load_si512(aligned_str + offset);
+                        z2 = _mm512_loadu_si512(unaligned_str + offset);
                         //Check for NULL
-                        ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+                        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+                        if (!ret)
+                        {
+                            offset += ZMM_SZ;
+                            z3 = _mm512_load_si512(aligned_str + offset);
+                            z4 = _mm512_loadu_si512(unaligned_str + offset);
+                            //Check for NULL
+                            ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
+                            if (!ret)
+                            {
+                                offset += ZMM_SZ;
+                                vecs_in_page -= 4;
+                                continue;
+                            }
+                        }
                     }
                 }
+                cmp_idx = _tzcnt_u64(ret) + offset;
+                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
-            if (ret)
-                break;
-            offset += ZMM_SZ;
-        }
+            while (vecs_in_page --)
+            {
+                z1 = _mm512_load_si512(aligned_str + offset);
+                z2 = _mm512_loadu_si512(unaligned_str + offset);
+                //Check for NULL
+                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+                if (ret)
+                {
+                    cmp_idx = _tzcnt_u64(ret) + offset;
+                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+                }
+                offset += ZMM_SZ;
+            }
+
+            // align unaligned_str to next lower ZMM boundary
+            z1 = _mm512_load_si512((char *)(((uintptr_t)unaligned_str + offset) & (-ZMM_SZ)));
+            if (_mm512_cmpeq_epu8_mask(z1, z0))
+            {
+                z_mask = _mm512_set1_epi8(0xff);
+                mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
+
+                z1 =  _mm512_mask_loadu_epi8(z_mask ,mask, aligned_str + offset);
+                z2 =  _mm512_mask_loadu_epi8(z_mask ,mask, unaligned_str + offset);
+
+                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+
+                if (ret)
+                {
+                    cmp_idx = _tzcnt_u64(ret) + offset;
+                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+                }
+            }
+            vecs_in_page  += PAGE_SZ/ZMM_SZ;
+        } //end of top level while
     }
     cmp_idx = _tzcnt_u64(ret) + offset;
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];

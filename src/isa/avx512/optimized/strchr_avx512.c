@@ -97,21 +97,17 @@ static inline char* __attribute__((flatten)) _strchr_avx512(const char *str, int
 
     // Ensure the next 4 * 64B vector loads in the main loop
     // do not cross a page boundary to prevent potential seg faults.
-    uint8_t vec_4_offset = (((uintptr_t)str + offset) & (4 * ZMM_SZ - 1) >> 6);
-    if (vec_4_offset)
-    {
-        do
+    cnt_vec = 4 - ((((uintptr_t)str + offset) & (4 * ZMM_SZ - 1)) >> 6);
+    while (cnt_vec--) {
+        z1 = _mm512_load_si512(str + offset);
+        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(_mm512_xor_si512(z1, zch),z1), z0);
+        if (ret)
         {
-            z1 = _mm512_load_si512(str + offset);
-            ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(_mm512_xor_si512(z1, zch),z1), z0);
-            if (ret)
-            {
-                if(*((char*)str + _tzcnt_u64(ret) + offset) == ch )
-                    return (char*)str + _tzcnt_u64(ret) + offset;
-                return NULL;
-            }
-            offset += ZMM_SZ;
-        } while (vec_4_offset++ < 4);
+            if(*((char*)str + _tzcnt_u64(ret) + offset) == ch )
+                return (char*)str + _tzcnt_u64(ret) + offset;
+            return NULL;
+        }
+        offset += ZMM_SZ;
     }
 
     // Main loop to process 4 vectors at a time for larger sizes(> 512B)

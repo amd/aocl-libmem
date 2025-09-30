@@ -142,7 +142,7 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
     // page , this is to avoid crossing a page boundary, which could lead to a page fault if
     // the memory is not mapped. Here it calculates and processes the maximum number of 32-byte
     // vectors that can be handled without the risk of crossing into an adjacent memory page.
-    cnt_vec = 4 - (((uintptr_t)src + offset) & (4 * YMM_SZ - 1) >> 5);
+    cnt_vec = 4 - ((((uintptr_t)src + offset) & (4 * YMM_SZ - 1)) >> 5);
     while (cnt_vec--)
     {
         y2 = _mm256_load_si256((void *)src + offset);
