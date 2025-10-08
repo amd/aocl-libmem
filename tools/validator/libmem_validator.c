@@ -1163,11 +1163,9 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     if (ret != str2_alnd_addr)
         printf("ERROR:[RETURN] (strlen = n) Return value mismatch: expected - %p, actual - %p\n", \
                                                              str2_alnd_addr, ret);
-
     //Check if the str2 buffer was modified after 'n bytes' copy
     if (boundary_check(str2_alnd_addr, size))
         printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
-
 
     //CASE 3:validation when str1 length is less than that of 'n'(no.of bytes to be copied)
     //Generating random str1 buffer of size less than n
@@ -1214,47 +1212,72 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
         printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
     // Robust page-cross check: Only for good candidates (does NOT cross last boundary vector)
-    if (is_page_cross_candidate(size, str1_alnmnt)) {
-        void *page_buff = NULL;
-        uint32_t page_cnt = PAGE_CNT(size);
-
-        alloc_page_cross_buffer(&page_buff, page_cnt, buff);
-
-        str1_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
-        // Test case 1: strlen > n (no null terminator in source within n bytes)
+        void *page_buff;
+        uint32_t page_cnt;
+        if (setup_single_page_cross_buffer(&str1_alnd_addr, str1_alnmnt, size, buff, 0, &page_buff, &page_cnt)) {
         for (index = 0; index < size; index++) {
-            *(str1_alnd_addr + index) = 'a' + (char)(rand() % LOWER_CHARS);
+            *(str1_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
         }
-        ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
-        //validation of str2 memory
-        for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
-                                *(str1_alnd_addr + index)); index ++);
-        if (index != size)
-            printf("ERROR:[PAGE-CROSS] (strlen > n) failed for size: %lu @index:%lu" \
-                        "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
-                  size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
-        else
-            ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen > n) validation passed for size: %lu\n", size);
+
+        //case1: Null at the size
+        *(str1_alnd_addr + size) = NULL_TERM_CHAR;
+        ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size + VEC_SZ); // intentionally copy more than size bytes
+
         //validation of return value
         if (ret != str2_alnd_addr)
             printf("ERROR:[PAGE-CROSS] (strlen > n) Return value mismatch: expected - %p, actual - %p\n", \
                                                                  str2_alnd_addr, ret);
-        // Test case 2: strlen = n-1 (null terminator at end)
-        *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
-        ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
-        //validation of str2 memory
-        for (index = 0; (index < size) && (*(str2_alnd_addr + index) == \
-                                *(str1_alnd_addr + index)); index ++);
-        if (index != size)
-            printf("ERROR:[PAGE-CROSS] (strlen = n-1) failed for size: %lu @index:%lu" \
+        //Validation of str2 memory
+        if (test_strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr)) //Validate till NULL
+
+            printf("ERROR:[PAGE-CROSS] (strlen > n) validation failed for size: %lu @index:%lu" \
                         "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
                   size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
         else
-            ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen = n-1) validation passed for size: %lu\n", size);
+                ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen > n) validation passed for size: %lu\n", size);
+
+        //validation of NULL bytes in str2 after str1_len
+        for (index = size + 1; index < size + VEC_SZ; index++)
+        {
+            if (str2_alnd_addr[index] != NULL_TERM_CHAR)
+            {
+                printf("ERROR:[PAGE-CROSS] (strlen > n) NULL Validation failed at index:%lu" \
+                            " for size: %ld(strlen = %ld)\n", index, size, str1_len);
+                break;
+            }
+        }
+        if (index == size + VEC_SZ)
+            ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen > n) NULL Validation passed for size: %lu\n", size);
+
+        //case2: Null exists before size, rand()%VEC_SZ bytes should be NULL
+        null_idx = size - (rand() % VEC_SZ) % size;
+        *(str1_alnd_addr + null_idx) = NULL_TERM_CHAR;
+        ret = strncpy((char *)str2_alnd_addr, (char *)str1_alnd_addr, size + VEC_SZ); // intentionally copy more than size bytes
+
         //validation of return value
         if (ret != str2_alnd_addr)
-            printf("ERROR:[PAGE-CROSS] (strlen = n-1) Return value mismatch: expected - %p, actual - %p\n", \
+            printf("ERROR:[PAGE-CROSS] (strlen < n) Return value mismatch: expected - %p, actual - %p\n", \
                                                                  str2_alnd_addr, ret);
+        //Validation of str2 memory
+        if (test_strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr)) //Validate till NULL
+
+            printf("ERROR:[PAGE-CROSS] (strlen < n) validation failed for size: %lu @index:%lu" \
+                        "[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n", \
+                  size, index, str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
+        else
+                ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen < n) validation passed for size: %lu\n", size);
+
+        for (index = null_idx + 1; index < size + VEC_SZ; index++)
+        {
+            if (str2_alnd_addr[index] != NULL_TERM_CHAR)
+            {
+                printf("ERROR:[PAGE-CROSS] (strlen < n) NULL Validation failed at index:%lu" \
+                            " for size: %ld(strlen = %ld)\n", index, size, str1_len);
+                break;
+            }
+        }
+        if (index == size + VEC_SZ)
+            ALM_VERBOSE_LOG("[PAGE-CROSS] (strlen < n) NULL Validation passed for size: %lu\n", size);
 
         cleanup_page_cross_buffer(page_buff, page_cnt);
     }
@@ -1632,7 +1655,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
         }
         *(str1_alnd_addr + size - 1) = *(str2_alnd_addr + size - 1) = NULL_TERM_CHAR;
 
-        ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
+        ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size + VEC_SZ); //Intentionally using size + VEC_SZ
         if (ret != 0) {
             printf("ERROR:[PAGE-CROSS] Equal strings failure for str1_aln:%u str2_aln:%u size: %lu\n", str1_alnmnt, str2_alnmnt, size);
         } else {
@@ -1643,7 +1666,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
         *(str1_alnd_addr + size - 1) = 'a';
         *(str2_alnd_addr + size - 1) = 'b';
 
-        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size + VEC_SZ); //Intentionally using size + VEC_SZ
         exp_ret = (*(uint8_t *)(str1_alnd_addr + size - 1) - *(uint8_t *)(str2_alnd_addr + size - 1));
         if (ret != exp_ret) {
             printf("ERROR:[PAGE-CROSS] Different strings (str1<str2) failure for str1_aln:%u str2_aln:%u size: %lu, return_value = %d, expected = %d\n",
@@ -1652,12 +1675,27 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
             ALM_VERBOSE_LOG("[PAGE-CROSS] Different strings validation passed for size: %lu\n", size);
         }
 
-        // Test case 3: Strings longer than n (no null terminator within n bytes)
+        // Test case 3: Strings shorter than n (null terminator before n bytes)
         for (index = 0; index < size; index++) {
             *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'c' + rand() % LOWER_CHARS);
         }
 
-        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size);
+        *(str1_alnd_addr + size - (rand() % VEC_SZ) % size) = NULL_TERM_CHAR; //Randomly place NULL within last vector
+        *(str2_alnd_addr + size - (rand() % VEC_SZ) % size) = NULL_TERM_CHAR; //Randomly place NULL within last vector
+
+        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size + VEC_SZ); //Intentionally using size + VEC_SZ
+        if (ret != test_strcmp((char *)str1_alnd_addr, (char *)str2_alnd_addr)) {
+            printf("ERROR:[PAGE-CROSS] Short strings failure for str1_aln:%u str2_aln:%u size: %lu\n", str1_alnmnt, str2_alnmnt, size);
+        } else {
+            ALM_VERBOSE_LOG("[PAGE-CROSS] Short strings validation passed for size: %lu\n", size);
+        }
+
+        //Test case 4: Strings longer than n (no null terminator before n bytes)
+        for (index = 0; index < size; index++) {
+            *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'c' + rand() % LOWER_CHARS);
+        }
+        ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size); //Exact size
+        //Expecting 0 as both strings are equal till size
         if (ret != 0) {
             printf("ERROR:[PAGE-CROSS] Long strings failure for str1_aln:%u str2_aln:%u size: %lu\n", str1_alnmnt, str2_alnmnt, size);
         } else {
