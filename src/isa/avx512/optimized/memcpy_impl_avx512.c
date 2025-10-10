@@ -214,7 +214,7 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst,
             //load the last VEC to handle alignment not multiple of the vec.
             z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
 
-            if (((size_t)dst & (ZMM_SZ-1)) == ((size_t)src & (ZMM_SZ-1)))
+            if (((size_t)dst & (ZMM_SZ - 1)) == ((size_t)src & (ZMM_SZ - 1)))
             {
                 size = __aligned_load_and_store_4zmm_vec_loop_bkwd_pftch(dst, src, size - off, 4 * ZMM_SZ);
             }
@@ -257,9 +257,9 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst,
             if (size <= 26 * 1024)
             {
                 if (((size_t)dst & (ZMM_SZ-1)) == ((size_t)src & (ZMM_SZ-1)))
-                    offset = __aligned_load_and_store_4zmm_vec_loop_pftch(dst, src, size - offset, offset);
+                    offset = __aligned_load_and_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
                 else
-                    offset = __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - offset, offset);
+                    offset = __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
                 // remaining data to be copied
                 uint16_t rem_data = size - offset;
 
@@ -282,23 +282,21 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst,
                         __load_store_ble_zmm_vec(dst + offset, src + offset, rem_data);
                 }
             }
-            // rep-movs
-            else if (size <= (zen_info.zen_cache_info.l2_per_core))
-            {
-                __erms_movsb(dst + offset, src + offset, size - offset);
-            }
             else //Temporal stores with 8zmm loops
             {
-                if (((size_t)dst & (ZMM_SZ-1)) == ((size_t)src & (ZMM_SZ-1)))
-                    offset = __aligned_load_and_store_8zmm_vec_loop_pftch(dst, src, size - offset, offset);
+                if (((size_t)dst & (ZMM_SZ - 1)) == ((size_t)src & (ZMM_SZ - 1)))
+                {
+                    offset = __aligned_load_and_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
+                }
                 else
-                    offset = __unaligned_load_aligned_store_8zmm_vec_loop_pftch(dst, src, size - offset, offset);
+                    offset = __unaligned_load_aligned_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
 
                 // remaining data to be copied
                 uint16_t rem_data = size - offset;
 
                 // data vector blocks to be copied
                 uint8_t rem_vecs = (rem_data >> 6) + !!(rem_data & (ZMM_SZ - 1));
+
                 // load-store blocks based on leftout vectors
                 switch (rem_vecs)
                 {
@@ -321,7 +319,6 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst,
                     case 1:
                         // handle the tail with upto 1xVEC load-stores
                         __load_store_ble_zmm_vec(dst + offset, src + offset, rem_data);
-                        //__load_store_zmm_vec(dst, src, size - ZMM_SZ);
                 }
             }
             //store the first VEC
@@ -400,3 +397,4 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst,
 #endif
 
 #endif // MEMCPY_IMPL_AVX512_H
+
