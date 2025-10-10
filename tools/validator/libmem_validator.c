@@ -2551,7 +2551,7 @@ int main(int argc, char **argv)
         }
     }
 
-    for (uint16_t index = 0; index <= (uint16_t)(sizeof(supp_funcs)/sizeof(supp_funcs[0])); index++)
+    for (uint16_t index = 0; index < (uint16_t)(sizeof(supp_funcs)/sizeof(supp_funcs[0])); index++)
     {
         if (!test_strcmp(supp_funcs[index].func_name, argv[1]))
         {
