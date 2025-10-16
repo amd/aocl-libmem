@@ -1506,6 +1506,20 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
         printf("ERROR:[VALIDATION] Matching failure for str1_aln:%u str2_aln:%u size: %lu,"\
                                     " return_value = %d\n",str1_alnmnt,str2_alnmnt, size, ret);
     }
+
+    //passing additional VEC_SZ bytes without NULL, but has mismatching byte after size
+    //to check if function is not going beyond 'size' bytes
+    *(str1_alnd_addr + size - 1) = ((char) 'a' + rand() % LOWER_CHARS);
+    *(str2_alnd_addr + size - 1) = 'X'; //mismatching UPPER case letter
+    ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size + VEC_SZ); // intentionally compare more than size bytes
+    exp_ret = (*(uint8_t *)(str1_alnd_addr + size - 1) - \
+                        *(uint8_t *)(str2_alnd_addr + size - 1));
+    if (ret != exp_ret)
+    {
+        printf("ERROR:[VALIDATION] Matching failure without NULL for str1_aln:%u str2_aln:%u size: %lu,"\
+                                    " return_value = %d exp=%d \n",str1_alnmnt,str2_alnmnt, size, ret, exp_ret);
+    }
+
     else
     {
         ALM_VERBOSE_LOG("Validation passed for matching memory of size: %lu\n", size);
@@ -1518,7 +1532,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
        //Case2(a): s1 < s2
            *(str1_alnd_addr + index) = '$';
 
-       ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size); // -ve value expected
+       ret = strncmp((char *)str1_alnd_addr, (char *)str2_alnd_addr, size + VEC_SZ); // -ve value expected
        exp_ret = (*(uint8_t *)(str1_alnd_addr + index) - \
                         *(uint8_t *)(str2_alnd_addr + index));
 
@@ -1530,7 +1544,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
        }
 
        //Case2(b): s1 > s2
-       ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size); // +ve value expected
+       ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size + VEC_SZ); // +ve value expected
        exp_ret = (*(uint8_t *)(str2_alnd_addr + index) - \
                         *(uint8_t *)(str1_alnd_addr + index));
        if (ret != exp_ret)
