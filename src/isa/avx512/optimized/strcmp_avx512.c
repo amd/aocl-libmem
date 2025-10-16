@@ -29,12 +29,21 @@
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
 
-/* This function is an optimized version of strcmp using AVX-512 instructions.
+/* This function is an optimized version of strcmp and strncmp using AVX-512 instructions.
 It compares the two strings str1 and str2 and returns returns an integer
 indicating the result of the comparison. */
 
+#ifdef STRNCMP
+static inline int __attribute__((flatten)) _strncmp_avx512(const char *str1, const char *str2, size_t size)
+#else
 static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, const char *str2)
+#endif
 {
+#ifdef STRNCMP
+    if (unlikely(size == 0))
+        return 0;
+#endif
+
     size_t offset1, offset2, offset;
     __m512i z0, z1, z2, z3, z4, z_mask;
     uint64_t  cmp_idx, ret, mask;
@@ -63,8 +72,16 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
         if (ret)
         {
             cmp_idx = _tzcnt_u64(ret);
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+#ifdef STRNCMP
+        else if (size <= (ZMM_SZ - offset))
+            return 0;
+#endif
     }
     // If the strings are not close to the end of a memory page, load the first 64 bytes
     else
@@ -76,8 +93,16 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
         if (ret)
         {
             cmp_idx = _tzcnt_u64(ret);
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+#ifdef STRNCMP
+        else if (size <= ZMM_SZ)
+            return 0;
+#endif
         else
         {
             offset1 = (uintptr_t)str1 & (ZMM_SZ - 1);
@@ -89,9 +114,13 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
     offset = ZMM_SZ - offset;
 
     // Alignement of both the strings is same
-    if (offset1 == offset2)
+    if (unlikely(offset1 == offset2))
     {
+#ifdef STRNCMP
+        while (offset < (size - 4 * ZMM_SZ))
+#else
         while (1)
+#endif
         {
             // Load 64 bytes from each string and compare till we find diff/null
             z1 = _mm512_load_si512(str1 + offset);
@@ -125,7 +154,27 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
             if (ret)
                 break;
             offset += ZMM_SZ;
-        }
+#ifdef STRNCMP
+            if (size <= offset)
+                return 0;
+#endif
+        } //end of while for 4xVEC
+        while (1)
+        {
+            z1 = _mm512_load_si512(str1 + offset);
+            z2 = _mm512_load_si512(str2 + offset);
+            //Check for NULL and mismatch
+            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+            if (ret)
+            {
+                goto return_val;
+            }
+            offset += ZMM_SZ;
+#ifdef STRNCMP
+            if (size <= offset)
+                return 0;
+#endif
+        } // end of while for 1xVEC
     }
     // Handle the case where alignments of the strings are different
     else
@@ -145,7 +194,11 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
         uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
         while (1)
         {
+#ifdef STRNCMP
+            while ((vecs_in_page >= 4) && (offset < (size - 4 * ZMM_SZ)))
+#else
             while (vecs_in_page >= 4)
+#endif
             {
                 z1 = _mm512_load_si512(aligned_str + offset);
                 z2 = _mm512_loadu_si512(unaligned_str + offset);
@@ -181,10 +234,13 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
                         }
                     }
                 }
-                cmp_idx = _tzcnt_u64(ret) + offset;
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-            while (vecs_in_page --)
+                goto return_val;
+            } //end of while
+#ifdef STRNCMP
+            if (size <= offset)
+                return 0;
+#endif
+            while (vecs_in_page--)
             {
                 z1 = _mm512_load_si512(aligned_str + offset);
                 z2 = _mm512_loadu_si512(unaligned_str + offset);
@@ -192,33 +248,40 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
                 ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
                 if (ret)
                 {
-                    cmp_idx = _tzcnt_u64(ret) + offset;
-                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+                    goto return_val;
                 }
                 offset += ZMM_SZ;
+#ifdef STRNCMP
+                if (size <= offset)
+                    return 0;
+#endif
             }
+            // Handle the case where we are crossing a page boundary for the unaligned string
+            z_mask = _mm512_set1_epi8(0xff);
+            mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
 
-            // align unaligned_str to next lower ZMM boundary
-            z1 = _mm512_load_si512((char *)(((uintptr_t)unaligned_str + offset) & (-ZMM_SZ)));
-            if (_mm512_cmpeq_epu8_mask(z1, z0))
+            z1 =  _mm512_mask_loadu_epi8(z_mask, mask, aligned_str + offset);
+            z2 =  _mm512_mask_loadu_epi8(z_mask, mask, unaligned_str + offset);
+
+            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+
+            if (ret)
             {
-                z_mask = _mm512_set1_epi8(0xff);
-                mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
-
-                z1 =  _mm512_mask_loadu_epi8(z_mask ,mask, aligned_str + offset);
-                z2 =  _mm512_mask_loadu_epi8(z_mask ,mask, unaligned_str + offset);
-
-                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-                if (ret)
-                {
-                    cmp_idx = _tzcnt_u64(ret) + offset;
-                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-                }
+                goto return_val;
             }
-            vecs_in_page  += PAGE_SZ/ZMM_SZ;
+#ifdef STRNCMP
+            if (size <= (offset + (ZMM_SZ - ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1)))))
+                return 0;
+#endif
+
+            vecs_in_page  += PAGE_SZ / ZMM_SZ;
         } //end of top level while
     }
+return_val:
     cmp_idx = _tzcnt_u64(ret) + offset;
+#ifdef STRNCMP
+    if (cmp_idx >= size)
+        return 0;
+#endif
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }

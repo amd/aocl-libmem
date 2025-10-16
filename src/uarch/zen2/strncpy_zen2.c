@@ -22,16 +22,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef STRNCPY_AVX2
+#define STRNCPY_AVX2
+#include "../../isa/avx2/optimized/strcpy_avx2.c"
 
-#include "../../isa/avx2/optimized/strncpy_avx2.c"
+#ifdef STRNCPY_AVX2
+#undef STRNCPY_AVX2
+#endif
 
 HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen2(char *dst, const char *src, size_t size)
 {
     LOG_INFO("\n");
-    return _strncpy_avx2(dst, src, size);
+       return _strncpy_avx2(dst, src, size);
 }
 
 #ifndef ALMEM_DYN_DISPATCH
 char *strncpy(char *, const char *, size_t) __attribute__((weak,
                         alias("__strncpy_zen2")));
+#endif
 #endif

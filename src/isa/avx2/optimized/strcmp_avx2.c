@@ -132,9 +132,16 @@ static inline uint8_t _strcmp_ble_ymm(const char *str1, const char *str2, uint8_
     return YMM_SZ;
 }
 
-
+#ifdef STRNCMP
+static inline int __attribute__((flatten)) _strncmp_avx2(const char *str1, const char *str2, size_t size)
+#else
 static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const char *str2)
+#endif
 {
+#ifdef STRNCMP
+    if (unlikely(size == 0))
+        return 0;
+#endif
     size_t offset1, offset2, offset, cmp_idx =0;
     __m256i y0, y1, y2, y3, y4, y_cmp, y_null;
     int32_t  ret;
@@ -158,12 +165,24 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
             if (ret)
             {
                 cmp_idx = _tzcnt_u32(ret);
+#ifdef STRNCMP
+                if (cmp_idx >= size)
+                    return 0;
+#endif
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
+#ifdef STRNCMP
+            else if (size <= (YMM_SZ - offset))
+                return 0;
+#endif
             cmp_idx = _strcmp_ble_ymm(str1 + YMM_SZ, str2 + YMM_SZ, YMM_SZ - offset);
             if (cmp_idx != YMM_SZ)
             {
                 cmp_idx += YMM_SZ;
+#ifdef STRNCMP
+                if (cmp_idx >= size)
+                    return 0;
+#endif
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
         }
@@ -172,8 +191,16 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
             cmp_idx = _strcmp_ble_ymm(str1, str2, (2 * YMM_SZ) - offset);
             if (cmp_idx != YMM_SZ)
             {
+#ifdef STRNCMP
+                if (cmp_idx >= size)
+                    return 0;
+#endif
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
+#ifdef STRNCMP
+            else if (size <= (2 * YMM_SZ - offset))
+                return 0;
+#endif
         }
     }
     else
@@ -186,8 +213,18 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
         if (ret)
         {
             cmp_idx = _tzcnt_u32(ret);
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+#ifdef STRNCMP
+        else if (size <= YMM_SZ)
+        {
+            return 0;
+        }
+#endif
 
         y3 =  _mm256_loadu_si256((void *)str1 + YMM_SZ);
         y4 =  _mm256_loadu_si256((void *)str2 + YMM_SZ);
@@ -197,9 +234,18 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
         if (ret)
         {
             cmp_idx = _tzcnt_u32(ret) + YMM_SZ;
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
-
+#ifdef STRNCMP
+        else if (size <= 2 * YMM_SZ)
+        {
+            return 0;
+        }
+#endif
         offset1 = (uintptr_t)str1 & ((2 * YMM_SZ) - 1);
         offset2 = (uintptr_t)str2 & ((2 * YMM_SZ) - 1);
         offset = (offset1 >= offset2) ? offset1 : offset2;
@@ -208,9 +254,13 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
     offset = (2 * YMM_SZ) - offset;
 
     // Alignement of both the strings is same
-    if (offset1 == offset2)
+    if (unlikely(offset1 == offset2))
     {
-        while(1)
+#ifdef STRNCMP
+        while (offset < (size - 4 * YMM_SZ))
+#else
+        while (1)
+#endif
         { //sure that no NUll in the next
             y1 =  _mm256_load_si256((void *)str1 + offset);
             y2 =  _mm256_load_si256((void *)str2 + offset);
@@ -251,7 +301,26 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
             if (ret)
                 break;
             offset+=YMM_SZ;
-        }
+#ifdef STRNCMP
+            if (offset >= size)
+                return 0;
+#endif
+        } // end of while for 4xVEC
+        while (1)
+        {
+            y1 =  _mm256_load_si256((void *)str1 + offset);
+            y2 =  _mm256_load_si256((void *)str2 + offset);
+            y_cmp = _mm256_cmpeq_epi8(y1, y2);
+            y_null = _mm256_cmpgt_epi8(y1, y0);
+            ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
+            if (ret)
+                break;
+            offset += YMM_SZ;
+#ifdef STRNCMP
+            if (size <= offset)
+                return 0;
+#endif
+        } // end of while for 1xVEC
     }
     else
     {
@@ -270,7 +339,11 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
         uint16_t vecs_in_page = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 5;
         while (1)
         {
+#ifdef STRNCMP
+            while ((vecs_in_page >= 4) && (offset < (size - 4 * YMM_SZ)))
+#else
             while (vecs_in_page >= 4)
+#endif
             {
                 y1 = _mm256_load_si256((void *)aligned_str + offset);
                 y2 = _mm256_loadu_si256((void *)unaligned_str + offset);
@@ -315,6 +388,10 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
                     }
                 }
                 cmp_idx = _tzcnt_u32(ret) + offset;
+#ifdef STRNCMP
+                if (cmp_idx >= size)
+                    return 0;
+#endif
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
             while (vecs_in_page --)
@@ -327,25 +404,42 @@ static inline int __attribute__((flatten)) _strcmp_avx2(const char *str1, const 
                 if (ret)
                 {
                     cmp_idx = _tzcnt_u32(ret) + offset;
+#ifdef STRNCMP
+                    if (cmp_idx >= size)
+                        return 0;
+#endif
                     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
                 }
                 offset += YMM_SZ;
+#ifdef STRNCMP
+                if (size <= offset)
+                    return 0;
+#endif
             }
 
-            y1 = _mm256_load_si256((__m256i*)((uintptr_t)(unaligned_str + offset) & (-YMM_SZ)));
-            if (_mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0)))
+            // Handle the case where we are crossing a page boundary for the unaligned string
+            uint32_t mask_offset = (uintptr_t)(unaligned_str + offset) & (YMM_SZ - 1);
+            cmp_idx = _strcmp_ble_ymm(aligned_str + offset, unaligned_str + offset, YMM_SZ - mask_offset);
+            if (cmp_idx != YMM_SZ)
             {
-                uint32_t mask_offset = (uintptr_t)(unaligned_str + offset) & (YMM_SZ - 1);
-                cmp_idx = _strcmp_ble_ymm(aligned_str + offset, unaligned_str + offset, YMM_SZ - mask_offset);
-                if (cmp_idx != YMM_SZ)
-                {
-                    cmp_idx += offset;
-                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-                }
+                cmp_idx += offset;
+#ifdef STRNCMP
+                if (cmp_idx >= size)
+                    return 0;
+#endif
+                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
+#ifdef STRNCMP
+            if (size <= (offset + YMM_SZ - mask_offset))
+                return 0;
+#endif
             vecs_in_page += PAGE_SZ / YMM_SZ;
         }
     }
     cmp_idx = _tzcnt_u32(ret) + offset;
+#ifdef STRNCMP
+    if (cmp_idx >= size)
+        return 0;
+#endif
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }

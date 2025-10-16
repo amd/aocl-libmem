@@ -26,14 +26,6 @@
 #include "strlen_avx2.c"
 #include "strchr_avx2.c"
 
-static inline size_t transition_index(const char *needle) {
-    size_t idx = 0;
-    while (needle[idx + 0] != STR_TERM_CHAR && needle[idx] == needle[idx + 1]) {
-        idx++;
-    }
-    return (needle[idx + 1] == STR_TERM_CHAR) ? 0 : idx;
-}
-
 static inline int  cmp_needle_ble_ymm(const char *str1, const char *str2, uint8_t size)
 {
     __m128i x0, x1, x2, x3, x4, x_cmp, x_null;
@@ -120,6 +112,7 @@ static inline int  cmp_needle_ble_ymm(const char *str1, const char *str2, uint8_
     }
     return 0;
 }
+
 
 /* This function compares two strings using AVX2 vector instructions.
    It returns 0 if the strings are equal up to the specified size, or -1 if they differ */
@@ -259,8 +252,6 @@ static inline int cmp_needle_page_safe_avx2(const char *str1, const char *str2, 
     return -1;
 }
 
-
-
 static inline int cmp_needle_page_cross_avx2(const char *str1, const char *str2, size_t size, size_t safe_bytes) {
     size_t offset = 0;
     if (safe_bytes > 0) {
@@ -292,7 +283,7 @@ static inline void load_and_check_first_block_avx2(const char* haystack,
     size_t offset = (uintptr_t)haystack & (YMM_SZ - 1);
     int check_unaligned = 1;
     
-    // Check for potential read beyond the page boundary (same logic as transition index)
+    // Check for potential read beyond the page boundary
     if (unlikely((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)haystack))) {
         // Use aligned load from previous address to prevent reading beyond page boundary
         *y1 = _mm256_loadu_si256((const __m256i*)(haystack - offset));
@@ -351,44 +342,6 @@ static inline void apply_filter_avx2(const char* haystack, size_t offset, size_t
     }
 }
 
-
-/* Full search processing for transition index */
-static inline char* process_full_transition_search_avx2(const char* haystack, const char* needle, 
-                                                       size_t needle_len, size_t base_offset,
-                                                       size_t transit_idx, uint32_t match_mask, uint32_t null_mask) {
-    uint32_t null_idx = 0;
-    
-    // Handle null terminator bounds
-    if (null_mask) {
-        null_idx = _tzcnt_u32(null_mask);
-        uint32_t first_match_idx = _tzcnt_u32(match_mask);
-        
-        // If the first match is beyond the null character, return NULL  
-        if (first_match_idx > null_idx)
-            return NULL;
-        // Update the match mask to exclude matches beyond the null character
-        match_mask &= ((1U << (null_idx + 1)) - 1);
-    }
-    
-    // Process each candidate match
-    while (match_mask) {
-        uint32_t match_idx = _tzcnt_u32(match_mask);
-        
-        // Check if the following character in the haystack matches
-        // the corresponding character in the needle  
-        if ((*(haystack + base_offset + match_idx + transit_idx + 1) == *(needle + transit_idx + 1))) {
-            // Compare the rest of the needle with the haystack
-            if (cmp_needle_avx2(haystack, needle, base_offset + match_idx, needle_len))
-                return (char*)(haystack + base_offset + match_idx);
-        }
-        
-        // Clear the lowest set bit to move to next match
-        match_mask = _blsr_u32(match_mask);
-    }
-    
-    return NULL;
-}
-
 /* Broadcasting approach for smaller needles (≤ 2KB) */
 static inline char * _strstr_avx2_broadcasting(const char* haystack, const char* needle, size_t needle_len) {
     __m256i needle_first = _mm256_set1_epi8(needle[0]);
@@ -403,7 +356,7 @@ static inline char * _strstr_avx2_broadcasting(const char* haystack, const char*
     uint32_t null_idx;
     uint32_t match_mask = 0;
     
-    // Check for potential read beyond the page boundary (same logic as transition index)
+    // Check for potential read beyond the page boundary 
     if (unlikely((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)haystack))) {
         // Use aligned load from previous address to prevent reading beyond page boundary
         y1 = _mm256_loadu_si256((const __m256i*)(haystack - offset));
@@ -432,7 +385,7 @@ static inline char * _strstr_avx2_broadcasting(const char* haystack, const char*
     if (null_mask && (null_idx < needle_len))
         return NULL;
     
-    // Smart filtering with unified logic
+    // Apply filtering
     if (match_mask && (!null_mask || null_idx > 1)) {
         apply_filter_avx2(haystack, 0, needle_len, needle_second, needle_last, &match_mask);
     }
@@ -467,126 +420,6 @@ static inline char * _strstr_avx2_broadcasting(const char* haystack, const char*
         
         offset += YMM_SZ;
     }
-}
-
-
-/* Transition index approach for larger needles (> 2KB) */
-static inline char * _strstr_avx2_transition_index(const char* haystack, const char* needle, size_t needle_len) {
-    // Calculate the transition index for the needle
-    size_t transit_idx = transition_index(needle);
-    
-    // Set up vectors with repeated characters from the needle at the transition index
-    __m256i needle_char_t0 = _mm256_set1_epi8(needle[transit_idx]);
-    __m256i needle_char_t1 = _mm256_set1_epi8(needle[transit_idx + 1]);
-    
-    // Initialize a zeroed AVX2 register for comparisons against null terminators
-    __m256i y0 = _mm256_setzero_si256();
-    
-    // Calculate the offset based on the alignment of the haystack pointer
-    size_t offset = (uintptr_t)haystack & (YMM_SZ - 1);
-    int check_unaligned = 1;
-    __m256i y1;
-    uint32_t null_mask = 0, match_mask = 0;
-    uint32_t null_idx = 0;
-    
-    // Check for potential read beyond the page boundary
-    if (unlikely((PAGE_SZ - YMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)haystack))) {
-        // Use masked load to prevent reading beyond page boundary
-        y1 = _mm256_loadu_si256((const __m256i*)(haystack - offset));
-        // Create masks for null characters and matches
-        __m256i null_cmp = _mm256_cmpeq_epi8(y0, y1);
-        __m256i match_cmp = _mm256_cmpeq_epi8(needle_char_t0, y1);
-        
-        // Extract masks and shift by offset to get correct positions
-        null_mask = _mm256_movemask_epi8(null_cmp) >> offset;
-        match_mask = _mm256_movemask_epi8(match_cmp) >> offset;
-        
-        // Set flag to skip unaligned check
-        check_unaligned = 0;
-    }
-    
-    // Unaligned check is needed, if no page cross
-    if (check_unaligned) {
-        y1 = _mm256_loadu_si256((const __m256i*)haystack);
-        null_mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
-        match_mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(needle_char_t0, y1));
-    }
-    
-    // Find the first null character if null_mask is non-zero
-    if (null_mask) {
-        null_idx = _tzcnt_u32(null_mask);
-        // If null character is before the transition index, return NULL
-        if (null_idx <= transit_idx)
-            return NULL;
-    }
-
-    // If there is a match
-    if (match_mask) {
-        if (null_mask) {
-            uint32_t match_idx = _tzcnt_u32(match_mask);
-            // If the match is beyond the null character, return NULL
-            if (match_idx > null_idx)
-                return NULL;
-            // Update the match mask to exclude matches beyond the null character
-            match_mask &= (null_mask ^ (null_mask - 1));
-        }
-        
-        // Loop until match_mask is clear
-        do {
-            uint32_t match_idx = _tzcnt_u32(match_mask);
-            // Check if the following character in the haystack matches
-            // the corresponding character in the needle
-            if ((*(haystack + match_idx + transit_idx + 1) == *(needle + transit_idx + 1))) {
-                // Compare the rest of the needle with the haystack
-                if (cmp_needle_avx2(haystack, needle, match_idx, needle_len))
-                    return (char*)(haystack + match_idx);
-            }
-            // Clear the LOWEST SET BIT
-            match_mask = _blsr_u32(match_mask);
-        } while (match_mask);
-    }
-
-    // If there is a null character in the checked part, return NULL
-    if (null_mask)
-        return NULL;
-
-    // Adjust the offset to align further loads
-    offset = YMM_SZ - offset;
-
-    // Loop until the end of the haystack or a null character is found
-    while (!null_mask) {
-        __m256i y1 = _mm256_loadu_si256((const __m256i*)(haystack + offset - 1));
-        __m256i y2;
-        if ((((uintptr_t)haystack + offset) & (PAGE_SZ - 1)) > (PAGE_SZ - YMM_SZ)) {
-            y2 = _mm256_setzero_si256();
-        } else {
-            y2 = _mm256_loadu_si256((const __m256i*)(haystack + offset));
-        }
-        
-        // Create masks for matching the first and second characters of the needle
-        match_mask = _mm256_movemask_epi8(_mm256_and_si256(_mm256_cmpeq_epi8(y1, needle_char_t0), _mm256_cmpeq_epi8(y2, needle_char_t1)));
-        null_mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y2, y0));
-        uint32_t null_pfx_mask = (null_mask ^ (null_mask - 1));
-        // Update the match mask to exclude matches beyond the null character
-        match_mask = match_mask & null_pfx_mask;
-        
-        // Occurrence of NEEDLE's first char
-        while (match_mask) {
-            uint32_t match_idx = _tzcnt_u32(match_mask);
-            if ((match_idx + offset) >= (transit_idx + 1)) {
-                match_idx += offset - transit_idx - 1;
-                // If the needle matches, return the start of the match
-                if (cmp_needle_avx2(haystack, needle, match_idx, needle_len))
-                    return (char*)(haystack + match_idx);
-            }
-            // Clear the LOWEST SET BIT
-            match_mask = _blsr_u32(match_mask);
-        }
-        // Move to the next part of the haystack
-        offset += YMM_SZ;
-    }
-    
-    return NULL;
 }
 
 /* This function is an optimized version of strstr using AVX2 instructions.

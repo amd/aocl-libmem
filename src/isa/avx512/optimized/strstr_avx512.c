@@ -26,6 +26,7 @@
 #include "strlen_avx512.c"
 #include "strchr_avx512.c"
 
+
 /* This function compares two strings using AVX-512 vector instructions.
    It returns 0 if the strings are equal up to the specified size, or -1 if they differ */
 static inline int cmp_needle_page_safe(const char *str1, const char *str2, size_t size)
@@ -34,11 +35,12 @@ static inline int cmp_needle_page_safe(const char *str1, const char *str2, size_
     __m512i z1, z2, z3, z4, z5, z6, z7, z8;
     
     if (likely(size <= ZMM_SZ)) {
-        __mmask64 mask = _bzhi_u64(UINT64_MAX, size);
+         __mmask64 mask = _bzhi_u64(UINT64_MAX, size);
         z1 = _mm512_maskz_loadu_epi8(mask, str1);
         z2 = _mm512_maskz_loadu_epi8(mask, str2);
-        return !!(_mm512_cmpneq_epu8_mask(z1, z2));
+        return !!(_mm512_cmpneq_epu8_mask(z1, z2) & mask);
     }
+  
     if (likely(size <= 2 * ZMM_SZ))
     {
 
@@ -130,72 +132,84 @@ static inline int cmp_needle_page_safe(const char *str1, const char *str2, size_
     return -1;  
 }
 
-// Handles page boundary, uses head/tail logic
+// Handles page boundary, uses head/tail logic 
 static inline int cmp_needle_page_cross(const char *str1, const char *str2, size_t size, size_t safe_bytes) {
     size_t offset = 0;
-    // Compare initial page-crossing region with masked loads
-    if (safe_bytes > 0) {
-        __mmask64 mask = _bzhi_u64(UINT64_MAX, safe_bytes);
-        __m512i z1 = _mm512_maskz_loadu_epi8(mask, str1);
-        __m512i z2 = _mm512_maskz_loadu_epi8(mask, str2);
-        if (_mm512_cmpneq_epu8_mask(z1, z2)) return -1;
-        offset = safe_bytes;
+    
+    // Masked loads till it is ZMM_SZ * 4 aligned to be page safe in cmp_needle_page_safe.
+    while (offset < safe_bytes) {
+        size_t safe_offset = safe_bytes - offset;
+        if (safe_offset > ZMM_SZ) safe_offset = ZMM_SZ;
+        
+        __mmask64 mask = (safe_offset >= ZMM_SZ) ? UINT64_MAX : ((1ULL << safe_offset) - 1);
+        __m512i z1 = _mm512_maskz_loadu_epi8(mask, str1 + offset);
+        __m512i z2 = _mm512_maskz_loadu_epi8(mask, str2 + offset);
+        if (_mm512_cmpneq_epu8_mask(z1, z2) & mask) return -1;
+        
+        offset += safe_offset;
     }
-    // Use full needle compare for the remainder
+    
+    // For the rest, check again if tail is in page boundary
     size_t tail = size - offset;
     if (tail > 0) {
-        int cmp = cmp_needle_page_safe(str1 + offset, str2 + offset, tail);
-        if (cmp) return -1;
+        size_t tail_offset1 = PAGE_SZ - ((uintptr_t)(str1 + offset) & (PAGE_SZ - 1));
+        size_t tail_offset2 = PAGE_SZ - ((uintptr_t)(str2 + offset) & (PAGE_SZ - 1));
+        size_t tail_safe_bytes = (tail_offset1 < tail_offset2) ? tail_offset1 : tail_offset2;
+
+        if (tail_safe_bytes >= tail) {
+            return cmp_needle_page_safe(str1 + offset, str2 + offset, tail);
+        } else {
+            return cmp_needle_page_cross(str1 + offset, str2 + offset, tail, tail_safe_bytes);
+        }
     }
     return 0;
 }
 
 static inline int cmp_needle_avx512(const char *haystack, const char *needle, 
                                             size_t hay_idx, size_t needle_len)
-{
-    size_t bytes_to_page_end = PAGE_SZ - ((uintptr_t)(haystack + hay_idx) & (PAGE_SZ - 1));
-    if (bytes_to_page_end < needle_len)
-        return cmp_needle_page_cross(haystack + hay_idx, needle, needle_len, bytes_to_page_end) == 0;
-    // Page safe compare for remaining
+{    
+    // Bytes to page end for both haystack and needle
+    size_t offset1 = PAGE_SZ - ((uintptr_t)(haystack + hay_idx) & (PAGE_SZ - 1));
+    size_t offset2 = PAGE_SZ - ((uintptr_t)needle & (PAGE_SZ - 1));
+    
+    size_t safe_bytes = (offset1 < offset2) ? 
+                        offset1 : offset2;
+
+    // Page boundary handling
+    if (safe_bytes < needle_len) {
+        // For 4*ZMM_SZ processing in cmp_needle_page_safe
+        if (needle_len > 4 * ZMM_SZ && safe_bytes >= 4 * ZMM_SZ) {
+            safe_bytes = (safe_bytes >> 8) << 8;  // Align to 4*ZMM_SZ
+        } else if (safe_bytes >= ZMM_SZ) {
+            safe_bytes = (safe_bytes >> 6) << 6;  // Align to ZMM_SZ
+        }
+        
+        return cmp_needle_page_cross(haystack + hay_idx, needle, needle_len, safe_bytes) == 0;
+    }
     return cmp_needle_page_safe(haystack + hay_idx, needle, needle_len) == 0;
 }
+
 
 /* Page check for initial block load and null check */
 static inline void load_and_check_first_block(const char* haystack, size_t offset, 
                                              __m512i* z1, __mmask64* null_mask, uint64_t* null_idx)
 {
-    // Branch-free page boundary check and load
-    int needs_masked_load = (PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)haystack);
-    
-    if (unlikely(needs_masked_load)) {
-        __m512i z7 = _mm512_set1_epi8(0xff);
+
+    if (unlikely((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)haystack))) {
+        __m512i z_mask = _mm512_set1_epi8(0xff);
         __mmask64 haystack_load_mask = UINT64_MAX >> offset;
-        *z1 = _mm512_mask_loadu_epi8(z7, haystack_load_mask, haystack);
+        *z1 = _mm512_mask_loadu_epi8(z_mask, haystack_load_mask, haystack);
+        __m512i z0 = _mm512_setzero_si512();
+        *null_mask = _mm512_cmpeq_epi8_mask(*z1, z0) & haystack_load_mask;
+        *null_idx = *null_mask ? _tzcnt_u64(*null_mask) : ZMM_SZ;
     } else {
         *z1 = _mm512_loadu_si512((void*)haystack);
-    }
-    
-    // Check for null terminator
-    __m512i z0 = _mm512_setzero_si512();
-    *null_mask = _mm512_cmpeq_epi8_mask(*z1, z0);
-    *null_idx = *null_mask ? _tzcnt_u64(*null_mask) : ZMM_SZ;
-}
 
-/* Full search */
-static inline char* process_full_search(const char* haystack, const char* needle, 
-                                               size_t needle_len, size_t base_offset,
-                                               __mmask64 match_mask, __mmask64 null_mask)
-{
-    // Null boundary check
-    match_mask &= null_mask ? (null_mask ^ (null_mask - 1)) : UINT64_MAX;
-    
-    while (match_mask) {
-        uint64_t match_idx = _tzcnt_u64(match_mask);
-        if (cmp_needle_avx512(haystack, needle, match_idx + base_offset, needle_len))
-            return (char*)(haystack + match_idx + base_offset);
-        match_mask = _blsr_u64(match_mask);
+        // Check for null terminator in all bytes
+        __m512i z0 = _mm512_setzero_si512();
+        *null_mask = _mm512_cmpeq_epi8_mask(*z1, z0);
+        *null_idx = *null_mask ? _tzcnt_u64(*null_mask) : ZMM_SZ;
     }
-    return NULL;
 }
 
 /* Filtering function */
@@ -214,7 +228,7 @@ static inline void apply_filter(const char *haystack, size_t offset, size_t need
     }
     
     // For last character filter, be very conservative for large needles
-    if (needle_len <= 512 &&  bytes_to_page_end > (needle_len + ZMM_SZ)) {
+    if (needle_len <= 512 && bytes_to_page_end > (needle_len + ZMM_SZ)) {
         // Only use last character filter for small needles with plenty of page space
         uintptr_t last_ptr = haystack_ptr + needle_len - 1;
         __m512i z_last = _mm512_loadu_si512((const void *)last_ptr);
@@ -226,8 +240,8 @@ static inline void apply_filter(const char *haystack, size_t offset, size_t need
 static inline char * _strstr_avx512_broadcasting(const char* haystack, const char* needle, size_t needle_len)
 {
     __m512i needle_first = _mm512_set1_epi8(needle[0]);
-    __m512i needle_second = _mm512_set1_epi8(needle[1]);  // Back to second char for safety
-    __m512i needle_last = _mm512_set1_epi8(needle[needle_len - 1]);  // Hoist last char broadcast
+    __m512i needle_second = _mm512_set1_epi8(needle[1]);
+    __m512i needle_last = _mm512_set1_epi8(needle[needle_len - 1]);
     
     size_t offset = (uintptr_t)haystack & (ZMM_SZ - 1);
     
@@ -242,17 +256,32 @@ static inline char * _strstr_avx512_broadcasting(const char* haystack, const cha
     if (null_mask && (null_idx < needle_len))
         return NULL;
     
-    // Process first block matches
+    // Process first block matches 
     __mmask64 match_mask = _mm512_cmpeq_epi8_mask(needle_first, z1);
     
-    // Apply filtering for first block
-    if (likely( match_mask & ~null_mask)) {
-        apply_filter(haystack, 0, needle_len,needle_second, needle_last, &match_mask);
+    // Apply filtering 
+    if (likely( (match_mask & ~null_mask))){
+        apply_filter(haystack, 0, needle_len, needle_second, needle_last, &match_mask);
     }
     
+    // Loop through all matches in first block
     if (match_mask) {
-        char* result = process_full_search(haystack, needle, needle_len, 0, match_mask, null_mask);
-        if (result) return result;
+        do {
+            uint64_t match_idx = _tzcnt_u64(match_mask);
+            
+            // Check if we have enough characters before null terminator
+            if (null_mask && (match_idx + needle_len) > null_idx) {
+                break; // Not enough characters remaining
+            }
+            
+            // Call cmp_needle directly for this position
+            if (cmp_needle_avx512(haystack, needle, match_idx, needle_len)) {
+                return (char*)(haystack + match_idx);
+            }
+            
+            // Remove this match and continue
+            match_mask = _blsr_u64(match_mask);
+        } while (match_mask);
     }
     
     if (null_mask) return NULL;
@@ -260,19 +289,36 @@ static inline char * _strstr_avx512_broadcasting(const char* haystack, const cha
     // Adjust offset for aligned loads
     offset = ZMM_SZ - offset;
     
-    // Main search loop
+    // Main search loop 
     while (1) {
-        z1 = _mm512_loadu_si512((void*)(haystack + offset));
+        z1 = _mm512_loadu_si512((void *)(haystack + offset));
         match_mask = _mm512_cmpeq_epi8_mask(z1, needle_first);
         null_mask = _mm512_cmpeq_epi8_mask(z1, _mm512_setzero_si512());
         
         // Apply filtering
-        if (likely(match_mask & ~null_mask)) {
-            apply_filter(haystack, offset, needle_len,needle_second, needle_last, &match_mask);
+        if (likely((match_mask & ~null_mask))){
+            apply_filter(haystack, offset, needle_len, needle_second, needle_last, &match_mask);
         }
-        if (match_mask) {
-            char* result = process_full_search(haystack, needle, needle_len, offset, match_mask, null_mask);
-            if (result) return result;
+        
+        // Loop through all matches in this block
+        if (match_mask & ~null_mask) {
+            do {
+                uint64_t match_idx = _tzcnt_u64(match_mask);
+                size_t absolute_pos = offset + match_idx;
+                
+                // Check if we have enough characters before null terminator
+                if (null_mask && (match_idx + needle_len) > _tzcnt_u64(null_mask)) {
+                    break; // Not enough characters remaining
+                }
+                
+                // Call cmp_needle directly for this position
+                if (cmp_needle_avx512(haystack, needle, absolute_pos, needle_len)) {
+                    return (char*)(haystack + absolute_pos);
+                }
+                
+                // Remove this match and continue
+                match_mask = _blsr_u64(match_mask);
+            } while (match_mask);
         }
         
         // Termination check
@@ -284,7 +330,7 @@ static inline char * _strstr_avx512_broadcasting(const char* haystack, const cha
 
 
 /* This function is an optimized version of strstr using AVX-512 instructions.
-It finds the first occurrence of the substring `needle` in the string `haystack`q. */
+It finds the first occurrence of the substring `needle` in the string `haystack`. */
 static inline char * __attribute__((flatten)) _strstr_avx512(const char* haystack, const char* needle)
 {
     size_t needle_len = 0;

@@ -22,10 +22,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef STRNCPY_AVX512
+#define STRNCPY_AVX512
 
-#include "../../isa/avx512/optimized/strncpy_avx512.c"
+#include "logger.h"
+#include "../../isa/avx512/optimized/strcpy_avx512.c"
 
-HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen5(char *dst, const char *src, size_t size)
+#ifdef STRNCPY_AVX512
+#undef STRNCPY_AVX512
+#endif
+
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen5(char * __restrict dst,
+                  const char * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     return _strncpy_avx512(dst, src, size);
@@ -35,3 +43,5 @@ HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen5(char *dst, const ch
 char *strncpy(char *, const char *, size_t) __attribute__((weak,
                         alias("__strncpy_zen5")));
 #endif
+
+#endif // STRNCPY_AVX512

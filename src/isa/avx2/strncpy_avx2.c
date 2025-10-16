@@ -23,7 +23,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "./optimized/strncpy_avx2.c"
+#ifndef STRNCPY_AVX2
+#define STRNCPY_AVX2
+
+#include "./optimized/strcpy_avx2.c"
 
 HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_avx2(char *dst, const char *src, size_t size)
 {
@@ -33,3 +36,4 @@ HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_avx2(char *dst, const ch
 
 char *strncpy(char *, const char *, size_t) __attribute__((weak,
                         alias("__strncpy_avx2")));
+#endif // STRNCPY_AVX2

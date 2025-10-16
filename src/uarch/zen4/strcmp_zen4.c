@@ -106,7 +106,7 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
     // Adjust the offset to align with cache line for the next load operation
     offset = ZMM_SZ - offset;
 
-    __m512i z0, z1, z2, z3, z4;
+    __m512i z0, z1, z2, z3, z4, z_mask;
     z0 = _mm512_setzero_epi32 ();
 
     // Alignement of both the strings is same
@@ -223,24 +223,19 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
                 }
                 offset += ZMM_SZ;
             }
+            // Handle the case where we are crossing a page boundary for the unaligned string
+            z_mask = _mm512_set1_epi8(0xff);
+            uint64_t mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
 
-            // align unaligned_str to next lower ZMM boundary
-            z1 = _mm512_load_si512((char *)(((uintptr_t)unaligned_str + offset) & (-ZMM_SZ)));
-            if (_mm512_cmpeq_epu8_mask(z1, z0))
+            z1 =  _mm512_mask_loadu_epi8(z_mask, mask, aligned_str + offset);
+            z2 =  _mm512_mask_loadu_epi8(z_mask, mask, unaligned_str + offset);
+
+            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+
+            if (ret)
             {
-                __m512i z_mask = _mm512_set1_epi8(0xff);
-                __mmask64 mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
-
-                z1 =  _mm512_mask_loadu_epi8(z_mask ,mask, aligned_str + offset);
-                z2 =  _mm512_mask_loadu_epi8(z_mask ,mask, unaligned_str + offset);
-
-                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-                if (ret)
-                {
-                    cmp_idx = _tzcnt_u64(ret) + offset;
-                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-                }
+                cmp_idx = _tzcnt_u64(ret) + offset;
+                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
             vecs_in_page  += PAGE_SZ / ZMM_SZ;
         } //end of top level while

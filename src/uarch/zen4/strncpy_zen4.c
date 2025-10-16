@@ -23,9 +23,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../../isa/avx512/optimized/strncpy_avx512.c"
+#ifndef STRNCPY_AVX512
+#define STRNCPY_AVX512
 
-HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen4(char *dst, const char *src, size_t size)
+#include "logger.h"
+#include "../../isa/avx512/optimized/strcpy_avx512.c"
+
+#ifdef STRNCPY_AVX512
+#undef STRNCPY_AVX512
+#endif
+
+HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen4(char * __restrict dst,
+                  const char * __restrict src, size_t size)
 {
     LOG_INFO("\n");
     return _strncpy_avx512(dst, src, size);
@@ -35,3 +44,5 @@ HIDDEN_SYMBOL char * __attribute__((flatten)) __strncpy_zen4(char *dst, const ch
 char *strncpy(char *, const char *, size_t) __attribute__((weak,
                         alias("__strncpy_zen4")));
 #endif
+
+#endif // STRNCPY_AVX512

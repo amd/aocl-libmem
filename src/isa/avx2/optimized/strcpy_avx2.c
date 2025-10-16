@@ -66,10 +66,104 @@ static inline void strcpy_ble_ymm(void *dst, const void *src, uint32_t size)
     return;
 }
 
-/* This function is an optimized version of strcpy using AVX2 instructions.
-It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
-static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char *src)
+#ifdef STRNCPY_AVX2
+/* This is a function to fill a memory region with null bytes ('\0')  */
+static inline void *_fill_null_avx2(void *mem, size_t size)
 {
+    __m256i y0;
+    __m128i x0;
+
+    if (size < 2 * YMM_SZ)
+    {
+        if (size >= XMM_SZ)
+        {
+            if (size >= YMM_SZ)
+            {
+                y0 = _mm256_set1_epi8(0);
+                _mm256_storeu_si256(mem, y0);
+                _mm256_storeu_si256(mem + size - YMM_SZ, y0);
+                return mem;
+            }
+            x0 = _mm_set1_epi8(0);
+            _mm_storeu_si128(mem, x0);
+            _mm_storeu_si128(mem + size - XMM_SZ, x0);
+            return mem;
+        }
+        if (size > QWORD_SZ)
+        {
+            *((uint64_t*)mem) = 0;
+            *((uint64_t*)(mem + size - QWORD_SZ)) = 0;
+            return mem;
+        }
+        if (size > DWORD_SZ)
+        {
+            *((uint32_t*)mem) = 0;
+            *((uint32_t*)(mem + size - 4)) = 0;
+            return mem;
+        }
+        if (size >= WORD_SZ)
+        {
+            *((uint16_t*)mem) = 0;
+            *((uint16_t*)(mem + size - 2)) = 0;
+            return mem;
+        }
+        if (size > 0)
+            *((uint8_t*)mem) = 0;
+        return mem;
+    }
+    
+    y0 = _mm256_set1_epi8(0);
+    if (size <= 4 * YMM_SZ)
+    {
+        _mm256_storeu_si256(mem, y0);
+        _mm256_storeu_si256(mem + YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+        _mm256_storeu_si256(mem + size - YMM_SZ, y0);
+        return mem;
+    }
+    _mm256_storeu_si256(mem + 0 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 1 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 4 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 3 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 2 * YMM_SZ, y0);
+    _mm256_storeu_si256(mem + size - 1 * YMM_SZ, y0);
+
+    if (size <= 8 * YMM_SZ)
+        return mem;
+
+    size_t offset = 4 * YMM_SZ;
+    size -= 4 * YMM_SZ;
+    offset -= ((uint64_t)mem & (YMM_SZ-1));
+
+    while( offset < size )
+    {
+        _mm256_store_si256(mem + offset + 0 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 1 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 2 * YMM_SZ, y0);
+        _mm256_store_si256(mem + offset + 3 * YMM_SZ, y0);
+        offset += 4 * YMM_SZ;
+    }
+    return mem;
+}
+#endif
+
+/* This function is an optimized version of strcpy and strncpy using AVX2 instructions.
+It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
+#ifdef STRNCPY_AVX2
+static inline char * __attribute__((flatten)) _strncpy_avx2(char *dst, const char *src, size_t size)
+#else
+static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char *src)
+#endif
+{
+#ifdef STRNCPY_AVX2
+    if (unlikely(size == 0))
+        return dst;
+    size_t slen,rem,null_start,null_idx;
+
+#endif
+
     size_t offset , index;
     uint32_t ret = 0, ret1 = 0, ret2 = 0;
     __m256i y0, y1, y2, y3, y4, y5, y6, y_cmp;
@@ -96,7 +190,22 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
         if (ret)
         {
             index = _tzcnt_u32(ret) + 1;
+#ifdef STRNCPY_AVX2
+            slen = (index < size) ? index : size;
+            
+            // Use fast path for full vector, masked operation only if needed
+            if (slen >= YMM_SZ) {
+                _mm256_storeu_si256((void*)dst, y1);
+            } else {
+                strcpy_ble_ymm(dst, src, slen);
+            }
+            
+            // Null fill
+            if (likely(index < size))
+                _fill_null_avx2(dst + index, size - index);
+#else
             strcpy_ble_ymm(dst, src, index);
+#endif
             return ret_dst;
         }
     }
@@ -107,11 +216,35 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
     if (ret)
     {
         index =  _tzcnt_u32(ret) + 1;
+#ifdef STRNCPY_AVX2
+        slen = (index < size) ? index : size;
+        
+        // Use fast path for full vector, masked operation only if needed
+        if (slen >= YMM_SZ) {
+            _mm256_storeu_si256((void*)dst, y1);
+        } else {
+            strcpy_ble_ymm(dst, src, slen);
+        }
+        
+        // Null fill 
+        if (likely(index < size))
+            _fill_null_avx2(dst + index, size - index);
+#else
         strcpy_ble_ymm(dst, src, index);
+#endif
         return ret_dst;
     }
     // Store the first 32 bytes to `dst`
+#ifdef STRNCPY_AVX2
+    if (size >= YMM_SZ) {
+        _mm256_storeu_si256((void *)dst, y1);
+    } else {
+        strcpy_ble_ymm(dst, src, size);
+        return ret_dst;
+    }
+#else
     _mm256_storeu_si256((void *)dst, y1);
+#endif
 
     // Adjust the offset for the next load operation
     offset = YMM_SZ - offset;
@@ -120,6 +253,9 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
     uint8_t cnt_vec = 5;
     do
     {
+#ifdef STRNCPY_AVX2
+        if (offset >= size) break;
+#endif
         y1 = _mm256_load_si256((void *)src + offset);
         y_cmp = _mm256_cmpeq_epi8(y0, y1);
         ret = _mm256_movemask_epi8(y_cmp);
@@ -128,13 +264,42 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
         // Load and copy the remaining bytes up to and including the null terminator
         if (ret)
         {
+#ifdef STRNCPY_AVX2
+            null_idx = _tzcnt_u32(ret);
+            rem = size - offset;
+            slen = (null_idx + 1 < rem) ? null_idx + 1 : rem;
+            
+            // Use fast path for full vector, masked operation only if needed
+            if (slen >= YMM_SZ) {
+                _mm256_storeu_si256((void*)dst + offset, y1);
+            } else {
+                strcpy_ble_ymm(dst + offset, src + offset, slen);
+            }
+            
+            // Null fill
+            null_start = offset + null_idx + 1;
+            if (likely(null_start < size)) {
+                _fill_null_avx2(dst + null_start, size - null_start);
+            }
+#else
             index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
             y2 = _mm256_loadu_si256((void *)src + index);
             _mm256_storeu_si256((void*)dst + index, y2);
+#endif
             return ret_dst;
         }
 
+#ifdef STRNCPY_AVX2
+        rem = size - offset;
+        if (rem >= YMM_SZ) {
+            _mm256_storeu_si256((void*)dst + offset, y1);
+        } else {
+            strcpy_ble_ymm(dst + offset, src + offset, rem);
+            return ret_dst;
+        }
+#else
         _mm256_storeu_si256((void*)dst + offset, y1);
+#endif
         offset += YMM_SZ;
     } while (cnt_vec--);
 
@@ -145,24 +310,60 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
     cnt_vec = 4 - ((((uintptr_t)src + offset) & (4 * YMM_SZ - 1)) >> 5);
     while (cnt_vec--)
     {
+#ifdef STRNCPY_AVX2
+        if (offset >= size) break;
+#endif
         y2 = _mm256_load_si256((void *)src + offset);
         y_cmp = _mm256_cmpeq_epi8(y0, y2);
         ret = _mm256_movemask_epi8(y_cmp);
 
         if (ret)
         {
+#ifdef STRNCPY_AVX2
+            null_idx = _tzcnt_u32(ret);
+            rem = size - offset;
+            slen = (null_idx + 1 < rem) ? null_idx + 1 : rem;
+            
+            // Use fast path for full vector, masked operation only if needed
+            if (slen >= YMM_SZ) {
+                _mm256_storeu_si256((void*)dst + offset, y2);
+            } else {
+                strcpy_ble_ymm(dst + offset, src + offset, slen);
+            }
+            
+            // Null fill
+            null_start = offset + null_idx + 1;
+            if (likely(null_start < size)) {
+                _fill_null_avx2(dst + null_start, size - null_start);
+            }
+#else
             index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
             y3 = _mm256_loadu_si256((void *)src + index);
             _mm256_storeu_si256((void*)dst + index, y3);
+#endif
             return ret_dst;
         }
 
+#ifdef STRNCPY_AVX2
+        rem = size - offset;
+        if (rem >= YMM_SZ) {
+            _mm256_storeu_si256((void*)dst + offset, y2);
+        } else {
+            strcpy_ble_ymm(dst + offset, src + offset, rem);
+            return ret_dst;
+        }
+#else
         _mm256_storeu_si256((void*)dst + offset, y2);
+#endif
         offset += YMM_SZ;
     }
 
     // Main loop to process 4 vectors at a time for larger sizes(> 256B)
+#ifdef STRNCPY_AVX2
+    while (offset + 4 * YMM_SZ <= size)
+#else
     while(1)
+#endif
     {
         y1 = _mm256_load_si256((void *)src + offset);
         y2 = _mm256_load_si256((void *)src + offset + YMM_SZ);
@@ -188,6 +389,13 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
 
         offset += 4 * YMM_SZ;
     }
+
+#ifdef STRNCPY_AVX2
+    // Handle remaining bytes if any for STRNCPY
+    if (offset < size) goto handle_remaining;
+    // If we exit the loop in STRNCPY mode, we're done
+    return ret_dst;
+#endif
 
    //Check for null terminator in the first two vectors (y1, y2)
     if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
@@ -220,11 +428,86 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
     // Label for copying the tail of the string where the null terminator was found
     copy_tail_vec:
     {
+#ifdef STRNCPY_AVX2
+        null_idx = _tzcnt_u32(ret);
+        rem = size - offset;
+        slen = (null_idx + 1 < rem) ? null_idx + 1 : rem;
+        
+        // Use fast path for full vector, masked operation only if needed
+        if (slen >= YMM_SZ) {
+            _mm256_storeu_si256((void*)dst + offset, _mm256_loadu_si256((void*)src + offset));
+        } else {
+            strcpy_ble_ymm(dst + offset, src + offset, slen);
+        }
+        
+        // Null fill
+        size_t pad_start = offset + null_idx + 1;
+        if (likely(pad_start < size)) {
+            _fill_null_avx2(dst + pad_start, size - pad_start);
+        }
+#else
         index = offset + _tzcnt_u32(ret) - YMM_SZ + 1;
         y1 = _mm256_loadu_si256((void*)src + index);
         _mm256_storeu_si256((void*)dst + index, y1);
+#endif
         return ret_dst;
-
     }
+
+#ifdef STRNCPY_AVX2
+handle_remaining:
+    // Remaining bytes handling
+    while (offset < size) {
+        rem = size - offset;
+        
+        // Use fast path for full vectors when possible
+        if (rem >= YMM_SZ) {
+            y1 = _mm256_loadu_si256((void *)src + offset);
+            y_cmp = _mm256_cmpeq_epi8(y0, y1);
+            uint32_t null_mask = _mm256_movemask_epi8(y_cmp);
+
+            if (null_mask) {
+                // Found null - use fast path for full vector
+                null_idx = _tzcnt_u32(null_mask);
+                _mm256_storeu_si256((void*)dst + offset, y1);
+                
+                // Null fill
+                size_t pad_start = offset + null_idx + 1;
+                if (pad_start < size)
+                    _fill_null_avx2(dst + pad_start, size - pad_start);
+                return ret_dst;
+            }
+
+            // No null found - store full vector
+            _mm256_storeu_si256((void*)dst + offset, y1);
+            offset += YMM_SZ;
+        } else {
+            // Partial vector - use masked operations
+            size_t block = rem;
+            y1 = _mm256_loadu_si256((void *)src + offset);
+            y_cmp = _mm256_cmpeq_epi8(y0, y1);
+            uint32_t null_mask = _mm256_movemask_epi8(y_cmp);
+
+            // Create mask for actual block size
+            null_mask &= ((1U << block) - 1);
+
+            if (null_mask) {
+                // Found null
+                null_idx = _tzcnt_u32(null_mask);
+                slen = (null_idx + 1 < block) ? null_idx + 1 : block;
+                strcpy_ble_ymm(dst + offset, src + offset, slen);
+                // Null fill
+                size_t pad_start = offset + null_idx + 1;
+                if (pad_start < size)
+                    _fill_null_avx2(dst + pad_start, size - pad_start);
+                return ret_dst;
+            }
+
+            // No null found - copy partial block
+            strcpy_ble_ymm(dst + offset, src + offset, block);
+            offset += block;
+        }
+    }
+    return ret_dst;
+#endif
 
 }

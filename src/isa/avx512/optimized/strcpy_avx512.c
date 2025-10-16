@@ -28,15 +28,75 @@
 #include <immintrin.h>
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
+#include "../../../base_impls/memset_erms_impls.h"
 
-/* This function is an optimized version of strcpy using AVX-512 instructions.
-It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
-
-static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const char *src)
+#ifdef STRNCPY_AVX512
+/* This is an optimized function to fill a memory region with null bytes ('\0') */
+static inline void *_fill_null_avx512(void *mem, size_t size)
 {
+    __m512i z0;
+
+    if (size < 2 * ZMM_SZ)
+    {
+        // Use the ERMS feature to fill memory with zeros
+        // This is likely more efficient for small sizes
+        return __erms_stosb(mem, 0, size);
+    }
+
+    z0 = _mm512_set1_epi8(0);
+    if (size <= 4 * ZMM_SZ)
+    {
+        _mm512_storeu_si512(mem , z0);
+        _mm512_storeu_si512(mem + ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        return mem;
+    }
+    _mm512_storeu_si512(mem + 0 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 1 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+    _mm512_storeu_si512(mem + size - 1 * ZMM_SZ, z0);
+
+    if (size <= 8 * ZMM_SZ)
+        return mem;
+
+    size_t offset = 4 * ZMM_SZ;
+    size -= 4 * ZMM_SZ;
+    offset -= ((uint64_t)mem & (ZMM_SZ-1));
+
+    while( offset < size )
+    {
+        _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 2 * ZMM_SZ, z0);
+        _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
+        offset += 4 * ZMM_SZ;
+    }
+    return mem;
+}
+#endif
+
+/* This function is an optimized version of strcpy and strncpy using AVX-512 instructions.
+It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
+#ifdef STRNCPY_AVX512
+static inline char * __attribute__((flatten)) _strncpy_avx512(char *dst, const char *src, size_t size)
+#else
+static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const char *src)
+#endif
+{
+#ifdef STRNCPY_AVX512
+    if (unlikely(size == 0))
+        return dst;
+    size_t slen,rem,null_idx,null_start;
+#endif
+
     size_t offset, index;
     __m512i z0, z1, z2, z3, z4, z5, z6;
-    uint64_t match, match1, match2;
+    uint64_t match, match1,match2;
     __mmask64 mask;
 
     // Store the original destination pointer to return at the end
@@ -64,8 +124,17 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         if (match)
         {
             index =  _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+            slen = (index + 1 < size) ? index + 1 : size;
+            mask = _bzhi_u64(UINT64_MAX, slen);
+            _mm512_mask_storeu_epi8(dst, mask, z1);
+            // Null fill
+            if (likely(index + 1 < size))
+                _fill_null_avx512(dst + index + 1, size - (index + 1));
+#else
             mask = UINT64_MAX >> (63 - (index));
             _mm512_mask_storeu_epi8(dst, mask, z1);
+#endif
             return ret;
         }
     }
@@ -76,12 +145,32 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
     if (match)
     {
         index =  _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+        slen = (index + 1 < size) ? index + 1 : size;
+        mask = _bzhi_u64(UINT64_MAX, slen);
+        _mm512_mask_storeu_epi8(dst, mask, z1);
+        // NULL fill
+        if (likely(index + 1 < size))
+            _fill_null_avx512(dst + index + 1, size - (index + 1));
+#else
         mask = UINT64_MAX >> (63 - index);
         _mm512_mask_storeu_epi8(dst, mask, z1);
+#endif
+
         return ret;
     }
     // Store the first 64 bytes to `dst`
+#ifdef STRNCPY_AVX512
+    // Use fast path for full vector, masked operation only if needed
+    if (size >= ZMM_SZ) {
+        _mm512_storeu_si512(dst, z1);
+    } else {
+        mask = _bzhi_u64(UINT64_MAX, size);
+        _mm512_mask_storeu_epi8(dst, mask, z1);
+    }
+#else
     _mm512_storeu_si512(dst, z1);
+#endif
 
     // Adjust the offset for the next load operation
     offset = ZMM_SZ - offset;
@@ -90,6 +179,9 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
     uint8_t cnt_vec = 2;
     do
     {
+#ifdef STRNCPY_AVX512
+        if (offset >= size) break;
+#endif
         z2 = _mm512_load_si512(src + offset);
         match = _mm512_cmpeq_epu8_mask(z2, z0);
 
@@ -97,13 +189,46 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         // Load and copy the remaining bytes up to and including the null terminator
         if (match)
         {
+#ifdef STRNCPY_AVX512
+            null_idx = _tzcnt_u64(match);
+            rem = size - offset;
+            slen = (null_idx + 1 < rem) ? null_idx + 1 : rem;
+            
+            // Use fast path for full vector, masked operation only if needed
+            if (slen >= ZMM_SZ) {
+                _mm512_storeu_si512(dst + offset, z2);
+            } else {
+                mask = _bzhi_u64(UINT64_MAX, slen);
+                _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+            }
+            
+            // Null fill
+            null_start = offset + null_idx + 1;
+            if (likely(null_start < size)) {
+                _fill_null_avx512(dst + null_start, size - null_start);
+            }
+#else
             index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
             z5 = _mm512_loadu_si512(src + index);
             _mm512_storeu_si512(dst + index, z5);
+#endif
+
             return ret;
         }
 
+#ifdef STRNCPY_AVX512
+        rem = size - offset;
+        
+        // Use fast path for full vector, masked operation only if needed
+        if (rem >= ZMM_SZ) {
+            _mm512_storeu_si512(dst + offset, z2);
+        } else {
+            mask = _bzhi_u64(UINT64_MAX, rem);
+            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+        }
+#else
         _mm512_storeu_si512(dst + offset, z2);
+#endif
         offset += ZMM_SZ;
     } while (cnt_vec--);
 
@@ -115,23 +240,62 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
     cnt_vec = 4 - ((((uintptr_t)src + offset) & (4 * ZMM_SZ - 1)) >> 6);
     while (cnt_vec--)
     {
+#ifdef STRNCPY_AVX512
+        if (offset >= size) break;
+#endif
         z2 = _mm512_load_si512(src + offset);
         match = _mm512_cmpeq_epu8_mask(z2, z0);
 
         if (match)
         {
             index =  _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+            rem = size - offset;
+            slen = (index + 1 < rem) ? index + 1 : rem;
+            
+            // Use fast path for full vector, masked operation only if needed
+            if (slen >= ZMM_SZ) {
+                _mm512_storeu_si512(dst + offset, z2);
+            } else {
+                mask = _bzhi_u64(UINT64_MAX, slen);
+                _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+            }
+            
+            // Null fill
+            null_start = offset + index + 1;
+            if (likely(null_start < size)) {
+                _fill_null_avx512(dst + null_start, size - null_start);
+            }
+#else
             mask = UINT64_MAX >> (63 - index);
             _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+#endif
+
             return ret;
         }
 
+#ifdef STRNCPY_AVX512
+        rem = size - offset;
+        
+        // Use fast path for full vector, masked operation only if needed
+        if (rem >= ZMM_SZ) {
+            _mm512_storeu_si512(dst + offset, z2);
+        } else {
+            mask = _bzhi_u64(UINT64_MAX, rem);
+            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
+        }
+#else
         _mm512_storeu_si512(dst + offset, z2);
+#endif
         offset += ZMM_SZ;
     }
 
     // Main loop to process 4 vectors at a time for larger sizes(> 256B)
+#ifdef STRNCPY_AVX512
+    while (offset + 4 * ZMM_SZ <= size)
+#else
     while (1)
+#endif
     {
         // Load 4 vectors from `src`
         z1 = _mm512_load_si512(src + offset);
@@ -155,6 +319,12 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z4);
         offset += 4 * ZMM_SZ;
     }
+
+#ifdef STRNCPY_AVX512
+    // Handle remaining bytes
+    if (offset < size) goto handle_remaining;
+    return ret;
+#endif
 
     // Check for null terminator in the first two vectors (z1, z2)
     if ((match1 = _mm512_cmpeq_epu8_mask(z5, z0)))
@@ -182,13 +352,72 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
         _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
         offset += 3 * ZMM_SZ;
     }
-
     // Label for copying the tail of the string where the null terminator was found
     copy_tail_vec:
     {
+#ifdef STRNCPY_AVX512
+        null_idx = _tzcnt_u64(match) + 1;
+        rem = size - offset;
+        slen = (null_idx < rem) ? null_idx : rem;
+        
+        if (slen >= ZMM_SZ) {
+            z5 = _mm512_loadu_si512(src + offset);
+            _mm512_storeu_si512(dst + offset, z5);
+        } else {
+            mask = _bzhi_u64(UINT64_MAX, slen);
+            z5 = _mm512_maskz_loadu_epi8(mask, src + offset);
+            _mm512_mask_storeu_epi8(dst + offset, mask, z5);
+        }
+        
+        // Null fill
+        null_start = offset + null_idx;
+        if (likely(null_start < size)) {
+            _fill_null_avx512(dst + null_start, size - null_start);
+        }
+#else
         index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
         z5 = _mm512_loadu_si512(src + index);
         _mm512_storeu_si512(dst + index, z5);
+#endif
         return ret;
     }
+
+#ifdef STRNCPY_AVX512
+handle_remaining:
+    // Remaining bytes handling
+    while (offset < size) {
+        rem = size - offset;
+        __mmask64 block = (rem >= ZMM_SZ) ? UINT64_MAX : _bzhi_u64(UINT64_MAX, rem);
+        z1 = _mm512_maskz_loadu_epi8(block, src + offset);
+
+        uint64_t null_mask = _mm512_cmpeq_epu8_mask(z1, z0) & block;
+        if (null_mask) {
+            // Found null
+            null_idx = _tzcnt_u64(null_mask) + 1;
+            slen = (null_idx < rem) ? null_idx : rem;
+            
+            if (slen >= ZMM_SZ) {
+                _mm512_storeu_si512(dst + offset, z1);
+            } else {
+                mask = _bzhi_u64(UINT64_MAX, slen);
+                _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+            }
+            
+            // Null fill
+            null_start = offset + null_idx;
+            if (null_start < size)
+                _fill_null_avx512(dst + null_start, size - null_start);
+            return ret;
+        }
+
+        // No null found 
+        if (rem >= ZMM_SZ) {
+            _mm512_storeu_si512(dst + offset, z1);
+        } else {
+            _mm512_mask_storeu_epi8(dst + offset, block, z1);
+        }
+        offset += ZMM_SZ;
+    }
+    return ret;
+#endif
 }

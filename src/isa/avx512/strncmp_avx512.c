@@ -22,7 +22,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "./optimized/strncmp_avx512.c"
+#ifndef STRNCMP
+#define STRNCMP
+#endif
+
+#include "./optimized/strcmp_avx512.c"
+
+#ifdef STRNCMP
+#undef STRNCMP
+#endif
+
 HIDDEN_SYMBOL int __attribute__((flatten)) __strncmp_avx512(const char *str1, const char *str2, size_t size)
 {
     LOG_INFO("\n");

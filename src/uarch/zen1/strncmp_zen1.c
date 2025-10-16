@@ -22,7 +22,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../../isa/avx2/optimized/strncmp_avx2.c"
+#ifndef STRNCMP
+#define STRNCMP
+#endif
+
+#include "../../isa/avx2/optimized/strcmp_avx2.c"
+
+#ifdef STRNCMP
+#undef STRNCMP
+#endif
 HIDDEN_SYMBOL int __attribute__((flatten)) __strncmp_zen1(const char *str1, const char *str2, size_t size)
 {
     LOG_INFO("\n");
