@@ -25,169 +25,9 @@
 
 #include "strlen_avx512.c"
 #include "strchr_avx512.c"
-
-
-/* This function compares two strings using AVX-512 vector instructions.
-   It returns 0 if the strings are equal up to the specified size, or -1 if they differ */
-static inline int cmp_needle_page_safe(const char *str1, const char *str2, size_t size)
-{
-    size_t offset = 0;
-    __m512i z1, z2, z3, z4, z5, z6, z7, z8;
-    
-    if (likely(size <= ZMM_SZ)) {
-         __mmask64 mask = _bzhi_u64(UINT64_MAX, size);
-        z1 = _mm512_maskz_loadu_epi8(mask, str1);
-        z2 = _mm512_maskz_loadu_epi8(mask, str2);
-        return !!(_mm512_cmpneq_epu8_mask(z1, z2) & mask);
-    }
-  
-    if (likely(size <= 2 * ZMM_SZ))
-    {
-
-        z1 = _mm512_loadu_si512(str1);
-        z2 = _mm512_loadu_si512(str2);
-        if (_mm512_cmpneq_epu8_mask(z1, z2))
-            return -1;
-        
-        offset = size - ZMM_SZ;
-        z3 = _mm512_loadu_si512(str1 + offset);
-        z4 = _mm512_loadu_si512(str2 + offset);
-        return !!(_mm512_cmpneq_epu8_mask(z3, z4));
-    }
-
-    // Handle the case where the size lies between 129B-2565B
-    if (likely(size <= 4 * ZMM_SZ)) 
-    {
-        z1 = _mm512_loadu_si512(str1);
-        z5 = _mm512_loadu_si512(str2);
-        z2 = _mm512_loadu_si512(str1 + ZMM_SZ);
-        z6 = _mm512_loadu_si512(str2 + ZMM_SZ);
-        if (_mm512_cmpneq_epu8_mask(z1, z5) | _mm512_cmpneq_epu8_mask(z2, z6))
-            return -1;
-
-        z3 = _mm512_loadu_si512(str1 + size - 2 * ZMM_SZ);
-        z7 = _mm512_loadu_si512(str2 + size - 2 * ZMM_SZ);
-        z4 = _mm512_loadu_si512(str1 + size - ZMM_SZ);
-        z8 = _mm512_loadu_si512(str2 + size - ZMM_SZ);
-        
-        return !!(_mm512_cmpneq_epu8_mask(z3, z7) | _mm512_cmpneq_epu8_mask(z4, z8));
-    }
-
-    // For sizes larger than 256B, process in chunks of 4 ZMM registers
-    while ((size - offset) >= 4 * ZMM_SZ)
-    {
-        z1 = _mm512_loadu_si512(str1 + offset);
-        z5 = _mm512_loadu_si512(str2 + offset);
-        z2 = _mm512_loadu_si512(str1 + offset + 1 * ZMM_SZ);
-        z6 = _mm512_loadu_si512(str2 + offset + 1 * ZMM_SZ);
-
-        if( _mm512_cmpneq_epu8_mask(z1, z5) | _mm512_cmpneq_epu8_mask(z2, z6))
-            return -1;
-
-        z3 = _mm512_loadu_si512(str1 + offset + 2 * ZMM_SZ);
-        z7 = _mm512_loadu_si512(str2 + offset + 2 * ZMM_SZ);
-
-        z4 = _mm512_loadu_si512(str1 + offset + 3 * ZMM_SZ);
-        z8 = _mm512_loadu_si512(str2 + offset + 3 * ZMM_SZ);
-
-        if( _mm512_cmpneq_epu8_mask(z3, z7) | _mm512_cmpneq_epu8_mask(z4, z8))
-            return -1;
-
-        offset += 4 * ZMM_SZ;
-    }
-    // Handle any remaining bytes that were not compared in the above loop
-    uint8_t left_out = size - offset;
-    if (!left_out)
-        return 0;
-
-    switch(left_out >> 6)
-    {
-        case 3:
-            offset = size - 4 * ZMM_SZ;
-            z1 = _mm512_loadu_si512(str1 + offset);
-            z2 = _mm512_loadu_si512(str2 + offset);
-            if (_mm512_cmpneq_epu8_mask(z1, z2))
-                break;
-            __attribute__ ((fallthrough));
-        case 2:
-            offset = size - 3 * ZMM_SZ;
-            z3 = _mm512_loadu_si512(str1 + offset);
-            z4 = _mm512_loadu_si512(str2 + offset);
-            if (_mm512_cmpneq_epu8_mask(z3, z4))
-                break;
-            __attribute__ ((fallthrough));
-        case 1:
-            offset = size - 2 * ZMM_SZ;
-            z1 = _mm512_loadu_si512(str1 + offset);
-            z2 = _mm512_loadu_si512(str2 + offset);
-            if (_mm512_cmpneq_epu8_mask(z1, z2))
-                break;
-            __attribute__ ((fallthrough));
-        case 0:
-            offset = size - ZMM_SZ;
-            z3 = _mm512_loadu_si512(str1 + offset);
-            z4 = _mm512_loadu_si512(str2 + offset);
-            return !!(_mm512_cmpneq_epu8_mask(z3, z4));
-    }
-    return -1;  
-}
-
-// Handles page boundary, uses head/tail logic 
-static inline int cmp_needle_page_cross(const char *str1, const char *str2, size_t size, size_t safe_bytes) {
-    size_t offset = 0;
-    
-    // Masked loads till it is ZMM_SZ * 4 aligned to be page safe in cmp_needle_page_safe.
-    while (offset < safe_bytes) {
-        size_t safe_offset = safe_bytes - offset;
-        if (safe_offset > ZMM_SZ) safe_offset = ZMM_SZ;
-        
-        __mmask64 mask = (safe_offset >= ZMM_SZ) ? UINT64_MAX : ((1ULL << safe_offset) - 1);
-        __m512i z1 = _mm512_maskz_loadu_epi8(mask, str1 + offset);
-        __m512i z2 = _mm512_maskz_loadu_epi8(mask, str2 + offset);
-        if (_mm512_cmpneq_epu8_mask(z1, z2) & mask) return -1;
-        
-        offset += safe_offset;
-    }
-    
-    // For the rest, check again if tail is in page boundary
-    size_t tail = size - offset;
-    if (tail > 0) {
-        size_t tail_offset1 = PAGE_SZ - ((uintptr_t)(str1 + offset) & (PAGE_SZ - 1));
-        size_t tail_offset2 = PAGE_SZ - ((uintptr_t)(str2 + offset) & (PAGE_SZ - 1));
-        size_t tail_safe_bytes = (tail_offset1 < tail_offset2) ? tail_offset1 : tail_offset2;
-
-        if (tail_safe_bytes >= tail) {
-            return cmp_needle_page_safe(str1 + offset, str2 + offset, tail);
-        } else {
-            return cmp_needle_page_cross(str1 + offset, str2 + offset, tail, tail_safe_bytes);
-        }
-    }
-    return 0;
-}
-
-static inline int cmp_needle_avx512(const char *haystack, const char *needle, 
-                                            size_t hay_idx, size_t needle_len)
-{    
-    // Bytes to page end for both haystack and needle
-    size_t offset1 = PAGE_SZ - ((uintptr_t)(haystack + hay_idx) & (PAGE_SZ - 1));
-    size_t offset2 = PAGE_SZ - ((uintptr_t)needle & (PAGE_SZ - 1));
-    
-    size_t safe_bytes = (offset1 < offset2) ? 
-                        offset1 : offset2;
-
-    // Page boundary handling
-    if (safe_bytes < needle_len) {
-        // For 4*ZMM_SZ processing in cmp_needle_page_safe
-        if (needle_len > 4 * ZMM_SZ && safe_bytes >= 4 * ZMM_SZ) {
-            safe_bytes = (safe_bytes >> 8) << 8;  // Align to 4*ZMM_SZ
-        } else if (safe_bytes >= ZMM_SZ) {
-            safe_bytes = (safe_bytes >> 6) << 6;  // Align to ZMM_SZ
-        }
-        
-        return cmp_needle_page_cross(haystack + hay_idx, needle, needle_len, safe_bytes) == 0;
-    }
-    return cmp_needle_page_safe(haystack + hay_idx, needle, needle_len) == 0;
-}
+#define STRNCMP
+#include "strcmp_avx512.c"
+#undef STRNCMP
 
 
 /* Page check for initial block load and null check */
@@ -274,8 +114,8 @@ static inline char * _strstr_avx512_broadcasting(const char* haystack, const cha
                 break; // Not enough characters remaining
             }
             
-            // Call cmp_needle directly for this position
-            if (cmp_needle_avx512(haystack, needle, match_idx, needle_len)) {
+            // Call strncmp directly for this position
+            if (_strncmp_avx512(haystack + match_idx, needle, needle_len) == 0) {
                 return (char*)(haystack + match_idx);
             }
             
@@ -311,8 +151,8 @@ static inline char * _strstr_avx512_broadcasting(const char* haystack, const cha
                     break; // Not enough characters remaining
                 }
                 
-                // Call cmp_needle directly for this position
-                if (cmp_needle_avx512(haystack, needle, absolute_pos, needle_len)) {
+                // Call strncmp directly for this position
+                if (_strncmp_avx512(haystack + absolute_pos, needle, needle_len) == 0) {
                     return (char*)(haystack + absolute_pos);
                 }
                 

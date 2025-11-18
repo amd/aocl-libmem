@@ -28,7 +28,6 @@
 #include <immintrin.h>
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
-
 /* This function is an optimized version of strcmp and strncmp using AVX-512 instructions.
 It compares the two strings str1 and str2 and returns returns an integer
 indicating the result of the comparison. */
@@ -179,23 +178,42 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
     // Handle the case where alignments of the strings are different
     else
     {
-        char *aligned_str, *unaligned_str;
-        if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
-        {
-            aligned_str = (char *)str1;
-            unaligned_str = (char *)str2;
-        }
-        else
-        {
-            aligned_str = (char *)str2;
-            unaligned_str = (char *)str1;
-        }
-
-        uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
         while (1)
         {
+            // Check if either string is aligned at current offset
+            char *aligned_str, *unaligned_str;
+            
+            if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
+            {
+                aligned_str = (char *)str1;
+                unaligned_str = (char *)str2;
+            }
+            else if ((((uintptr_t)str2 + offset) & (ZMM_SZ - 1)) == 0)
+            {
+                aligned_str = (char *)str2;
+                unaligned_str = (char *)str1;
+            }
+            else
+            {
+                // Use unaligned loads for both strings
+                z1 = _mm512_loadu_si512(str1 + offset);
+                z2 = _mm512_loadu_si512(str2 + offset);
+                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1, z2);
+                if (ret) {
+                    goto return_val;
+                }
+                offset += ZMM_SZ;
 #ifdef STRNCMP
-            while ((vecs_in_page >= 4) && (offset < (size - 4 * ZMM_SZ)))
+                if (size <= offset)
+                    return 0;
+#endif
+                continue; // Go back and check alignment again
+            }
+            // Calculate safe vectors based on page boundaries for BOTH strings
+            uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
+            
+#ifdef STRNCMP
+            while ((vecs_in_page >= 4) && (offset + 4 * ZMM_SZ <= size))
 #else
             while (vecs_in_page >= 4)
 #endif
@@ -274,7 +292,8 @@ static inline int __attribute__((flatten)) _strcmp_avx512(const char *str1, cons
                 return 0;
 #endif
 
-            vecs_in_page  += PAGE_SZ / ZMM_SZ;
+            // Advance offset after processing page boundary crossing
+            offset += ZMM_SZ - ((uintptr_t)(unaligned_str + offset) & (ZMM_SZ - 1));
         } //end of top level while
     }
 return_val:

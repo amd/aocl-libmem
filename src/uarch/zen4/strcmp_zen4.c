@@ -52,7 +52,7 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
             y1 =  _mm256_loadu_si256((void *)str1);
             y2 =  _mm256_loadu_si256((void *)str2);
             y_cmp = _mm256_cmpeq_epi8(y1, y2);
-            y_null = _mm256_cmpgt_epi8(y1, y0);
+            y_null = _mm256_andnot_si256(_mm256_cmpeq_epi8(y1, y0), _mm256_set1_epi8(-1));
             ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
             if (ret)
             {
@@ -81,7 +81,7 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
         y1 =  _mm256_loadu_si256((void *)str1);
         y2 =  _mm256_loadu_si256((void *)str2);
         y_cmp = _mm256_cmpeq_epi8(y1, y2);
-        y_null = _mm256_cmpgt_epi8(y1, y0);
+        y_null = _mm256_andnot_si256(_mm256_cmpeq_epi8(y1, y0), _mm256_set1_epi8(-1));
         ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
         if (ret)
         {
@@ -92,7 +92,7 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
         y3 =  _mm256_loadu_si256((void *)str1 + YMM_SZ);
         y4 =  _mm256_loadu_si256((void *)str2 + YMM_SZ);
         y_cmp = _mm256_cmpeq_epi8(y3, y4);
-        y_null = _mm256_cmpgt_epi8(y3, y0);
+        y_null = _mm256_andnot_si256(_mm256_cmpeq_epi8(y3, y0), _mm256_set1_epi8(-1));
         ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
         if (ret)
         {
@@ -152,21 +152,37 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
     // Handle the case where alignments of the strings are different
     else
     {
-        char *aligned_str, *unaligned_str;
-        if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
-        {
-            aligned_str = (char *)str1;
-            unaligned_str = (char *)str2;
-        }
-        else
-        {
-            aligned_str = (char *)str2;
-            unaligned_str = (char *)str1;
-        }
-
-        uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
         while (1)
         {
+            // Check if either string is aligned at current offset
+            char *aligned_str, *unaligned_str;
+            
+            if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
+            {
+                aligned_str = (char *)str1;
+                unaligned_str = (char *)str2;
+            }
+            else if ((((uintptr_t)str2 + offset) & (ZMM_SZ - 1)) == 0)
+            {
+                aligned_str = (char *)str2;
+                unaligned_str = (char *)str1;
+            }
+            else
+            {
+                // Use unaligned loads for both strings
+                z1 = _mm512_loadu_si512(str1 + offset);
+                z2 = _mm512_loadu_si512(str2 + offset);
+                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1, z2);
+                if (ret) {
+                    cmp_idx = _tzcnt_u64(ret) + offset;
+                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+                }
+                offset += ZMM_SZ;
+                continue; // Go back and check alignment again
+            }
+            // Calculate safe vectors based on page boundaries for BOTH strings
+            uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
+            
             while (vecs_in_page >= 4)
             {
                 _mm_prefetch(str1 + offset + 4 * ZMM_SZ, _MM_HINT_NTA);
@@ -207,7 +223,7 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
                 }
                 cmp_idx = _tzcnt_u64(ret) + offset;
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
+            } //end of while
             while (vecs_in_page--)
             {
                 _mm_prefetch(str1 + offset + ZMM_SZ, _MM_HINT_NTA);
@@ -237,7 +253,9 @@ HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const
                 cmp_idx = _tzcnt_u64(ret) + offset;
                 return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
             }
-            vecs_in_page  += PAGE_SZ / ZMM_SZ;
+
+            // Advance offset after processing page boundary crossing
+            offset += ZMM_SZ - ((uintptr_t)(unaligned_str + offset) & (ZMM_SZ - 1));
         } //end of top level while
     }
     cmp_idx = _tzcnt_u64(ret) + offset;

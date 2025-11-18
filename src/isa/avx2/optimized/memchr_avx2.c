@@ -124,14 +124,24 @@ static inline void *memchr_le_2ymm(void *mem, int val, uint8_t size)
     x3 = _mm_cmpeq_epi8(x0, x1);
     ret = _mm_movemask_epi8(x3);
 
-    if (ret > 16 || ret == 0)
+    // Mask to only consider the 4 bytes we loaded
+    ret &= 0xf;  // Only keep bits 0-3
+
+    if (ret == 0) // No match found in first 4 bytes
     {
-        index = size - DWORD_SZ;
-        x1 = _mm_loadu_si32(mem + index);
-        x3 = _mm_cmpeq_epi8(x0, x1);
-        ret = _mm_movemask_epi8(x3);
-        if (ret > 16 || ret == 0)
+        if (size == DWORD_SZ)
             return NULL;
+
+        else
+        {
+            index = size - DWORD_SZ;
+            x1 = _mm_loadu_si32(mem + index);
+            x3 = _mm_cmpeq_epi8(x0, x1);
+            ret = _mm_movemask_epi8(x3);
+            // No masking needed: only last 4 bytes loaded, matches are within valid range
+            if (ret == 0)
+                return NULL;
+        }
     }
     index += _tzcnt_u32(ret);
     return (uint8_t*)(mem + index);
@@ -145,6 +155,9 @@ static inline void * __attribute__((flatten)) _memchr_avx2(const void *mem, int 
     size_t index = 0, offset = 0;
     int ret, ret1, ret2, ret3;
     void *ret_ptr = (void *)mem;
+
+    if (unlikely(size == 0))
+        return NULL;
 
     if (likely(size <= 2 * YMM_SZ))
         return memchr_le_2ymm((void *)mem, val, (uint8_t) size);

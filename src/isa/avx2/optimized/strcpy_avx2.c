@@ -209,7 +209,27 @@ static inline char * __attribute__((flatten)) _strcpy_avx2(char *dst, const char
             return ret_dst;
         }
     }
+    // Load the first 32 bytes from `src` and check for null terminator
+#ifdef STRNCPY_AVX2
+    if (size < YMM_SZ) {
+        strcpy_ble_ymm(dst, src, size);
+        for (size_t i = 0; i < size; i++) {
+            if (dst[i] == '\0') {
+                null_idx = i;
+                if (null_idx + 1 < size)
+                    _fill_null_avx2(dst + null_idx + 1, size - (null_idx + 1));
+                return ret_dst;
+            }
+        }
+        return ret_dst;
+    }
+    else {
+        y1 = _mm256_loadu_si256((void *)src);
+    }
+#else
     y1 = _mm256_loadu_si256((void *)src);
+#endif
+
     y_cmp = _mm256_cmpeq_epi8(y0, y1);
 
     ret = _mm256_movemask_epi8(y_cmp);
