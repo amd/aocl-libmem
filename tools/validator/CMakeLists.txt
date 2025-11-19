@@ -25,6 +25,11 @@
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Validator_tool.md
 DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/)
 
+# Create glibc directory and copy the test script
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tools/validator/glibc/)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/glibc/glibc_validator.sh
+DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/glibc/)
+
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/validator.py
   DESTINATION ${CMAKE_BINARY_DIR}/test)
 
