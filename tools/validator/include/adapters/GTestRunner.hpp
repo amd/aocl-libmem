@@ -244,6 +244,12 @@ private:
         registerTest<PageBoundaryStrlenTest<traits::StrlenTag>>("strlen", "PageBoundary");
         registerTest<PageOverrunLengthTest<traits::StrlenTag>>("strlen", "PageOverrun");
 
+        // --- STRNLEN ---
+        registerTest<ZeroSizeBoundedLengthTest<traits::StrnlenTag>>("strnlen", "ZeroSize");
+        registerTest<BasicStrnlenTest<traits::StrnlenTag>>("strnlen", "BasicStrnlen");
+        registerTest<PageBoundaryStrnlenTest<traits::StrnlenTag>>("strnlen", "PageBoundary");
+        registerTest<PageOverrunBoundedLengthTest<traits::StrnlenTag>>("strnlen", "PageOverrun");
+
         // --- STRCAT ---
         registerTest<ZeroSizeConcatTest<traits::StrcatTag>>("strcat", "ZeroSize");
         registerTest<BasicConcatTest<traits::StrcatTag>>("strcat", "BasicConcat");

@@ -52,13 +52,28 @@ static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)
         y1 = _mm256_loadu_si256((void *)str - offset);
         ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
         ret = ret >> offset;
-        if (ret)
 #ifdef STRNLEN_AVX2
+        if (ret)
         {
             size_t pos = _tzcnt_u32(ret);
             return (pos < maxlen) ? pos : maxlen;
         }
+        size_t safe_bytes = YMM_SZ - offset;
+        if (safe_bytes >= maxlen)
+            return maxlen;
+        if (maxlen <= YMM_SZ)
+        {
+            size_t rem = maxlen - safe_bytes;
+            y1 = _mm256_loadu_si256((void *) (str + safe_bytes));
+            ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+            uint32_t mask = (rem >= 32) ? UINT32_MAX : ((1U << rem) - 1);
+            ret = ret & mask;
+            if (ret)
+                return _tzcnt_u32(ret) + safe_bytes;
+            return maxlen;
+        }
 #else
+        if (ret)
             return _tzcnt_u32(ret);
 #endif
     }

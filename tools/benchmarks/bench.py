@@ -311,7 +311,7 @@ class Bench:
             dcperf_execute()
 
 libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp', 'mempcpy']
-libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strnlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
 libmem_funcs = libmem_memory + libmem_string
 
 def run_command(cmd):

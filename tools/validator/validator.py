@@ -46,7 +46,7 @@ VALIDATOR_PATH = '../tools/validator/libmem_validator'
 # Supported memory functions
 LIBMEM_FUNCS = [
     'memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp', 'memchr',
-    'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen',
+    'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strnlen',
     'strcat', 'strncat', 'strstr', 'strspn', 'strchr'
 ]
 
@@ -199,7 +199,6 @@ def whole_number(value):
     except ValueError:
         raise argparse.ArgumentTypeError(f"{value} is not a whole number")
     return value
-
 
 def main():
     parser = argparse.ArgumentParser(

@@ -1,4 +1,4 @@
-# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -218,6 +218,13 @@ clean_file() {
     
     # Fix test_main declaration conflicts (remove static)
     sed -i 's/^static int$/int/' "$file"
+    
+    # Special handling for test-strnlen.c - add IMPL registration
+    if [[ "$file" == *"test-strnlen.c" ]]; then
+        # Use the IMPL macro (section-based) so the linker auto-generates
+        # correct __start_impls/__stop_impls section boundaries.
+        sed -i '/#include "test-string.h"/a\\nIMPL (strnlen, 1)' "$file"
+    fi
     
     echo "Cleaned $file"
 }

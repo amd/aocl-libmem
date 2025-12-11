@@ -210,6 +210,37 @@ public:
 };
 
 /**
+ * ZeroSizeBoundedLengthTest - strnlen with maxlen=0
+ *
+ * strnlen(s, 0) must return 0 regardless of the string content.
+ */
+template<typename Tag>
+class ZeroSizeBoundedLengthTest : public FunctionTest<Tag> {
+public:
+    const char* name() const override { return "ZeroSizeBoundedLength"; }
+
+    TestResult execute(const TestContext& ctx) override {
+        this->ctx_ = ctx;
+
+        const char* str = "non-empty string";
+        size_t ret = FunctionTest<Tag>::Traits::invoke(str, static_cast<size_t>(0));
+
+        if (ret != 0) {
+            return this->error("expected 0 for maxlen=0, got %zu", ret);
+        }
+
+        const char* empty = "";
+        ret = FunctionTest<Tag>::Traits::invoke(empty, static_cast<size_t>(0));
+
+        if (ret != 0) {
+            return this->error("expected 0 for empty string with maxlen=0, got %zu", ret);
+        }
+
+        return TestResult::success();
+    }
+};
+
+/**
  * ZeroSizeSpanTest - strspn with empty string
  */
 template<typename Tag>

@@ -210,6 +210,83 @@ public:
     }
 };
 
+// ============================================================================
+// Bounded Length Test (strnlen)
+// ============================================================================
+
+/**
+ * BasicStrnlenTest
+ *
+ * Runs all maxlen scenarios for the given size:
+ *   1. maxlen > strlen       → should return strlen
+ *   2. maxlen < strlen       → should return maxlen
+ *   3. maxlen == strlen      → should return strlen
+ *   4. maxlen == 0           → should return 0
+ *   5. null before maxlen    → should stop at null, not maxlen
+ */
+template<typename Tag>
+class BasicStrnlenTest : public FunctionTest<Tag> {
+public:
+    const char* name() const override { return "BasicStrnlen"; }
+
+    TestResult execute(const TestContext& ctx) override {
+        this->ctx_ = ctx;
+        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+
+        if (!buf.base) {
+            return this->error("failed to allocate buffer");
+        }
+
+        this->fillLowercaseLetters(buf.dst, ctx.size);
+        this->nullTerminate(buf.dst, ctx.size);
+
+        const char* str = reinterpret_cast<const char*>(buf.dst);
+        size_t ret;
+        size_t maxlen;
+
+        maxlen = ctx.size + 1 + (rand() % 100);
+        ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+        if (ret != ctx.size) {
+            return this->error("(maxlen > strlen) expected=%zu, actual=%zu, maxlen=%zu",
+                               ctx.size, ret, maxlen);
+        }
+
+        if (ctx.size > 1) {
+            maxlen = ctx.size / 2;
+            ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+            if (ret != maxlen) {
+                return this->error("(maxlen < strlen) expected=%zu, actual=%zu, strlen=%zu",
+                                   maxlen, ret, ctx.size);
+            }
+        }
+
+        maxlen = ctx.size;
+        ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+        if (ret != ctx.size) {
+            return this->error("(maxlen == strlen) expected=%zu, actual=%zu",
+                               ctx.size, ret);
+        }
+
+        ret = FunctionTest<Tag>::Traits::invoke(str, static_cast<size_t>(0));
+        if (ret != 0) {
+            return this->error("(maxlen == 0) expected=0, actual=%zu", ret);
+        }
+
+        if (ctx.size > 2) {
+            size_t null_pos = ctx.size / 2;
+            buf.dst[null_pos] = '\0';
+            maxlen = ctx.size;
+            ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+            if (ret != null_pos) {
+                return this->error("(null before maxlen) expected=%zu, actual=%zu, maxlen=%zu",
+                                   null_pos, ret, maxlen);
+            }
+        }
+
+        return TestResult::success();
+    }
+};
+
 } // namespace validator
 } // namespace libmem
 

@@ -296,6 +296,61 @@ protected:
 };
 
 // ============================================================================
+// PageBoundaryStrnlenTest
+// ============================================================================
+
+/**
+ * Tests: strnlen
+ * - String spans multiple pages
+ * - Validates both clamped (maxlen < strlen) and unclamped cases
+ */
+template<typename Tag>
+class PageBoundaryStrnlenTest : public PageBoundaryTestBase<Tag> {
+protected:
+    TestResult runPageBoundaryTest(size_t size, size_t null_pos,
+                            uint32_t off1, uint32_t /*off2*/) override {
+        PageCrossBuffer buf;
+
+        if (!buf.allocate(size + 1)) {
+            return this->error("allocation failed");
+        }
+
+        this->seedRandom(size, null_pos, off1, 0);
+        this->fillNonNull(buf.base(), buf.usableSize());
+
+        uint8_t* str = buf.getAddressNearBoundary(off1);
+
+        if (!str || str + null_pos + 1 > buf.base() + buf.usableSize()) {
+            return TestResult::success();
+        }
+
+        str[null_pos] = '\0';
+
+        size_t maxlen = size;
+        size_t ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(str), maxlen);
+
+        if (ret != null_pos) {
+            return this->error("unclamped mismatch: expected=%zu got=%zu (maxlen=%zu)",
+                               null_pos, ret, maxlen);
+        }
+
+        if (null_pos > 1) {
+            size_t clamped_max = null_pos / 2;
+            ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(str), clamped_max);
+
+            if (ret != clamped_max) {
+                return this->error("clamped mismatch: expected=%zu got=%zu (maxlen=%zu)",
+                                   clamped_max, ret, clamped_max);
+            }
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
 // PageBoundaryConcatTest
 // ============================================================================
 
@@ -1015,6 +1070,57 @@ private:
         str[size - 1] = '\0';
         return FunctionTest<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(str), accept);
+    }
+};
+
+// ============================================================================
+// PageOverrunBoundedLengthTest
+// ============================================================================
+
+/**
+ * Tests: strnlen
+ * - String's '\0' is the last byte before the trap page
+ * - Tests both clamped and unclamped cases at the guard boundary
+ */
+template<typename Tag>
+class PageOverrunBoundedLengthTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        this->fillNonNull(buf.ptr, size);
+        buf.ptr[size - 1] = '\0';
+
+        size_t expected = size - 1;
+        size_t ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(buf.ptr), size);
+
+        if (ret != expected)
+            return this->error("unclamped length mismatch: expected=%zu got=%zu", expected, ret);
+
+
+        if (size > 1) {
+            size_t clamped_max = size / 2;
+            ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(buf.ptr), clamped_max);
+
+            if (ret != clamped_max)
+                return this->error("clamped length mismatch: expected=%zu got=%zu", clamped_max, ret);
+        }
+
+        auto buf_nn = this->setupAtGuard(size);
+        if (!buf_nn.valid) return this->error("no-null allocation failed");
+
+        this->fillNonNull(buf_nn.ptr, size);
+
+        ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(buf_nn.ptr), size);
+
+        if (ret != size)
+            return this->error("no-null bounded mismatch: expected=%zu got=%zu", size, ret);
+
+        return TestResult::success();
     }
 };
 

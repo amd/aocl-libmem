@@ -49,6 +49,7 @@ struct StrncatTag {};
 struct StrcmpTag {};
 struct StrncmpTag {};
 struct StrlenTag {};
+struct StrnlenTag {};
 struct StrchrTag {};
 struct StrstrTag {};
 struct StrspnTag {};
@@ -216,6 +217,28 @@ struct FunctionTraits<StrlenTag> : StringTraitsBase<FunctionTraits<StrlenTag>> {
 
     static size_t invoke(const char* s) {
         return std::strlen(s);
+    }
+};
+
+/**
+ * strnlen traits
+ * size_t strnlen(const char* s, size_t maxlen)
+ */
+template<>
+struct FunctionTraits<StrnlenTag> : StringTraitsBase<FunctionTraits<StrnlenTag>> {
+    using ReturnType = size_t;
+    using FunctionPtr = size_t(*)(const char*, size_t);
+
+    static const char* name() { return "strnlen"; }
+
+    static constexpr FunctionCategory category = FunctionCategory::LENGTH;
+    static constexpr ReturnCategory return_category = ReturnCategory::SIZE;
+    static constexpr bool has_size_param = true;
+    static constexpr bool is_bounded = true;
+    static constexpr size_t arg_count = 2;
+
+    static size_t invoke(const char* s, size_t maxlen) {
+        return ::strnlen(s, maxlen);
     }
 };
 

@@ -157,6 +157,11 @@ struct Strlen_Data {
     void *(*functionPtr)(const char *src);
 };
 
+struct Strnlen_Data {
+    const char *functionName;
+    size_t (*functionPtr)(const char *src, size_t n);
+};
+
 class MemoryFixture {
 public:
     void SetUp(size_t size, char alignment, char spill, char page, bool isStringOperation, int buff) {
@@ -462,6 +467,33 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
+    void strnlenRunBenchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+        int size = state.range(0);
+        SetUp(size, alignment, spill, page, true, BUFFER);
+        if(cache_mode == CacheMode::Hot)
+        {
+            for (auto _ : state) {
+            benchmark::DoNotOptimize(func((char*)src_alnd, size));
+            }
+        }
+        else
+        {
+            for (auto _ : state) {
+                state.PauseTiming();
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                }while (cacheline_iters--);
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)src_alnd, size));
+            }
+        }
+        TearDown(alignment);
+    Bench_Result(state);
+    }
+
+    template <typename MemFunction, typename... Args>
     void substrRunBenchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         if (cache_mode == CacheMode::Hot)
@@ -716,6 +748,12 @@ void runstrlenBenchmark(benchmark::State& state, CacheMode cache_mode, char alig
 }
 
 template <typename MemFunction, typename... Args>
+void runstrnlenBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    MemoryFixture fixture;
+    fixture.strnlenRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
+}
+
+template <typename MemFunction, typename... Args>
 void runsubstrBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
     fixture.substrRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
@@ -768,6 +806,10 @@ Str_n_Data str_n_functionList[] = {
 
 Strlen_Data Strlen_functionList[] = {
     {"strlen",  (void *(*)(const char*)) strlen},
+};
+
+Strnlen_Data Strnlen_functionList[] = {
+    {"strnlen", (size_t (*)(const char*, size_t)) strnlen},
 };
 
 enum class Parameters
@@ -870,6 +912,14 @@ int main(int argc, char** argv) {
         }
     };
 
+    auto strnlenBenchmark = [&](benchmark::State& state) {
+        for (const auto &strData : Strnlen_functionList) {
+            if (func == strData.functionName) {
+                runstrnlenBenchmark(state, operation, alignment, spill, page, strData.functionPtr, strData.functionName);
+            }
+        }
+    };
+
     auto substrBenchmark = [&](benchmark::State& state) {
         for (const auto &strData : subfunctionList) {
             if (func == strData.functionName) {
@@ -903,7 +953,9 @@ int main(int argc, char** argv) {
             registerBenchmark(memoryBenchmark);
         }
     } else if (func.compare(0, 3, "str") == 0) {
-        if (func.compare(0, 4, "strn") == 0) {
+        if (func == "strnlen") {
+            registerBenchmark(strnlenBenchmark);
+        } else if (func.compare(0, 4, "strn") == 0) {
             registerBenchmark(string_n_Benchmark);
         } else if (func.compare(0, 4, "strl") == 0) {
             registerBenchmark(strlenBenchmark);

@@ -253,7 +253,9 @@ set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(VALIDATOR_UNIFIED_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator_unified)
 
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
-    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strncat" "strstr" "strspn" "strchr")
+    "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strnlen" "strcat" "strncat" "strstr" "strspn" "strchr")
+
+#Threshold specific functions
 set(load_store_func "memcpy" "mempcpy" "memmove")
 set(store_func "memset")
 

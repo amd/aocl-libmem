@@ -60,6 +60,7 @@
 #include "validators/string/StrcmpValidator.hpp"
 #include "validators/string/StrncmpValidator.hpp"
 #include "validators/string/StrlenValidator.hpp"
+#include "validators/string/StrnlenValidator.hpp"
 #include "validators/string/StrchrValidator.hpp"
 #include "validators/string/StrstrValidator.hpp"
 #include "validators/string/StrspnValidator.hpp"
