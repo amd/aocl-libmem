@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -39,25 +39,39 @@ static inline void *_memset_avx512_erms(void *mem, int val, size_t size)
     ret = mem;
 
     z0 = _mm512_set1_epi8(val);
-    if (likely(size <= 2 * ZMM_SZ))
+
+    if (likely(size <= ZMM_SZ))
     {
-        if (likely(size >  ZMM_SZ))
-        {
-            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
-        }
         mask = _bzhi_u64((uint64_t)-1, (uint8_t)size);
         _mm512_mask_storeu_epi8(mem, mask, z0);
         return ret;
     }
-
-    else if (size <= 4 * ZMM_SZ)
+    
+    if (likely(size <= 2 * ZMM_SZ))
     {
-        _mm512_storeu_si512(mem , z0);
-        _mm512_storeu_si512(mem + ZMM_SZ, z0);
+        _mm512_storeu_si512(mem, z0);
         _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
-        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
         return ret;
-
+    }
+    if (size <= 4 * ZMM_SZ)
+    {
+        _mm512_storeu_si512(mem, z0);
+        _mm512_storeu_si512(mem + ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        return ret;
+    }
+    if (size <= 8 * ZMM_SZ)
+    {
+        _mm512_storeu_si512(mem, z0);
+        _mm512_storeu_si512(mem + ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + 3 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 4 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 3 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+        _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
+        return ret;
     }
     // store first 4xVECs irrespective of alignment
     _mm512_storeu_si512(mem , z0);
