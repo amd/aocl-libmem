@@ -30,27 +30,29 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Determine repository root - handle both source tree and build tree locations
-if [[ "$SCRIPT_DIR" == */build/tools/validator/glibc ]]; then
-    # Script is in build directory
-    REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-else
-    # Script is in source tree
-    REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-fi
+# Determine paths relative to script location
+# Script is in: build/tools/validator/glibc/
+# We need to go up to build/ directory
+BUILD_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# Set paths relative to repository root
-GLIBC_TESTS_DIR="$REPO_ROOT/build/test/glibc-functionality-tests"
+# Set paths relative to build directory
+GLIBC_TESTS_DIR="$BUILD_DIR/test/glibc-functionality-tests"
 GLIBC_EXECUTABLES_DIR="$GLIBC_TESTS_DIR/bin"
-SHARED_LIB="$REPO_ROOT/build/lib/libaocl-libmem.so.5.1.1"
+LIB_DIR="$BUILD_DIR/lib"
+
+# Find repository root for CMakeLists.txt (one level up from build)
+REPO_ROOT="$(cd "$BUILD_DIR/.." && pwd)"
+
+# Find the shared library (version-agnostic - finds versioned or symlink)
+SHARED_LIB=$(find "$LIB_DIR" -name "libaocl-libmem.so*" -type f | head -1)
 
 echo "Comprehensive glibc test integration with LD_PRELOAD"
 echo "=================================================="
 
 # Check if shared library exists
 if [ ! -f "$SHARED_LIB" ]; then
-    echo "ERROR: Shared library not found: $SHARED_LIB"
-    echo "Please build the library first with: cd build && make"
+    echo "ERROR: Shared library not found in $LIB_DIR/"
+    echo "Please build the library first with: cmake --build ."
     exit 1
 fi
 
