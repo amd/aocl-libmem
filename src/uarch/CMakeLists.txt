@@ -29,6 +29,7 @@ add_library(uarch_objlib INTERFACE)
 if (ALMEM_DYN_DISPATCH)
     set(uarch_list RANGE ${MIN_ZEN_VER} ${MAX_ZEN_VER})
 else ()
+    # Use specific architecture version (either user-specified via ALMEM_ARCH or auto-detected)
     set(uarch_list ${ARCH_VER})
 endif()
 

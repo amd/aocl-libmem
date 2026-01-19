@@ -1,4 +1,4 @@
-# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -57,6 +57,12 @@ option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
 
 option(ALMEM_GCOV "Enable Code Coverage" OFF)
 
+set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5). Leave empty for auto-detection.")
+
+# Define supported Zen version range
+set(MIN_ZEN_VER 1)
+set(MAX_ZEN_VER 5)
+
 if (ALMEM_LOGGING)
 add_definitions(-DALMEM_LOGGER)
 # uncomment the below for debug logs, LOG_LEVEL=DEBUG.
@@ -67,6 +73,28 @@ if (ENABLE_TUNABLES) #retaining for backward compatibility
     set(ALMEM_TUNABLES ON)
 endif()
 
+# Validate and process ALMEM_ARCH option
+if (ALMEM_ARCH)
+    string(TOLOWER ${ALMEM_ARCH} ALMEM_ARCH_LOWER)
+    # Build regex pattern dynamically based on MIN_ZEN_VER and MAX_ZEN_VER
+    set(ZEN_RANGE "")
+    foreach(i RANGE ${MIN_ZEN_VER} ${MAX_ZEN_VER})
+        if(ZEN_RANGE)
+            string(APPEND ZEN_RANGE "|${i}")
+        else()
+            string(APPEND ZEN_RANGE "${i}")
+        endif()
+    endforeach()
+
+    if (ALMEM_ARCH_LOWER MATCHES "^zen(${ZEN_RANGE})$")
+        string(REGEX REPLACE "^zen([0-9]+)$" "\\1" ARCH_VER "${ALMEM_ARCH_LOWER}")
+        message(STATUS "ALMEM_ARCH: Forcing build for Zen${ARCH_VER}")
+    else ()
+        message(WARNING "Invalid ALMEM_ARCH value: '${ALMEM_ARCH}'. Must be one of: zen${MIN_ZEN_VER} to zen${MAX_ZEN_VER}. Falling back to next available option...")
+        set(ALMEM_ARCH "")
+    endif ()
+endif()
+
 #reset ISA for invalid options
 if (NOT (${ALMEM_ISA} STREQUAL "avx2" OR ${ALMEM_ISA} STREQUAL "avx512"))
     if (${ALMEM_ISA} MATCHES "avx")
@@ -74,6 +102,22 @@ if (NOT (${ALMEM_ISA} STREQUAL "avx2" OR ${ALMEM_ISA} STREQUAL "avx512"))
     endif ()
     set(ALMEM_ISA "")
 endif ()
+
+# ALMEM_ARCH has highest precedence
+if (ALMEM_ARCH)
+    if (ALMEM_ISA)
+        message(WARNING "ALMEM_ARCH has precedence over ISA; Disabling ISA option...")
+        set(ALMEM_ISA "")
+    endif ()
+    if (ALMEM_DYN_DISPATCH)
+        message(WARNING "ALMEM_ARCH has precedence over DYN_DISPATCH; Disabling Dynamic CPU dispatching...")
+        set(ALMEM_DYN_DISPATCH OFF)
+    endif ()
+    if (ALMEM_TUNABLES)
+        message(WARNING "ALMEM_ARCH has precedence over TUNABLES; Disabling TUNABLES option...")
+        set(ALMEM_TUNABLES OFF)
+    endif ()
+endif()
 
 if (ALMEM_ISA) #ISA has precedence over DYN_DISPATCH
     if (ALMEM_DYN_DISPATCH)

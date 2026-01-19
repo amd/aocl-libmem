@@ -12,6 +12,8 @@
     #Configure for GCC build
         # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=gcc -S <source_dir> -B <build_dir>
+        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5)
+        $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=zen4 -S <source_dir> -B <build_dir>
         # Compiling with Dynamic CPU Dispatcher
         $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>
         # Compiling AVX2 binary
@@ -23,6 +25,8 @@
     #Configure for AOCC(Clang) build
         # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=clang -S <source_dir> -B <build_dir>
+        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5)
+        $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=zen4 -S <source_dir> -B <build_dir>
         # Compiling with Dynamic CPU Dispatcher
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>
         # Compiling AVX2 binary
@@ -31,7 +35,7 @@
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ISA=avx512 -S <source_dir> -B <build_dir>
         # Compiling with Tunable Parameters
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_TUNABLES=Y -S <source_dir> -B <build_dir>
-    Note: 'ALMEM_ISA' has precedence over 'ALMEM_DYN_DISPATCH' and 'ALMEM_TUNABLES' options.
+    Note: 'ALMEM_ARCH' has highest precedence, followed by 'ALMEM_ISA', then 'ALMEM_DYN_DISPATCH' and 'ALMEM_TUNABLES' options.
     # Build
     $ cmake --build <build_dir>
 

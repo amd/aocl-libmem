@@ -1,4 +1,4 @@
-# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -32,8 +32,6 @@ check_c_compiler_flag("-march=znver5"    CONFIG_COMPILER_HAS_ZEN5)
 
 set(DETECT_ARCH 1)
 set(ARCH_UNDF 255)
-set(MIN_ZEN_VER 1)
-set(MAX_ZEN_VER 5)
 
 set(DETECT_FEATURE 2)
 set(AVX2 0)
@@ -63,7 +61,22 @@ foreach(FEATURE ${CPU_FEATURES})
     endif()
 endforeach()
 
-if (ALMEM_ISA)
+# Warn about compiling AVX512 code on AVX2-only machines
+if (NOT HAS_AVX512)
+    set(AVX512_WARNING_MSG "but this machine does NOT support AVX512. Running this binary on an AVX2-only machine will result in an ILLEGAL INSTRUCTION error.")
+    # Check if ALMEM_ISA is set to avx512
+    if (ALMEM_ISA AND "${ALMEM_ISA}" STREQUAL "avx512")
+        message(WARNING "ALMEM_ISA is set to 'avx512', ${AVX512_WARNING_MSG}")
+    endif()
+    # Check if ALMEM_ARCH is set to zen4 or zen5 (AVX512 architectures)
+    if (ARCH_VER AND ARCH_VER GREATER_EQUAL 4)
+        message(WARNING "ALMEM_ARCH is set to 'zen${ARCH_VER}' which uses AVX512 instructions, ${AVX512_WARNING_MSG}")
+    endif()
+endif()
+
+if (ALMEM_ARCH)
+        message(STATUS "## Compiling for specific Zen architecture: Zen${ARCH_VER}...")
+elseif (ALMEM_ISA)
         if (${ALMEM_ISA} MATCHES "avx512")
             message(STATUS "## Compiling for AVX512 CPUs...")
         elseif (${ALMEM_ISA} MATCHES "avx2")
@@ -149,7 +162,11 @@ if (ALMEM_LOGGING)
     list(APPEND SOURCE_FILES logger.c)
 endif ()
 
-if (ALMEM_ISA)
+if (ALMEM_ARCH)
+    if (ALMEM_ARCH_LOWER MATCHES "zen")
+        add_subdirectory(uarch)
+    endif ()
+elseif (ALMEM_ISA)
     if (ALMEM_ISA MATCHES "avx")
         add_subdirectory(isa)
     endif ()
