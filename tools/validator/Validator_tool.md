@@ -2,13 +2,14 @@
 
 ## Description
 - AOCL-LibMem Validator Framework is used for functional validation of LibMem supported functions. It performs data validation check, which checks the data integrity of the source and destination memory.
-- The framework provides two validator implementations:
+- The framework provides three validator implementations:
   - **Legacy Validator** (`libmem_validator`): Original C implementation
   - **Unified Validator** (`libmem_validator_unified`): Refactored C++ framework with template-based architecture and registry for dynamic dispatch
+  - **GTest Validator** (`libmem_validator_gtest`): GTest-style test runner for interactive debugging and fine-grained test control
 
 - Users can perform validation testing using any of the methods mentioned below:
    1. Testing with Validator script (`build_dir/test/validator.py`)
-   2. Testing with validator binaries directly (`libmem_validator` or `libmem_validator_unified`)
+   2. Testing with validator binaries directly (`libmem_validator`, `libmem_validator_unified`, or `libmem_validator_gtest`)
    3. Testing with ctest utility (`build_dir/test $ ctest`)
 
 ---
@@ -345,6 +346,42 @@ $ ctest -R "unified_memcpy_thresholdL2|unified_memcpy_threshold_nt"
 # Unified shift tests with timestamped logs
 $ ctest -R "unified_memcpy_shift" -O ctest_results_$(date +%Y_%m_%d_%H%M%S).log
 ```
-
 Notes:
 1. Running ctest on Memcmp, Strcmp and Strncmp takes some extra time (as we are trying to compare all the Bytes).
+
+---
+
+# GTest Validator (`libmem_validator_gtest`)
+
+The GTest validator provides a GTest-style command-line interface for running tests dynamically. It allows running specific tests with any function, size, and alignment combination, producing output in a familiar GTest format.
+
+## Command Line Interface
+
+```bash
+libmem_validator_gtest <function> [size] [src_align] [dst_align] [all_alignments] [--test=<name>]
+```
+
+Options:
+
+- `--test=<name>`: Run only the specified test (e.g., `--test=BasicCopy`)
+- `--list-tests`: List all available tests for all functions
+- `--help`: Show usage
+
+## Usage Examples
+
+```bash
+# Run all memcpy tests at size 64
+./tools/validator/libmem_validator_gtest memcpy 64
+
+# Run specific test for memmove
+./tools/validator/libmem_validator_gtest memmove 40 --test=BackwardOverlap
+
+# Run with specific alignments
+./tools/validator/libmem_validator_gtest memcpy 128 5 3
+
+# Run all alignment combinations (4096 tests per test case)
+./tools/validator/libmem_validator_gtest memcpy 128 0 0 1
+
+# List all available tests
+./tools/validator/libmem_validator_gtest --list-tests
+```

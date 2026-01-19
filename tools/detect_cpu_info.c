@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,73 +23,60 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-#include <stdlib.h>
+#include "../include/threshold.h"
 #include "../include/zen_cpu_info.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define     REQ_IDX         1
+#define ARCH_ZEN1 1
+#define ARCH_ZEN2 2
+#define ARCH_ZEN3 3
+#define ARCH_ZEN4 4
+#define ARCH_ZEN5 5
+#define ARCH_UNDF 255
 
-#define     REQ_TYPE_ARCH   1
-/* ZEN Architecture flags */
-#define     ARCH_ZEN1       1
-#define     ARCH_ZEN2       2
-#define     ARCH_ZEN3       3
-#define     ARCH_ZEN4       4
-#define     ARCH_ZEN5       5
-#define     ARCH_UNDF       255
+#define NON_AMD_CPU 0
+#define AMD_CPU 1
 
-#define     REQ_TYPE_FEATURE    2
-
-#define     REQ_FEATURE_IDX     2
-/* ZEN CPU feature flags */
-#define     HAS_AVX2        0
-#define     HAS_ERMS        1
-#define     HAS_FSRM        2
-#define     HAS_AVX512      3
-#define     HAS_MOVDIRI     4
-
-#define     REQ_TYPE_CACHE  3
-
-#define     REQ_CACHE_IDX   2
-#define     L1_DCACHE_CORE  1
-#define     L2_CACHE_CORE   2
-#define     L3_CACHE_CCX    3
-
-#define     REQ_TYPE_CPU_VENDOR 4
-#define     NON_AMD_CPU     0
-#define     AMD_CPU         1
-
-void __get_cpu_id(cpuid_registers *cpuid_regs)
+static void __get_cpu_id(cpuid_registers *cpuid_regs)
 {
-    asm volatile
-    (
-     "cpuid"
-     :"=a"(cpuid_regs->eax), "=b"(cpuid_regs->ebx), "=c"(cpuid_regs->ecx), "=d"(cpuid_regs->edx)
-     :"0"(cpuid_regs->eax), "2"(cpuid_regs->ecx)
-    );
+    asm volatile("cpuid"
+                 : "=a"(cpuid_regs->eax), "=b"(cpuid_regs->ebx), "=c"(cpuid_regs->ecx), "=d"(cpuid_regs->edx)
+                 : "0"(cpuid_regs->eax), "2"(cpuid_regs->ecx));
+}
+
+static uint64_t get_cache_bytes(cpuid_registers *cpuid_regs, uint8_t cache_level)
+{
+    cpuid_regs->eax = 0x8000001D;
+    cpuid_regs->ecx = cache_level;
+    __get_cpu_id(cpuid_regs);
+    return (uint64_t) ((((cpuid_regs->ebx >> 22) & 0x3ff) + 1) *
+                       (((cpuid_regs->ebx & 0xfff) + 1) * (cpuid_regs->ecx + 1)));
 }
 
 int main(int argc, char **argv)
 {
     cpuid_registers cpuid_regs;
-    uint8_t req_feature, req_cache;
 
-    uint8_t req_type = atoi(argv[REQ_IDX]);
+    if (argc < 2)
+        return -1;
 
-    switch (req_type)
+    const char *cmd = argv[1];
+
+    /* Architecture */
+    if (strcmp(cmd, "arch") == 0)
     {
-        case REQ_TYPE_ARCH:
-        cpuid_regs.eax= 0x7;
+        cpuid_regs.eax = 0x7;
         cpuid_regs.ecx = 0;
         __get_cpu_id(&cpuid_regs);
-
         if (cpuid_regs.ebx & AVX512_MASK)
         {
             if (cpuid_regs.ecx & MOVDIRI_MASK)
                 return ARCH_ZEN5;
             return ARCH_ZEN4;
-        }
-        else if (cpuid_regs.ebx & AVX2_MASK)
+        } else if (cpuid_regs.ebx & AVX2_MASK)
         {
             if (cpuid_regs.ecx & VPCLMULQDQ_MASK)
                 return ARCH_ZEN3;
@@ -99,66 +86,91 @@ int main(int argc, char **argv)
                 return ARCH_ZEN1;
         }
         return ARCH_UNDF;
+    }
 
-        case REQ_TYPE_FEATURE:
-        req_feature = atoi(argv[REQ_FEATURE_IDX]);
-        cpuid_regs.eax= 0x7;
+    if (strcmp(cmd, "vendor") == 0)
+    {
+        cpuid_regs.eax = 0x0;
         cpuid_regs.ecx = 0;
         __get_cpu_id(&cpuid_regs);
-
-        switch (req_feature)
-        {
-            case HAS_AVX512:
-                return !!(cpuid_regs.ebx & AVX512_MASK);
-            case HAS_AVX2:
-                return !!(cpuid_regs.ebx & AVX2_MASK);
-            case HAS_ERMS:
-                return !!(cpuid_regs.ebx & ERMS_MASK);
-            case HAS_FSRM:
-                return !!(cpuid_regs.edx & FSRM_MASK);
-            case HAS_MOVDIRI:
-                return !!(cpuid_regs.ecx & MOVDIRI_MASK);
-            default:
-                return -1;
-        }
-
-        case REQ_TYPE_CACHE:
-        req_cache = atoi(argv[REQ_CACHE_IDX]);
-        cpuid_regs.eax = 0x8000001D;
-        uint8_t shifter = 0;
-        switch (req_cache)
-        {
-            case L1_DCACHE_CORE:
-                cpuid_regs.ecx = 0x0;
-                shifter = 10; // size reported in multiples of KB
-                break;
-            case L2_CACHE_CORE:
-                cpuid_regs.ecx = 0x2;
-                shifter = 19; // size reported in multiple of 512 KB
-                break;
-            case L3_CACHE_CCX:
-                cpuid_regs.ecx = 0x3;
-                shifter = 20; // size reported in multiple of MB
-                break;
-            default:
-                return -1;
-        }
-        __get_cpu_id(&cpuid_regs);
-
-        return ((((cpuid_regs.ebx>>22) & 0x3ff) + 1) * \
-                  (((cpuid_regs.ebx & 0xfff) + 1) * (cpuid_regs.ecx + 1))) >> shifter;
-
-        case REQ_TYPE_CPU_VENDOR:
-        cpuid_regs.eax= 0x0;
-        cpuid_regs.ecx = 0;
-        __get_cpu_id(&cpuid_regs);
-        if ((cpuid_regs.ebx ^ 0x68747541) |
-            (cpuid_regs.edx ^ 0x69746E65) |
-                 (cpuid_regs.ecx ^ 0x444D4163))
-        {
+        if ((cpuid_regs.ebx ^ 0x68747541) | (cpuid_regs.edx ^ 0x69746E65) | (cpuid_regs.ecx ^ 0x444D4163))
             return NON_AMD_CPU;
-        }
         return AMD_CPU;
     }
+
+    /* Features */
+    if (strcmp(cmd, "feature_avx2") == 0)
+    {
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        return !!(cpuid_regs.ebx & AVX2_MASK);
+    }
+
+    if (strcmp(cmd, "feature_avx512") == 0)
+    {
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        return !!(cpuid_regs.ebx & AVX512_MASK);
+    }
+
+    if (strcmp(cmd, "feature_erms") == 0)
+    {
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        return !!(cpuid_regs.ebx & ERMS_MASK);
+    }
+
+    if (strcmp(cmd, "feature_fsrm") == 0)
+    {
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        return !!(cpuid_regs.edx & FSRM_MASK);
+    }
+
+    if (strcmp(cmd, "feature_movdiri") == 0)
+    {
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        return !!(cpuid_regs.ecx & MOVDIRI_MASK);
+    }
+
+    /* Cache sizes */
+    if (strcmp(cmd, "l1_dcache") == 0)
+        return (int) (get_cache_bytes(&cpuid_regs, 0x0) >> 10);
+
+    if (strcmp(cmd, "l2_cache") == 0)
+        return (int) (get_cache_bytes(&cpuid_regs, 0x2) >> 19);
+
+    if (strcmp(cmd, "l3_cache") == 0)
+        return (int) (get_cache_bytes(&cpuid_regs, 0x3) >> 20);
+
+    if (strcmp(cmd, "nt_threshold") == 0)
+    {
+        uint64_t l3_bytes = get_cache_bytes(&cpuid_regs, 0x3);
+        cpuid_regs.eax = 0x7;
+        cpuid_regs.ecx = 0;
+        __get_cpu_id(&cpuid_regs);
+        /* Zen5: NT moves/stores start from L3 */
+        if (cpuid_regs.ecx & MOVDIRI_MASK)
+            return (int) (COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) >> 20);
+        /* Pre-Zen5: NT moves start from 3/4 of L3 */
+        return (int) (COMPUTE_NT_MOV_THRESHOLD(l3_bytes) >> 20);
+    }
+
+    if (strcmp(cmd, "aligned_vec_cpy_threshold") == 0)
+        return (int) (COMPUTE_ALIGNED_VEC_MOV_TH(get_cache_bytes(&cpuid_regs, 0x0)) >> 10);
+
+    if (strcmp(cmd, "aligned_vec_set_threshold") == 0)
+        return (int) (COMPUTE_ALIGNED_VEC_STORE_TH(get_cache_bytes(&cpuid_regs, 0x0)) >> 10);
+
+    if (strcmp(cmd, "zen5_nt_store_threshold") == 0)
+        return (int) (COMPUTE_NT_THRESHOLD_ZEN5(get_cache_bytes(&cpuid_regs, 0x3)) >> 20);
+
+    fprintf(stderr, "Error: Unknown command '%s'\n", cmd);
     return -1;
 }

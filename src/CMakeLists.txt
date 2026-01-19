@@ -30,29 +30,16 @@ check_c_compiler_flag("-march=znver4"    CONFIG_COMPILER_HAS_ZEN4)
 check_c_compiler_flag("-march=znver5"    CONFIG_COMPILER_HAS_ZEN5)
 
 
-set(DETECT_ARCH 1)
 set(ARCH_UNDF 255)
-
-set(DETECT_FEATURE 2)
-set(AVX2 0)
-set(ERMS 1)
-set(FSRM 2)
-set(AVX512 3)
-set(MOVIDR 4)
-
-set(DETECT_CPU_VENDOR  4)
 set(AMD_CPU 1)
-
 set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
-
 set(CPU_FEATURES AVX512 AVX2 ERMS)
 
-# Detect CPU features
 foreach(FEATURE ${CPU_FEATURES})
-
+    string(TOLOWER ${FEATURE} FEATURE_LOWER)
     try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "feature_${FEATURE_LOWER}")
 
     if (HAS_${FEATURE})
         message(STATUS "HAS_${FEATURE}: True")
@@ -99,12 +86,12 @@ elseif (ALMEM_DYN_DISPATCH)
 else ()
     #Detect the CPU Vendor
     try_run(CPU_VENDOR COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_CPU_VENDOR})
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "vendor")
 
     if (${CPU_VENDOR} MATCHES ${AMD_CPU})
         #Detect the CPU architecture
         try_run(ARCH_VER COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_ARCH})
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "arch")
 
 
         if (${ARCH_VER} LESS ${ARCH_UNDF})

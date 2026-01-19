@@ -57,7 +57,7 @@ add_executable(libmem_validator_unified
 target_compile_features(libmem_validator_unified PRIVATE cxx_std_11)
 target_compile_options(libmem_validator_unified PRIVATE -Wall -Wextra -O0)
 
-target_include_directories(libmem_validator_unified PRIVATE 
+target_include_directories(libmem_validator_unified PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
@@ -215,120 +215,76 @@ endmacro()
 # TEST CONFIGURATION
 enable_testing()
 
-set(DETECT_FEATURE 2)
-set(AVX2 0)
-set(AVX512 3)
-set(DETECT_CPU_VENDOR  4)
-set(DETECT_ARCH_TYPE   1)
-set(ARCH_ZEN5 5)
-set(REQ_TYPE_CACHE 3)
-set(L1_DCACHE_CORE 1)
-set(L2_CACHE_CORE  2)
-set(L3_CACHE_CCX   3)
 set(AMD_CPU 1)
-set(CPU_FEATURES AVX512)
-
+set(ARCH_ZEN5 5)
 set(CPU_DETECT_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
 
-#Detect the CPU Vendor
 try_run(CPU_VENDOR COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_CPU_VENDOR})
+COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "vendor")
 
 if (${CPU_VENDOR} MATCHES ${AMD_CPU})
     set(CPU "AMD")
 endif()
 
-# Detect CPU features
-set(FEATURE AVX512)
-try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
-if (HAS_${FEATURE})
-    #AVX512 supported
+try_run(HAS_AVX512 COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "feature_avx512")
+if (HAS_AVX512)
     SET(ISA "AVX512")
-    #Passing AVX512_FEATURE_ENABLED for VEC_SZ computation
     target_compile_definitions(libmem_validator PRIVATE AVX512_FEATURE_ENABLED)
-    #Detect if ZEN5 CPU, for new threshold checks
-    try_run(IS_ZEN5 COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_ARCH_TYPE})
-    if (${IS_ZEN5} MATCHES ${ARCH_ZEN5})
+    try_run(ARCH_VER COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "arch")
+    if (${ARCH_VER} MATCHES ${ARCH_ZEN5})
         SET(ARCH "ZEN5")
     endif()
-
 else()
-    SET(FEATURE AVX2)
-    try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
-        if (HAS_${FEATURE})
-            #AVX2 supported
-            SET(ISA "AVX2")
-        endif()
+    try_run(HAS_AVX2 COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "feature_avx2")
+    if (HAS_AVX2)
+        SET(ISA "AVX2")
+    endif()
 endif()
 
-# Define test values
-set(PAGE_SIZE 4096)    #4KB
-set(MAX_SIZE 33554432) #32MB
-
-set(MAX_TIMEOUT 12000) #Timeout set to 200Mins
+set(PAGE_SIZE 4096)
+set(MAX_SIZE 33554432)
+set(MAX_TIMEOUT 12000)
 set(LIBMEM_PATH ${CMAKE_INSTALL_PREFIX}/lib/libaocl-libmem.so)
 set(VALIDATOR_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator)
 set(VALIDATOR_UNIFIED_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator_unified)
 
-# All supported functions
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
     "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strcat" "strncat" "strstr" "strspn" "strchr")
-
-#Threshold specific functions
 set(load_store_func "memcpy" "mempcpy" "memmove")
 set(store_func "memset")
 
-
-# GENERATE SIZE LISTS (computed once, used by both validators)
-# Iterator sizes: [0, 1, 2, ..., 4096]
 generate_size_range(ITER_SIZES 0 ${PAGE_SIZE})
-
-# Shift sizes: [1, 2, 4, 8, ..., 32MB] (powers of 2)
 generate_power_of_2_sizes(SHIFT_SIZES 1 ${MAX_SIZE})
 
 message(STATUS "Adding validator tests for: ${supp_func}")
 
 
-# ITERATOR TESTING [0,1,2...4096B]
-# Tests all sizes from 0 to PAGE_SIZE (4096 bytes)
 add_dual_validator_tests("iter" "${supp_func}" "${ITER_SIZES}")
-
-# SHIFT TESTING [1B,2B,4B,8B...32MB]
-# Tests powers of 2 from 1 byte to MAX_SIZE (32MB)
 add_dual_shift_tests("${supp_func}" "${SHIFT_SIZES}" "${MAX_TIMEOUT}")
-
-# ALIGNMENT TESTING [size 0-4096B, src/dst 0-63]
-# Tests all sizes with alignment flag enabled
 add_dual_validator_tests("align" "${supp_func}" "${ITER_SIZES}" 0 0 1)
 
 message(STATUS "Basic validator tests added: iterator, shift, and alignment tests")
 
-
 # THRESHOLD TESTING FOR AMD CPUS
-# Tests correctness at performance threshold boundaries where AOCL-LibMEM
-# switches between different optimization strategies.
 if(CPU STREQUAL "AMD")
     message(STATUS "Adding AMD-specific threshold tests")
 
-    #L2 Cache info, rep-movs threshold check for ZEN5 arch
-    try_run(L2_CACHE COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L2_CACHE_CORE})
-    #L2_CACHE returned is a multiple of 512KB
-    math(EXPR L2_CACHE "${L2_CACHE} * 512 * 1024")
+    try_run(L2_CACHE_512KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l2_cache")
+    math(EXPR L2_CACHE "${L2_CACHE_512KB} * 512 * 1024")
 
-    #L3 Cache info
-    try_run(L3_CACHE COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L3_CACHE_CCX})
-    #L3_CACHE returned is a multiple of MB
-    math(EXPR L3_CACHE "${L3_CACHE} * 1024 * 1024")
-    #3/4th of L3 Cache = NT_THRESHOLD
-    math(EXPR NT_TH "${L3_CACHE} * 3/4")
+    try_run(L3_CACHE_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l3_cache")
+    math(EXPR L3_CACHE "${L3_CACHE_MB} * 1024 * 1024")
 
-    # Set threshold range based on ISA
+    try_run(NT_TH_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "nt_threshold")
+    math(EXPR NT_TH "${NT_TH_MB} * 1024 * 1024")
+
     if(ISA STREQUAL "AVX512")
         set(TH_RANGE 512)
         set(MAX_SHIFT 9)
@@ -339,47 +295,41 @@ if(CPU STREQUAL "AMD")
         message(FATAL_ERROR "SKIPPING Threshold validation - unsupported ISA")
     endif()
 
-    # Generate power-of-2 offset values for threshold boundary testing
     generate_offset_values(OFFSET_VALUES ${MAX_SHIFT})
 
-
-    # L2 CACHE THRESHOLD TESTING
-    # Test around L2 cache boundary where optimization strategy changes
     generate_threshold_values(L2_TH_SIZES ${L2_CACHE} ${TH_RANGE} "${OFFSET_VALUES}")
     add_dual_validator_tests("thresholdL2" "${load_store_func}" "${L2_TH_SIZES}" 0 0 1)
 
-
-    # NT (NON-TEMPORAL) THRESHOLD TESTING
-    # Test around NT threshold (3/4 of L3 cache) where NT stores are used
     generate_threshold_values(NT_TH_SIZES ${NT_TH} ${TH_RANGE} "${OFFSET_VALUES}")
     add_dual_validator_tests("threshold_nt" "${load_store_func}" "${NT_TH_SIZES}" 0 0 1)
 
-    message(STATUS "AMD threshold tests added: L2 and NT thresholds")
+    if(ISA STREQUAL "AVX2")
+        generate_threshold_values(MEMSET_NT_SIZES ${L3_CACHE} ${TH_RANGE} "${OFFSET_VALUES}")
+        add_dual_validator_tests("threshold_nt" "${store_func}" "${MEMSET_NT_SIZES}" 0 0 1)
+    endif()
 
+    message(STATUS "AMD threshold tests added: L2 and NT thresholds")
 
     # ZEN5-SPECIFIC THRESHOLD TESTING
     if(ARCH STREQUAL "ZEN5")
         message(STATUS "Adding ZEN5-specific threshold tests")
 
-        # L1 D-Cache info for aligned vector thresholds
-        try_run(L1_DCACHE COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${REQ_TYPE_CACHE} ${L1_DCACHE_CORE})
-
-        # LOAD-STORE FUNCTION ALIGNED VECTOR THRESHOLD (ZEN5)
-        # Threshold = (L1_DCACHE >> 1) + 2KB for load-store functions
-        math(EXPR ALIGNED_VEC_CPY_TH "(${L1_DCACHE} * 1024 / 2) + 2048")
+        try_run(ALIGNED_VEC_CPY_TH_KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_cpy_threshold")
+        math(EXPR ALIGNED_VEC_CPY_TH "${ALIGNED_VEC_CPY_TH_KB} * 1024")
         generate_threshold_values(ALIGNED_VEC_CPY_SIZES ${ALIGNED_VEC_CPY_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("aligned_vector" "${load_store_func}" "${ALIGNED_VEC_CPY_SIZES}" 0 0 1)
 
-        # STORE FUNCTION ALIGNED VECTOR THRESHOLD (ZEN5)
-        # Threshold = L1_DCACHE for store functions (memset)
-        math(EXPR ALIGNED_VEC_SET_TH "${L1_DCACHE} * 1024")
+        try_run(ALIGNED_VEC_SET_TH_KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_set_threshold")
+        math(EXPR ALIGNED_VEC_SET_TH "${ALIGNED_VEC_SET_TH_KB} * 1024")
         generate_threshold_values(ALIGNED_VEC_SET_SIZES ${ALIGNED_VEC_SET_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("aligned_vector" "${store_func}" "${ALIGNED_VEC_SET_SIZES}" 0 0 1)
 
-        # STORE FUNCTION NT THRESHOLD (ZEN5)
-        # ZEN5 uses L3_CACHE as NT threshold for store functions
-        generate_threshold_values(ZEN5_NT_SIZES ${L3_CACHE} ${TH_RANGE} "${OFFSET_VALUES}")
+        try_run(ZEN5_NT_TH_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "zen5_nt_store_threshold")
+        math(EXPR ZEN5_NT_TH "${ZEN5_NT_TH_MB} * 1024 * 1024")
+        generate_threshold_values(ZEN5_NT_SIZES ${ZEN5_NT_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("threshold_nt" "${store_func}" "${ZEN5_NT_SIZES}" 0 0 1)
 
         message(STATUS "ZEN5-specific threshold tests added")
@@ -388,3 +338,17 @@ if(CPU STREQUAL "AMD")
 endif()
 
 message(STATUS "Validator test configuration complete")
+
+# Dynamic Validator - runs specific tests with any size/alignment
+add_executable(libmem_validator_gtest
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtest/gtest_main.cpp
+)
+
+target_compile_features(libmem_validator_gtest PRIVATE cxx_std_11)
+target_compile_options(libmem_validator_gtest PRIVATE -Wall -Wextra -O0)
+
+target_include_directories(libmem_validator_gtest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(libmem_validator_gtest m)
