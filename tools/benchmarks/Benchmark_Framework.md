@@ -6,12 +6,17 @@
     - TinyMemBench:
 
         External benchmark tool which uses the existing tbm framework.
-    - GoogleBench: cached & uncached modes
+    - GoogleBench: hot & cold cached modes
 
         A microbenchmark support library for running memory benchmarks.
     - FleetBench:
 
         By making use of existing probability data set, function call to a specific size is being made.
+    - DCPerf:
+
+        Meta's datacenter benchmark suite supporting WDL (workload-driven latency) benchmarks for memcpy/memset and AI benchmarks for rebatch/tensor operations.
+        
+        **Note**: DCPerf benchmarks require sudo/root privileges to run.
 
 - Result will be generated in the format of csv and .png(in case of graph reports)
 
@@ -82,10 +87,11 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 ## Running Bench framework
 
     $ ./bench.py <benchmark_name> <common_options> <benchmark_specific_options>
-      <benchmark_name>  = {gbm,tbm,fbm}
+      <benchmark_name>  = {gbm,tbm,fbm,dcperf}
                           gbm          Googlebench
                           tbm          TinyMembench
                           fbm          Fleetbench
+                          dcperf       DCPerf (WDL and AI benchmarks)
 
       <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,g,b,d] -bestperf
 
@@ -128,9 +134,18 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
       <TBM_specific_option> = None
 
+      <DCPerf_specific_option> = [func] [sub_func]
+                          func         : Benchmark type (optional, default='wdl')
+                                        wdl - Workload-driven latency benchmarks
+                                        ai  - AI benchmarks
+                          sub_func     : Specific function/type to benchmark (optional)
+                                        For 'wdl': memcpy, memset (defaults to both if not specified)
+                                        For 'ai': rebatch, tensor
+
     Examples:
     Benchmark Help option
     $ ./bench.py -h
+    $ ./bench.py dcperf -h
 
     Running Google Benchmark
     $ ./bench.py gbm memcpy -r 8B 16B -m c -t "1" -x 16
@@ -146,3 +161,13 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     Running Fleetbench
     $ ./bench.py fbm memset -x 47 -i 100
     Runs fleetbench for memset benchmarking on core - 47 for 100 iterations
+
+    Running DCPerf (Requires sudo privileges)
+    $ sudo ./bench.py dcperf wdl -x 47
+    Runs DCPerf WDL benchmarks for both memcpy and memset on core - 47
+
+    $ sudo ./bench.py dcperf wdl memcpy -x 47
+    Runs DCPerf WDL benchmarks for memcpy only on core - 47
+
+    $ sudo ./bench.py dcperf ai rebatch -x 47
+    Runs DCPerf AI rebatch benchmark on core - 47
