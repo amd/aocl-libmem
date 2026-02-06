@@ -23,7 +23,24 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 cmake_minimum_required(VERSION 3.22)
+# Auto-install git hooks
+if(EXISTS "${CMAKE_SOURCE_DIR}/.githooks/pre-push")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.git/hooks/pre-push")
+        file(COPY "${CMAKE_SOURCE_DIR}/.githooks/pre-push"
+             DESTINATION "${CMAKE_SOURCE_DIR}/.git/hooks/"
+             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+        message(STATUS "✓ Git pre-push hook installed automatically")
+    endif()
+endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/.githooks/pre-commit")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit")
+        file(COPY "${CMAKE_SOURCE_DIR}/.githooks/pre-commit"
+             DESTINATION "${CMAKE_SOURCE_DIR}/.git/hooks/"
+             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+        message(STATUS "✓ Git pre-commit hook installed automatically")
+    endif()
+endif()
 # avoid build in root directory
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR “In-source build detected!”)
