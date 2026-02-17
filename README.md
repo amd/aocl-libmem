@@ -30,6 +30,8 @@ After downloading the latest stable release from the git repository, https://git
 
 `Note:` _Binaries can be built based on the cpu ISA features: AVX2 and AVX512 with help of Cmake flag: ALMEM_ARCH. It is recommended not to load/run the AVX512 library on a non-AVX512 machine as it will lead to crash due to unsupported instructions._
 
+`Note:` _By default, the library uses page-boundary-safe unmasked vector loads for small sizes to maximize throughput (the same technique used by glibc). A **strict-bounds build variant** is available via the `ALMEM_STRICT_BOUNDS=Y` CMake option, which enforces masked loads that never load beyond the caller-specified buffer size. See [BUILD_RUN.md](BUILD_RUN.md) for details._
+
 `Note:` _IFUNC may only be compatible with the most recent compiler toolchains to manage runtime dependencies effectively._
 
 `Note:` _The dynamic loading library APIs, such as dlopen, dlclose, and dlsym, have been incorporated into Glibc starting from version 2.34.Therefore, if you compile the library on a system using Glibc 2.34 or newer and then execute it on a system with an older version of Glibc,you will encounter runtime issues related to symbol resolution for these functions.To avoid such issues, it is recommended, if you build the library with older version of Glibc (prior to 2.34) then execute it on systems with the same version of Glibc.If built on Glibc 2.34 or newer, ensure that the target system also has Glibc 2.34 or newer._
