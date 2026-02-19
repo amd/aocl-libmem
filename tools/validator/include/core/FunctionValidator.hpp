@@ -228,7 +228,7 @@ public:
         // Handle size==0 with zero-size tests
         if (size == 0) {
             DEBUG_LOG("  Mode: Zero-size tests");
-            runZeroSizeTests(src_align, dst_align);
+            runZeroSizeTests(dst_align, src_align);
             return;
         }
 
@@ -236,7 +236,7 @@ public:
         DEBUG_LOG("  Registered tests: %zu", registry_.size());
 
         // Run regular tests
-        runRegularTests(size, src_align, dst_align);
+        runRegularTests(size, dst_align, src_align);
     }
 
     const TestStats& getStats() const override {
