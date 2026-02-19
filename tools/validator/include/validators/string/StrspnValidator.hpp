@@ -31,6 +31,8 @@
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
 #include "tests/length/LengthTests.hpp"
+#include "tests/search/SearchTests.hpp"
+#include "tests/compare/CompareTests.hpp"
 
 namespace libmem {
 namespace validator {
@@ -45,7 +47,13 @@ public:
             .zeroSize<ZeroSizeSpanTest<traits::StrspnTag>>("Empty string")
             .add<StrspnTest<traits::StrspnTag>>("Basic span")
             .add<PageBoundaryStrspnTest<traits::StrspnTag>>("Page boundary")
-            .add<PageOverrunLengthTest<traits::StrspnTag>>("Page overrun");
+            .add<PageOverrunLengthTest<traits::StrspnTag>>("Page overrun")
+            .add<StrspnSingleCharAcceptTest<traits::StrspnTag>>("Single-char accept")
+            .add<StrspnAccept16Test<traits::StrspnTag>>("Accept 16-char boundary")
+            .add<StrspnLongAcceptMismatchTest<traits::StrspnTag>>("Long accept mismatch")
+            .add<StrspnExtendedAsciiTest<traits::StrspnTag>>("Extended ASCII (1-255)")
+            .add<AcceptPageCrossStrspnTest<traits::StrspnTag>>("Accept page-cross")
+            .add<BothPageCrossStrspnTest<traits::StrspnTag>>("Both s+accept page-cross");
     }
 };
 

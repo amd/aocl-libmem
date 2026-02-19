@@ -472,12 +472,14 @@ protected:
 };
 
 // ============================================================================
-// PageBoundaryStrspnTest
+// Page-Cross Strspn Test (short accept, PCMPISTRI path)
 // ============================================================================
 
 /**
+ * PageCrossStrspnTest - s near page boundary, short accept (<= 16 chars)
+ *
  * Tests: strspn
- * - String spans multiple pages
+ * - String spans multiple pages with randomized accept
  */
 template<typename Tag>
 class PageBoundaryStrspnTest : public PageBoundaryTestBase<Tag> {
@@ -496,22 +498,220 @@ protected:
             return TestResult::success();
         }
 
-        const char* accept = "abcdefghij";
-        for (size_t i = 0; i < span_len && i < size; ++i) {
-            str[i] = 'a' + (i % 10);
-        }
+        char alpha[27];
+        for (int i = 0; i < 26; ++i) alpha[i] = 'a' + i;
+        alpha[26] = '\0';
+        this->shuffleChars(alpha, 26);
+        const int accept_len = 10;
+        char reject = alpha[accept_len];
+        alpha[accept_len] = '\0';
 
-        for (size_t i = span_len; i < size; ++i) {
-            str[i] = 'z';
-        }
+        for (size_t i = 0; i < span_len && i < size; ++i)
+            str[i] = alpha[rand() % accept_len];
+
+        for (size_t i = span_len; i < size; ++i)
+            str[i] = reject;
         str[size] = '\0';
 
         size_t expected = (span_len < size) ? span_len : size;
         size_t ret = FunctionTest<Tag>::Traits::invoke(
-            reinterpret_cast<const char*>(str), accept);
+            reinterpret_cast<const char*>(str), alpha);
 
         if (ret != expected) {
-            return this->error("strspn mismatch: expected=%zu got=%zu", expected, ret);
+            return this->error("strspn page-cross: expected=%zu got=%zu", expected, ret);
+        }
+
+        return TestResult::success();
+    }
+};
+
+
+// ============================================================================
+// Page-Cross Accept Strspn Test
+// ============================================================================
+
+/**
+ * AcceptPageCrossStrspnTest - accept string straddles a page boundary
+ *
+ * Tests the masked load handling in the accept loading path. Catches bugs
+ * where accept is silently truncated when its null terminator falls on the
+ * next page.
+ */
+template<typename Tag>
+class AcceptPageCrossStrspnTest : public PageBoundaryTestBase<Tag> {
+public:
+    const char* name() const override { return "AcceptPageCross"; }
+
+protected:
+    bool usePositions() const override { return false; }
+
+    TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
+                            uint32_t off1, uint32_t /*off2*/) override {
+        static constexpr size_t ACCEPT_OFFSETS[] = {11, 12, 13, 14, 15};
+
+        char alpha[27];
+        for (int i = 0; i < 26; ++i) alpha[i] = 'a' + i;
+        alpha[26] = '\0';
+        this->shuffleChars(alpha, 26);
+        const int accept_len = 10;
+        char reject = alpha[accept_len];
+        alpha[accept_len] = '\0';
+
+        PageCrossBuffer s_buf;
+        if (!s_buf.allocate(size + 1)) {
+            return this->error("allocation failed for s");
+        }
+
+        uint8_t* str = s_buf.getAddressNearBoundary(off1);
+        if (!str || str + size + 1 > s_buf.base() + s_buf.usableSize()) {
+            return TestResult::success();
+        }
+
+        PageCrossBuffer accept_buf;
+        if (!accept_buf.allocate(accept_len + 1)) {
+            return this->error("allocation failed for accept");
+        }
+
+        for (size_t a_off : ACCEPT_OFFSETS) {
+            uint8_t* accept_ptr = accept_buf.base() +
+                                  accept_buf.usableSize() - a_off;
+
+            if (accept_ptr < accept_buf.base()) continue;
+
+            for (int i = 0; i < accept_len; ++i)
+                accept_ptr[i] = (uint8_t)alpha[i];
+            accept_ptr[accept_len] = '\0';
+
+            for (size_t i = 0; i < size; ++i)
+                str[i] = alpha[rand() % accept_len];
+            str[size] = '\0';
+
+            size_t ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(str),
+                reinterpret_cast<const char*>(accept_ptr));
+
+            if (ret != size) {
+                return this->error(
+                    "accept page-cross: a_off=%zu expected=%zu got=%zu",
+                    a_off, size, ret);
+            }
+
+            if (size > 1) {
+                size_t mid = 1 + (rand() % (size - 1));
+                char orig = str[mid];
+                str[mid] = reject;
+
+                ret = FunctionTest<Tag>::Traits::invoke(
+                    reinterpret_cast<const char*>(str),
+                    reinterpret_cast<const char*>(accept_ptr));
+
+                str[mid] = orig;
+
+                if (ret != mid) {
+                    return this->error(
+                        "accept page-cross mismatch: a_off=%zu expected=%zu got=%zu",
+                        a_off, mid, ret);
+                }
+            }
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// Both s AND accept Page-Cross Strspn Test
+// ============================================================================
+
+/**
+ * BothPageCrossStrspnTest - both s and accept straddle page boundaries
+ *
+ * Catches interaction bugs where page-boundary handling in the s scan loop
+ * and the accept load path interfere with each other (e.g., register
+ * clobbering, flag corruption between the two masked-load paths).
+ */
+template<typename Tag>
+class BothPageCrossStrspnTest : public PageBoundaryTestBase<Tag> {
+public:
+    const char* name() const override { return "BothPageCross"; }
+
+protected:
+    bool usePositions() const override { return false; }
+    size_t minTestSize() const override { return 8; }
+
+    TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
+                            uint32_t off1, uint32_t /*off2*/) override {
+        if (size > PAGE_SZ) return TestResult::success();
+
+        char alpha[27];
+        for (int i = 0; i < 26; ++i) alpha[i] = 'a' + i;
+        alpha[26] = '\0';
+        this->shuffleChars(alpha, 26);
+        const int accept_len = 10;
+        char reject = alpha[accept_len];
+        alpha[accept_len] = '\0';
+
+        // Offsets must be >= accept_len+1 so the full string (incl. null)
+        // fits in usable memory; the SIMD over-read is what crosses into
+        // the guard page, exercising the masked-load path.
+        static constexpr size_t ACCEPT_OFFSETS[] = {11, 12, 13, 14, 15};
+
+        // s near page boundary
+        PageCrossBuffer s_buf;
+        if (!s_buf.allocate(size + 1))
+            return this->error("allocation failed for s");
+
+        uint8_t* str = s_buf.getAddressNearBoundary(off1);
+        if (!str || str + size + 1 > s_buf.base() + s_buf.usableSize())
+            return TestResult::success();
+
+        // accept near page boundary (separate allocation)
+        PageCrossBuffer accept_buf;
+        if (!accept_buf.allocate(accept_len + 1))
+            return this->error("allocation failed for accept");
+
+        for (size_t a_off : ACCEPT_OFFSETS) {
+            uint8_t* accept_ptr = accept_buf.base() +
+                                  accept_buf.usableSize() - a_off;
+            if (accept_ptr < accept_buf.base()) continue;
+
+            for (int i = 0; i < accept_len; ++i)
+                accept_ptr[i] = (uint8_t)alpha[i];
+            accept_ptr[accept_len] = '\0';
+
+            // Full-span test: all chars in accept → expect size
+            for (size_t i = 0; i < size; ++i)
+                str[i] = alpha[rand() % accept_len];
+            str[size] = '\0';
+
+            size_t ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(str),
+                reinterpret_cast<const char*>(accept_ptr));
+
+            if (ret != size) {
+                return this->error(
+                    "both page-cross: a_off=%zu off1=%u expected=%zu got=%zu",
+                    a_off, off1, size, ret);
+            }
+
+            // Mismatch test: inject reject at midpoint
+            if (size > 1) {
+                size_t mid = 1 + (rand() % (size - 1));
+                char orig = str[mid];
+                str[mid] = reject;
+
+                ret = FunctionTest<Tag>::Traits::invoke(
+                    reinterpret_cast<const char*>(str),
+                    reinterpret_cast<const char*>(accept_ptr));
+
+                str[mid] = orig;
+
+                if (ret != mid) {
+                    return this->error(
+                        "both page-cross mismatch: a_off=%zu off1=%u expected=%zu got=%zu",
+                        a_off, off1, mid, ret);
+                }
+            }
         }
 
         return TestResult::success();

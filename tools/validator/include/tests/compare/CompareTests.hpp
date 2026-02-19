@@ -830,6 +830,133 @@ private:
     }
 };
 
+/**
+ * StrspnLongAcceptMismatchTest - Byte-by-byte mismatch with accept > 16 chars.
+ * Exercises the LUT/vpshufb path specifically (not PCMPISTRI).
+ */
+template<typename Tag>
+class StrspnLongAcceptMismatchTest : public FunctionTest<Tag> {
+public:
+    const char* name() const override { return "LongAcceptMismatch"; }
+
+    TestResult execute(const TestContext& ctx) override {
+        this->ctx_ = ctx;
+        if (ctx.size < 2) return TestResult::success();
+
+        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        if (!buf.base) return this->error("allocation failed");
+
+        // Shuffle 52 chars, pick 30 as accept; reject from the rest
+        char pool[53];
+        for (int i = 0; i < 26; ++i) pool[i] = 'a' + i;
+        for (int i = 0; i < 26; ++i) pool[26 + i] = 'A' + i;
+        pool[52] = '\0';
+        this->shuffleChars(pool, 52);
+        const int accept_len = 30;
+        char reject = pool[accept_len];
+        pool[accept_len] = '\0';
+
+        // Fill buffer once with accepted chars, then sweep reject position
+        for (size_t i = 0; i < ctx.size; ++i)
+            buf.dst[i] = pool[rand() % accept_len];
+        this->nullTerminate(buf.dst, ctx.size);
+
+        // Exhaustive up to 256; stride-sampled beyond (keeps ~256 tests max)
+        size_t stride = (ctx.size <= 256) ? 1 : (ctx.size / 256 + 1);
+
+        for (size_t pos = 0; pos < ctx.size; pos += stride) {
+            char saved = buf.dst[pos];
+            buf.dst[pos] = reject;
+
+            size_t ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(buf.dst), pool);
+
+            if (ret != pos) {
+                return this->errorAt(pos, "long accept mismatch: expected %zu, got %zu", pos, ret);
+            }
+
+            buf.dst[pos] = saved;
+        }
+
+        // Always test the last position
+        if ((ctx.size - 1) % stride != 0) {
+            size_t pos = ctx.size - 1;
+            char saved = buf.dst[pos];
+            buf.dst[pos] = reject;
+
+            size_t ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(buf.dst), pool);
+
+            if (ret != pos) {
+                return this->errorAt(pos, "long accept mismatch: expected %zu, got %zu", pos, ret);
+            }
+
+            buf.dst[pos] = saved;
+        }
+
+        return TestResult::success();
+    }
+};
+
+/**
+ * StrspnExtendedAsciiTest - Verifies correct membership for all byte values
+ * (1-255) in accept. Catches signed-comparison bugs, nibble table errors,
+ * and LUT indexing issues across the full 0x01-0xFF range.
+ */
+template<typename Tag>
+class StrspnExtendedAsciiTest : public FunctionTest<Tag> {
+public:
+    const char* name() const override { return "ExtendedAsciiSpan"; }
+
+    TestResult execute(const TestContext& ctx) override {
+        this->ctx_ = ctx;
+        if (ctx.size < 2 || ctx.size > 256) return TestResult::success();
+
+        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        if (!buf.base) return this->error("allocation failed");
+
+        // Accept all 255 non-zero bytes (inherent to the test)
+        char all_accept[256];
+        for (int i = 0; i < 255; ++i)
+            all_accept[i] = (char)(i + 1);
+        all_accept[255] = '\0';
+
+        // Fill s with random non-zero bytes
+        for (size_t i = 0; i < ctx.size; ++i)
+            buf.dst[i] = (uint8_t)(1 + (rand() % 255));
+        this->nullTerminate(buf.dst, ctx.size);
+
+        size_t ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(buf.dst), all_accept);
+
+        if (ret != ctx.size) {
+            return this->error("all-byte accept: expected %zu, got %zu", ctx.size, ret);
+        }
+
+        // Spot-check edge byte values at random positions
+        uint8_t edge_values[] = {1, 127, 128, 200, 254, 255};
+        for (uint8_t val : edge_values) {
+            size_t pos = rand() % ctx.size;
+            buf.dst[pos] = (char)val;
+            for (size_t i = 0; i < ctx.size; ++i) {
+                if (i != pos)
+                    buf.dst[i] = (uint8_t)(1 + (rand() % 255));
+            }
+            this->nullTerminate(buf.dst, ctx.size);
+
+            ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(buf.dst), all_accept);
+
+            if (ret != ctx.size) {
+                return this->errorAt(pos, "byte 0x%02X should be in accept, span=%zu expected %zu",
+                                    (unsigned)val, ret, ctx.size);
+            }
+        }
+
+        return TestResult::success();
+    }
+};
+
 } // namespace validator
 } // namespace libmem
 

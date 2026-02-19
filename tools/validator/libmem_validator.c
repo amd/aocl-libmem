@@ -2406,6 +2406,89 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
         }
         free(page_buff);
     }
+
+    // case 5 : Accept near page boundary
+    //  Place accept so it straddles a page boundary tests masked load
+    //  handling in the accept loading path.
+    if (size <= PAGE_SZ && accept_len >= 2)
+    {
+        void *page_buff_accept = NULL;
+        uint32_t page_cnt_a = 2; // two pages
+        posix_memalign(&page_buff_accept, PAGE_SZ, page_cnt_a * PAGE_SZ);
+
+        if (page_buff_accept != NULL)
+        {
+            size_t offsets[] = {1, 2, 5, 9, 13, 15};
+            size_t num_offsets = sizeof(offsets) / sizeof(offsets[0]);
+
+            for (size_t oi = 0; oi < num_offsets; oi++)
+            {
+                size_t offset = offsets[oi];
+                if (offset > accept_len)
+                    continue;
+
+                uint8_t *accept_pg = (uint8_t *)page_buff_accept + PAGE_SZ - offset;
+                memcpy(accept_pg, accept, accept_len);
+                accept_pg[accept_len] = '\0';
+
+                string_setup((char *)s, size, (char *)accept_pg, accept_len);
+                res = strspn((char *)s, (char *)accept_pg);
+                expected = test_strspn((char *)s, (char *)accept_pg);
+                if (res != expected)
+                {
+                    printf("ERROR:[ACCEPT PAGE-CROSS offset=%lu]failure for S\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                           offset, str1_alnmnt, size, res, expected, accept_pg, accept_pg, s, s);
+                }
+
+                if (size > 1)
+                {
+                    size_t mid = size / 2;
+                    char orig = s[mid];
+                    s[mid] = (char)127;
+                    res = strspn((char *)s, (char *)accept_pg);
+                    expected = test_strspn((char *)s, (char *)accept_pg);
+                    if (res != expected)
+                    {
+                        printf("ERROR:[ACCEPT PAGE-CROSS mismatch offset=%lu idx=%lu]failure\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                               offset, mid, str1_alnmnt, size, res, expected, accept_pg, accept_pg, s, s);
+                    }
+                    s[mid] = orig;
+                }
+            }
+            free(page_buff_accept);
+        }
+    }
+
+    // case 6 : Both s AND accept near page boundaries
+    if (size <= PAGE_SZ && accept_len >= 2)
+    {
+        void *page_buff_both = NULL;
+        posix_memalign(&page_buff_both, PAGE_SZ, 4 * PAGE_SZ);
+
+        if (page_buff_both != NULL)
+        {
+            size_t a_off = (accept_len < 9) ? accept_len : 9;
+            uint8_t *accept_pg = (uint8_t *)page_buff_both + PAGE_SZ - a_off;
+            memcpy(accept_pg, accept, accept_len);
+            accept_pg[accept_len] = '\0';
+
+            uint8_t *s_pg = (uint8_t *)page_buff_both + 3 * PAGE_SZ - (size + NULL_BYTE);
+            string_setup((char *)s_pg, size, (char *)accept_pg, accept_len);
+
+            res = strspn((char *)s_pg, (char *)accept_pg);
+            expected = test_strspn((char *)s_pg, (char *)accept_pg);
+            if (res != expected)
+            {
+                printf("ERROR:[BOTH PAGE-CROSS]failure\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                       str1_alnmnt, size, res, expected, accept_pg, accept_pg, s_pg, s_pg);
+            }
+            free(page_buff_both);
+        }
+    }
+
     free(buff);
 }
 

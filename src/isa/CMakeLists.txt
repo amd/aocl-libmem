@@ -37,7 +37,7 @@ target_include_directories(isa_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mbmi2 -mlzcnt -mno-vzeroupper)
 if (${ALMEM_ISA} MATCHES "avx512")
-    list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw)
+    list(APPEND _MODULE_CC_FLAGS -mavx512f -mavx512bw -mavx512vbmi)
 else ()
     list(APPEND _MODULE_CC_FLAGS -mavx2)
 endif ()

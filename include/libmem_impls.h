@@ -34,6 +34,7 @@
 #include "amd_strncmp.h"
 #include "amd_strcat.h"
 #include "amd_strncat.h"
+#include "amd_strspn.h"
 #include "amd_strstr.h"
 #include "amd_strlen.h"
 #include "amd_strchr.h"

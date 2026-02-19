@@ -328,6 +328,16 @@ protected:
     }
 
     /**
+     * Shuffle of a char array
+     */
+    void shuffleChars(char* buf, int len) {
+        for (int i = len - 1; i > 0; --i) {
+            int j = rand() % (i + 1);
+            char t = buf[i]; buf[i] = buf[j]; buf[j] = t;
+        }
+    }
+
+    /**
      * Add NULL terminator
      */
     void nullTerminate(uint8_t* buf, size_t pos) {
