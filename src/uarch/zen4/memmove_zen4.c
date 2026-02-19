@@ -30,8 +30,8 @@
 #include "logger.h"
 #include "memcpy_impl_zen4.c"
 
-HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen4(void * __restrict dst, \
-                        const void * __restrict src, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen4(void *dst,
+                        const void *src, size_t size)
 {
     LOG_INFO("\n");
     return _memcpy_zen4_impl(dst, src, size);

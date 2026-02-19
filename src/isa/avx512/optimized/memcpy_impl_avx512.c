@@ -34,11 +34,25 @@
 
 extern cpu_info zen_info;
 
+#ifdef MEMMOVE_AVX512
+static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
+#else
 static inline void *_memcpy_avx512(void *__restrict dst, const void *__restrict src, size_t size)
+#endif
 {
     register void *ret asm("rax");
     ret = dst;
-
+#ifdef MEMMOVE_AVX512
+    if (likely(size <= 2 * ZMM_SZ)) // 128B
+    {
+        if (likely(size < ZMM_SZ)) // 64B
+        {
+            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
+        }
+        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
+        return ret;
+    }
+#else
     if (likely(size <= 2 * ZMM_SZ)) // 128B
     {
         if (likely(size < ZMM_SZ))
@@ -48,7 +62,7 @@ static inline void *_memcpy_avx512(void *__restrict dst, const void *__restrict 
         __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
         return ret;
     }
-
+#endif
 #ifdef MEMMOVE_AVX512
     if (likely(size <= 8 * ZMM_SZ)) // 512B
     {
@@ -170,17 +184,25 @@ static inline void *_memcpy_avx512(void *__restrict dst, const void *__restrict 
     return ret;
 }
 
+#ifdef MEMMOVE_AVX512_ERMS
+static inline void *_memcpy_avx512_erms(void *dst, const void *src, size_t size)
+#else
 static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__restrict src, size_t size)
+#endif
 {
     size_t offset;
     register void *ret asm("rax");
     ret = dst;
-
     if (likely(size <= 2 * ZMM_SZ)) // 128B
     {
-        if (likely(size <= ZMM_SZ))
+        if (likely(size < ZMM_SZ)) // 64B
+        {
+#ifdef MEMMOVE_AVX512_ERMS
+            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
+#else
             return __load_store_ble_zmm_vec(dst, src, (uint8_t) size);
-
+#endif
+        }
         __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
         return ret;
     }

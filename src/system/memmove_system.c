@@ -27,8 +27,8 @@
 #include <stddef.h>
 #include <gnu/lib-names.h>
 
-void * __attribute__((flatten)) __memmove_system(void * __restrict dst,
-                        const void * __restrict src, size_t size)
+void * __attribute__((flatten)) __memmove_system(void *dst,
+                        const void *src, size_t size)
 {
     LOG_INFO("\n");
     void * (*system_memmove)(void *, const void *, size_t);

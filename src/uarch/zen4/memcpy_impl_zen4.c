@@ -33,26 +33,29 @@
 
 extern cpu_info zen_info;
 
-static inline void *_memcpy_zen4_impl(void *__restrict dst,
-                                       const void *__restrict src, size_t size)
+#ifdef MEMMOVE_ZEN4
+static inline void *_memcpy_zen4_impl(void *dst, const void *src, size_t size)
+#else
+static inline void *_memcpy_zen4_impl(void *__restrict dst, const void *__restrict src, size_t size)
+#endif
 {
     register void *ret asm("rax");
     ret = dst;
 
-    if ((size <= 2 * ZMM_SZ)) //128B
+#ifdef MEMMOVE_ZEN4
+    if (size <= 2 * ZMM_SZ) // 128B
     {
-        if ((size < ZMM_SZ))
+        if (size < ZMM_SZ)
         {
-            (void)__load_store_ble_zmm_vec(dst, src, (uint8_t)size);
-            return ret;
+            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
         }
-        //TODO: fix gaps between 64B and 128B
-        __load_store_le_2zmm_vec(dst, src, (uint8_t)size);
+        // 64-127B: ZMM head-tail
+        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
         return ret;
     }
-    else if (size <= 8 * ZMM_SZ) //512B
+    else if (size <= 8 * ZMM_SZ) // 512B
     {
-        if (size <= 4 * ZMM_SZ) //256B
+        if (size <= 4 * ZMM_SZ) // 256B
         {
             __load_store_le_4zmm_vec(dst, src, size);
             return ret;
@@ -61,63 +64,98 @@ static inline void *_memcpy_zen4_impl(void *__restrict dst,
         return ret;
     }
 
-#ifdef MEMMOVE_ZEN4
     // Handle overlapping memory blocks
     if (unlikely(!(((dst + size) < src) || ((src + size) < dst))))
     {
-        __m512i z4, z5, z6, z7, z8;
-        if (src < dst) //Backward Copy
+        __m512i z8;
+        if (src < dst) // Backward Copy
         {
-            z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ);
-            z5 = _mm512_loadu_si512(src + 2 * ZMM_SZ);
-            z6 = _mm512_loadu_si512(src + 1 * ZMM_SZ);
-            z7 = _mm512_loadu_si512(src + 0 * ZMM_SZ);
-            if ((((size_t)dst & (ZMM_SZ-1)) == 0) && (((size_t)src & (ZMM_SZ-1)) == 0))
-            {
-                //load the last VEC to handle size not multiple of the vec.
-                z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
-                __aligned_load_and_store_4zmm_vec_loop_bkwd(dst, src, size & ~(ZMM_SZ-1), 3 * ZMM_SZ);
-                //store the last VEC to handle size not multiple of the vec.
-                _mm512_storeu_si512(dst + size - ZMM_SZ, z8);
-            }
-            else
-                __unaligned_load_and_store_4zmm_vec_loop_bkwd(dst, src, size, 4 * ZMM_SZ);
-            _mm512_storeu_si512(dst +  3 * ZMM_SZ, z4);
-            _mm512_storeu_si512(dst +  2 * ZMM_SZ, z5);
-            _mm512_storeu_si512(dst +  1 * ZMM_SZ, z6);
-            _mm512_storeu_si512(dst +  0 * ZMM_SZ, z7);
-        }
-        else //Forward Copy
-        {
-            z4 = _mm512_loadu_si512(src + size - 4 * ZMM_SZ);
-            z5 = _mm512_loadu_si512(src + size - 3 * ZMM_SZ);
-            z6 = _mm512_loadu_si512(src + size - 2 * ZMM_SZ);
-            z7 = _mm512_loadu_si512(src + size - 1 * ZMM_SZ);
-            if ((((size_t)dst & (ZMM_SZ-1)) == 0) && (((size_t)src & (ZMM_SZ-1)) == 0))
-                __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
-            else
-                __unaligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
+            size_t off = ((size_t) dst + size) & (ZMM_SZ - 1);
+            size_t size_temp = size;
 
-            _mm512_storeu_si512(dst + size - 4 * ZMM_SZ, z4);
-            _mm512_storeu_si512(dst + size - 3 * ZMM_SZ, z5);
-            _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z6);
-            _mm512_storeu_si512(dst + size - 1 * ZMM_SZ, z7);
+            // Load the last VEC to handle alignment not multiple of the vec
+            z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
+
+            size_t rem_data;
+            if (((size_t) dst & (ZMM_SZ - 1)) == ((size_t) src & (ZMM_SZ - 1)))
+            {
+                rem_data = __aligned_load_and_store_4zmm_vec_loop_bkwd_pftch(dst, src, size - off, 4 * ZMM_SZ);
+            } else
+            {
+                rem_data = __unaligned_load_aligned_store_4zmm_vec_loop_bkwd_pftch(dst, src, size - off, 4 * ZMM_SZ);
+            }
+
+            // Handle remaining data
+            if (rem_data > 2 * ZMM_SZ)
+                __load_store_le_4zmm_vec(dst, src, rem_data);
+            else if (rem_data > ZMM_SZ)
+                __load_store_le_2zmm_vec(dst, src, rem_data);
+            else if (rem_data > 0)
+                __load_store_ble_zmm_vec(dst, src, rem_data);
+
+            // Store the last VEC
+            _mm512_storeu_si512(dst + size_temp - ZMM_SZ, z8);
+        } else // Forward Copy
+        {
+            size_t offset = ZMM_SZ - ((size_t) dst & (ZMM_SZ - 1));
+
+            // Load the first VEC
+            z8 = _mm512_loadu_si512(src);
+
+            if (((size_t) dst & (ZMM_SZ - 1)) == ((size_t) src & (ZMM_SZ - 1)))
+                offset = __aligned_load_and_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+            else
+                offset = __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+
+            // Handle remaining data at the end
+            size_t rem_data = size - offset;
+            if (rem_data > 2 * ZMM_SZ)
+                __load_store_le_4zmm_vec(dst + offset, src + offset, rem_data);
+            else if (rem_data > ZMM_SZ)
+                __load_store_le_2zmm_vec(dst + offset, src + offset, rem_data);
+            else if (rem_data > 0)
+                __load_store_ble_zmm_vec(dst + offset, src + offset, rem_data);
+
+            // Store the first VEC
+            _mm512_storeu_si512(dst, z8);
         }
+        return ret;
+    }
+#else
+    if (size <= 2 * ZMM_SZ) // 128B
+    {
+        if (size < ZMM_SZ)
+        {
+            (void) __load_store_ble_zmm_vec(dst, src, (uint8_t) size);
+            return ret;
+        }
+        // TODO: fix gaps between 64B and 128B
+        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
+        return ret;
+    } 
+    else if (size <= 8 * ZMM_SZ) // 512B
+    {
+        if (size <= 4 * ZMM_SZ) // 256B
+        {
+            __load_store_le_4zmm_vec(dst, src, size);
+            return ret;
+        }
+        __load_store_le_8zmm_vec(dst, src, size);
         return ret;
     }
 #endif
 
     size_t offset = 0;
-    uint32_t dst_align = ((uintptr_t)dst & (ZMM_SZ - 1));
+    uint32_t dst_align = ((uintptr_t) dst & (ZMM_SZ - 1));
 
     __load_store_le_8zmm_vec(dst, src, size);
     offset = 4 * ZMM_SZ - dst_align;
 
-    //Aligned Load and Store addresses
-    if (((uintptr_t)src & (ZMM_SZ - 1)) == dst_align)
+    // Aligned Load and Store addresses
+    if (((uintptr_t) src & (ZMM_SZ - 1)) == dst_align)
     {
         // 4-ZMM registers
-        if (size < zen_info.zen_cache_info.l2_per_core)//L2 Cache Size
+        if (size < zen_info.zen_cache_info.l2_per_core) // L2 Cache Size
         {
             __aligned_load_and_store_8ymm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }
@@ -132,14 +170,13 @@ static inline void *_memcpy_zen4_impl(void *__restrict dst,
             __aligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
         }
     }
-    //Unalgined Load/Store addresses: force-align store address to ZMM size
+    // Unaligned Load/Store addresses: force-align store address to ZMM size
     else
     {
         if (size < __nt_start_threshold)
         {
             __unaligned_load_aligned_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
-        }
-        else
+        } else
         {
             __unaligned_load_nt_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, offset);
         }

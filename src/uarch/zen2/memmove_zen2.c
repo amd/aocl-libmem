@@ -25,8 +25,8 @@
 
 #include "../../isa/avx2/optimized/memmove_avx2.c"
 
-HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen2(void * __restrict dst,
-                             const void * __restrict src, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen2(void *dst,
+                             const void *src, size_t size)
 {
     LOG_INFO("\n");
     return _memmove_avx2(dst, src, size);

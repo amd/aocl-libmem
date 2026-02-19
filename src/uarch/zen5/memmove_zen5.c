@@ -29,8 +29,8 @@
 #include "logger.h"
 #include "../../isa/avx512/optimized/memcpy_impl_avx512.c"
 
-HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen5(void * __restrict dst,
-                             const void * __restrict src, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_zen5(void *dst,
+                             const void *src, size_t size)
 {
     LOG_INFO("\n");
     return _memcpy_avx512_erms(dst, src, size);
