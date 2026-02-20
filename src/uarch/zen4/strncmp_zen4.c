@@ -26,7 +26,7 @@
 #define STRNCMP
 #endif
 
-#include "../../isa/avx512/optimized/strcmp_avx512.c"
+#include "strcmp_zen4.c"
 
 #ifdef STRNCMP
 #undef STRNCMP
@@ -35,9 +35,8 @@
 HIDDEN_SYMBOL int __attribute__((flatten)) __strncmp_zen4(const char *str1, const char *str2, size_t size)
 {
     LOG_INFO("\n");
-    return _strncmp_avx512(str1, str2, size);
+    return _strncmp_zen4(str1, str2, size);
 }
 #ifndef ALMEM_DYN_DISPATCH
-int strncmp(const char *, const char *, size_t) __attribute__((weak,
-                        alias("__strncmp_zen4")));
+int strncmp(const char *, const char *, size_t) __attribute__((weak, alias("__strncmp_zen4")));
 #endif
