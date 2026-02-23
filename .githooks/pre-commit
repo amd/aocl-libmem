@@ -40,7 +40,7 @@ CLANG_STYLE='{
         AfterControlStatement: Always,
         AfterEnum: false,
         AfterStruct: false,
-        BeforeElse: false
+        BeforeElse: true
     },
     AllowShortFunctionsOnASingleLine: None,
     AllowShortIfStatementsOnASingleLine: Never
@@ -52,13 +52,26 @@ for file in $STAGED_FILES; do
     if [ -f "$file" ]; then
         echo -e "${BLUE}  Checking: $file${NC}"
         
-        # Format the file in-place
-        clang-format -i --style="$CLANG_STYLE" "$file" 2>/dev/null
+        # Format only the staged (changed) lines, not the entire file
+        git diff --cached -U0 "$file" | grep '^@@' | while read -r line; do
+            NEW_RANGE=$(echo "$line" | sed -n 's/^.*+\([0-9]*\),*\([0-9]*\).*/\1:\2/p')
+            START=$(echo "$NEW_RANGE" | cut -d: -f1)
+            COUNT=$(echo "$NEW_RANGE" | cut -d: -f2)
+
+            if [ -z "$COUNT" ] || [ "$COUNT" = "0" ]; then
+                COUNT=1
+            fi
+
+            END=$((START + COUNT - 1))
+
+            if [ "$START" -gt 0 ]; then
+                clang-format -i --style="$CLANG_STYLE" --lines="$START:$END" "$file" 2>/dev/null
+            fi
+        done
         
         # Check if file was modified
         if ! git diff --quiet "$file"; then
             echo -e "${GREEN}    ✓ Formatted and re-staged${NC}"
-            # Re-stage the formatted file
             git add "$file"
             FORMATTED=true
         else

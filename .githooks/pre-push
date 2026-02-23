@@ -90,7 +90,7 @@ while read local_ref local_sha remote_ref remote_sha; do
     if [ -z "$CHANGED_FILES" ]; then
         echo -e "${YELLOW}No C/H files changed, skipping spell/indentation checks${NC}\n"
     else
-        echo -e "${YELLOW}[2/4] Running Spell Check on changed files...${NC}"
+        echo -e "${YELLOW}[2/4] Running Spell Check on changed lines (diff only)...${NC}"
         
         SPELL_ERRORS=""
         DICT_FILE=""
@@ -128,50 +128,56 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
         
         for file in $CHANGED_FILES; do
-            # Check the committed version, not working directory
-            if git cat-file -e HEAD:"$file" 2>/dev/null; then
-                # Use dictionary if available
+            if [ -f "$file" ]; then
+                # Extract added lines with actual file line numbers from diff hunk headers
+                DIFF_NUMBERED=""
+                _current_ln=0
+                while IFS= read -r _diff_line; do
+                    if [[ "$_diff_line" =~ ^@@.*\+([0-9]+)(,([0-9]+))?.* ]]; then
+                        _current_ln=${BASH_REMATCH[1]}
+                    elif [[ "$_diff_line" == +* ]] && [[ "$_diff_line" != +++* ]]; then
+                        DIFF_NUMBERED="${DIFF_NUMBERED}${_current_ln}:${_diff_line:1}"$'\n'
+                        ((_current_ln++)) || true
+                    fi
+                done < <(git diff -U0 "$range" -- "$file")
+
+                DIFF_ADDED=$(echo "$DIFF_NUMBERED" | sed 's/^[0-9]*://')
+                
+                if [ -z "$DIFF_ADDED" ]; then
+                    continue
+                fi
+                
                 if [ -n "$DICT_FILE" ] && [ -f "$DICT_FILE" ]; then
-                    # Extract words ONLY from comments (not code)
-                    # Match C/C++ comments: // and /* */
-                    # Exclude lines with #include, #define, etc.
-                    COMMENT_LINES=$(git show HEAD:"$file" | grep -E '^\s*(//|/\*|\*|#)' | grep -v -E '^\s*#\s*(include|define|if|ifdef|ifndef|endif|pragma)')
-                    WORDS=$(echo "$COMMENT_LINES" | grep -oE '\b[a-zA-Z]{4,}\b' | sort -u)
+                    COMMENT_LINES=$(echo "$DIFF_ADDED" | grep -E '^\s*(//|/\*|\*|#)' | grep -v -E '^\s*#\s*(include|define|if|ifdef|ifndef|endif|pragma)' || true)
+                    WORDS=$(echo "$COMMENT_LINES" | grep -oE '\b[a-zA-Z]{4,}\b' | sort -u || true)
                     
                     for word in $WORDS; do
-                        # Skip based on patterns only (no hardcoded words):
-                        # 1. Short all-caps (2-4 chars): NULL, EOF, INT
-                        # 2. All-caps with underscores: MAX_SIZE, MIN_VALUE
                         if echo "$word" | grep -qE '^[A-Z]{2,4}$|^[A-Z]+_[A-Z_]+$'; then
                             continue
                         fi
                         
                         word_lower=$(echo "$word" | tr '[:upper:]' '[:lower:]')
                         
-                        # Check dictionary
                         if ! grep -qixF "$word_lower" "$DICT_FILE" && ! grep -qixF "$word" "$DICT_FILE"; then
-                            LINE_NUM=$(git show HEAD:"$file" | grep -n "\b$word\b" | head -1 | cut -d: -f1)
+                            LINE_NUM=$(echo "$DIFF_NUMBERED" | grep "\b$word\b" | head -1 | cut -d: -f1)
                             SPELL_ERRORS="${SPELL_ERRORS}$file:$LINE_NUM: '$word' (in comment)\n"
                         fi
                     done
                     
-                    # Check alphanumeric words in comments - but skip common patterns
-                    ALPHANUM=$(echo "$COMMENT_LINES" | grep -oE '\b[a-z]+[0-9]+[a-z0-9]*\b' | sort -u)
+                    ALPHANUM=$(echo "$COMMENT_LINES" | grep -oE '\b[a-z]+[0-9]+[a-z0-9]*\b' | sort -u || true)
                     for word in $ALPHANUM; do
-                        # Skip single digit patterns (mem1, arg2, var3 - likely parameter names)
                         if echo "$word" | grep -qE '^[a-z]+[0-9]$'; then
                             continue
                         fi
-                        # Flag multi-digit or mixed patterns (avxss512, test123abc)
-                        LINE_NUM=$(git show HEAD:"$file" | grep -n "\b$word\b" | head -1 | cut -d: -f1)
+                        LINE_NUM=$(echo "$DIFF_NUMBERED" | grep "\b$word\b" | head -1 | cut -d: -f1)
                         SPELL_ERRORS="${SPELL_ERRORS}$file:$LINE_NUM: '$word' (check spelling)\n"
                     done
                 else
-                    # Fallback: pattern-based checking only
-                    MIXED_CASE=$(git show HEAD:"$file" | grep -n -E '\b[A-Z][a-z]{2,}[a-z][A-Z][a-zA-Z]*\b' 2>/dev/null | \
+                    # Fallback: pattern-based checking only on changed lines
+                    MIXED_CASE=$(echo "$DIFF_ADDED" | grep -n -E '\b[A-Z][a-z]{2,}[a-z][A-Z][a-zA-Z]*\b' 2>/dev/null | \
                                 grep -v -E '[A-Z][a-z]+[A-Z]' || true)
                     if [ -n "$MIXED_CASE" ]; then
-                        SPELL_ERRORS="${SPELL_ERRORS}$file: Mixed-case typos:\n$MIXED_CASE\n"
+                        SPELL_ERRORS="${SPELL_ERRORS}$file: Mixed-case typos in changed lines:\n$MIXED_CASE\n"
                     fi
                 fi
             fi
@@ -185,7 +191,7 @@ while read local_ref local_sha remote_ref remote_sha; do
             echo -e "${GREEN}✓ Spell check passed${NC}\n"
         fi
         
-        echo -e "${YELLOW}[3/4] Checking Code Style on changed files...${NC}"
+        echo -e "${YELLOW}[3/4] Checking Code Style on changed lines (diff only)...${NC}"
         # Check if clang-format is available
         if ! command -v clang-format &> /dev/null; then
             echo -e "${YELLOW}⚠ clang-format not found, skipping style check${NC}\n"
@@ -204,7 +210,7 @@ while read local_ref local_sha remote_ref remote_sha; do
                     AfterControlStatement: Always,
                     AfterEnum: false,
                     AfterStruct: false,
-                    BeforeElse: false
+                    BeforeElse: true
                 },
                 AllowShortFunctionsOnASingleLine: None,
                 AllowShortIfStatementsOnASingleLine: Never
@@ -213,19 +219,46 @@ while read local_ref local_sha remote_ref remote_sha; do
             INDENT_ERRORS=""
             for file in $CHANGED_FILES; do
                 if [ -f "$file" ]; then
-                    # Check if file has formatting issues
-                    if ! clang-format --dry-run --Werror --style="$CLANG_STYLE" "$file" 2>/dev/null; then
-                        INDENT_ERRORS="${INDENT_ERRORS}\n  $file"
-                        # Extract line numbers from diff
-                        DIFF_LINES=$(diff -U0 "$file" <(clang-format --style="$CLANG_STYLE" "$file" 2>/dev/null) 2>/dev/null | \
+                    # Create temp file with current version
+                    TEMP_FILE=$(mktemp)
+                    cp "$file" "$TEMP_FILE"
+                    
+                    # Get the diff of changed lines in the push range
+                    # Format: @@ -old_start,old_count +new_start,new_count @@
+                    git diff -U0 "$range" -- "$file" | grep '^@@' | while read -r line; do
+                        # Extract the line range for additions (lines starting with +)
+                        NEW_RANGE=$(echo "$line" | sed -n 's/^.*+\([0-9]*\),*\([0-9]*\).*/\1:\2/p')
+                        START=$(echo "$NEW_RANGE" | cut -d: -f1)
+                        COUNT=$(echo "$NEW_RANGE" | cut -d: -f2)
+                        
+                        # If count is empty, it's a single line change
+                        if [ -z "$COUNT" ] || [ "$COUNT" = "0" ]; then
+                            COUNT=1
+                        fi
+                        
+                        # Calculate end line
+                        END=$((START + COUNT - 1))
+                        
+                        # Format only the changed lines in temp file
+                        if [ "$START" -gt 0 ]; then
+                            clang-format -i --style="$CLANG_STYLE" --lines="$START:$END" "$TEMP_FILE" 2>/dev/null
+                        fi
+                    done
+                    
+                    # Check if formatting changed anything
+                    if ! diff -q "$file" "$TEMP_FILE" > /dev/null 2>&1; then
+                        # Extract line numbers that differ
+                        DIFF_LINES=$(diff -U0 "$file" "$TEMP_FILE" 2>/dev/null | \
                         grep "^@@" | sed 's/@@ -\([0-9]*\).*/\1/' | head -20 | tr '\n' ',' | sed 's/,$//')
-                        INDENT_ERRORS="${INDENT_ERRORS} (lines: ${DIFF_LINES})"
+                        INDENT_ERRORS="${INDENT_ERRORS}\n  $file (changed lines: ${DIFF_LINES})"
                     fi
+                    
+                    rm -f "$TEMP_FILE"
                 fi
             done
             
             if [ -n "$INDENT_ERRORS" ]; then
-                echo -e "${RED}✗ Style issues in:${INDENT_ERRORS}${NC}"
+                echo -e "${RED}✗ Style issues in modified lines:${INDENT_ERRORS}${NC}"
                 echo -e "${YELLOW}  Common issues:${NC}"
                 echo -e "${YELLOW}    - Braces on new line for functions and control statements${NC}"
                 echo -e "${YELLOW}    - Space after cast: (uint8_t *) not (uint8_t*)${NC}"
@@ -235,7 +268,7 @@ while read local_ref local_sha remote_ref remote_sha; do
                 echo -e "${YELLOW}  Run: clang-format -i <file> to auto-fix${NC}\n"
                 exit 1
             else
-                echo -e "${GREEN}✓ Code style check passed${NC}\n"
+                echo -e "${GREEN}✓ Code style check passed (changed lines)${NC}\n"
             fi
         fi
     fi
