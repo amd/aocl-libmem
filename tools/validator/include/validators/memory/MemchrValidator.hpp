@@ -48,7 +48,8 @@ public:
             .add<SearchAtStartTest<traits::MemchrTag>>("Found at start")
             .add<SearchAtEndTest<traits::MemchrTag>>("Found at end")
             .add<SearchNullCharTest<traits::MemchrTag>>("Search null char")
-            .add<PageCrossSearchTest<traits::MemchrTag>>("Page cross");
+            .add<PageBoundaryMemchrTest<traits::MemchrTag>>("Page boundary")
+            .add<PageOverrunMemchrTest<traits::MemchrTag>>("Page overrun");
     }
 };
 

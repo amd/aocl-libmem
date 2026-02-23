@@ -44,7 +44,8 @@ public:
         tests()
             .zeroSize<ZeroSizeLengthTest<traits::StrlenTag>>("Empty string")
             .add<BasicLengthTest<traits::StrlenTag>>("Basic length")
-            .add<PageCrossLengthTest<traits::StrlenTag>>("Page cross");
+            .add<PageBoundaryStrlenTest<traits::StrlenTag>>("Page boundary")
+            .add<PageOverrunLengthTest<traits::StrlenTag>>("Page overrun");
     }
 };
 

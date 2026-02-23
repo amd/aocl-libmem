@@ -44,7 +44,8 @@ public:
         tests()
             .zeroSize<ZeroSizeBoundedConcatTest<traits::StrncatTag>>("Size zero")
             .add<StrncatCopyTest<traits::StrncatTag>>("Basic concat")
-            .add<PageCrossConcatTest<traits::StrncatTag>>("Page-cross");
+            .add<PageBoundaryConcatTest<traits::StrncatTag>>("Page boundary")
+            .add<PageOverrunConcatTest<traits::StrncatTag>>("Page overrun");
     }
 };
 

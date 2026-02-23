@@ -45,7 +45,8 @@ public:
             .zeroSize<ZeroSizeStringCopyTest<traits::StrcpyTag>>("Empty string copy")
             .add<BasicCopyNoSizeTest<traits::StrcpyTag>>("Basic copy")
             .add<MultiNullCopyTest<traits::StrcpyTag>>("Multi-null")
-            .add<PageCrossStringCopyTest<traits::StrcpyTag>>("Page-cross");
+            .add<PageBoundaryCopyTest<traits::StrcpyTag>>("Page boundary")
+            .add<PageOverrunCopyTest<traits::StrcpyTag>>("Page overrun");
     }
 };
 

@@ -52,7 +52,8 @@ public:
             .add<MultiNullCompareTest<traits::StrcmpTag>>("Multi-null compare")
             .add<HighByteCompareTest<traits::StrcmpTag>>("High-byte compare (128-255)")
             .add<ExtendedAsciiCompareTest<traits::StrcmpTag>>("Extended ASCII compare")
-            .add<PageCrossCompareTest<traits::StrcmpTag>>("Page-cross");
+            .add<PageBoundaryCompareTest<traits::StrcmpTag>>("Page boundary")
+            .add<PageOverrunCompareTest<traits::StrcmpTag>>("Page overrun");
     }
 };
 

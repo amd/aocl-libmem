@@ -46,7 +46,8 @@ public:
             .add<EqualCompareTest<traits::MemcmpTag>>("Equal data")
             .add<MismatchCompareTest<traits::MemcmpTag>>("Different data")
             .add<ByteByByteMismatchTest<traits::MemcmpTag>>("Byte-by-byte mismatch")
-            .add<PageCrossCompareTest<traits::MemcmpTag>>("Page cross");
+            .add<PageBoundaryCompareTest<traits::MemcmpTag>>("Page boundary")
+            .add<PageOverrunCompareTest<traits::MemcmpTag>>("Page overrun");
     }
 };
 

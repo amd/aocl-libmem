@@ -44,7 +44,8 @@ public:
         tests()
             .zeroSize<ZeroSizeCopyTest<traits::MemcpyTag>>("Size zero")
             .add<BasicCopyTest<traits::MemcpyTag>>("Basic copy")
-            .add<PageCrossCopyTest<traits::MemcpyTag>>("Page cross");
+            .add<PageBoundaryCopyTest<traits::MemcpyTag>>("Page boundary")
+            .add<PageOverrunCopyTest<traits::MemcpyTag>>("Page overrun");
     }
 };
 

@@ -83,7 +83,8 @@ public:
             .add<StrncpyStrlenGreaterTest<traits::StrncpyTag>>("strlen > n")
             .add<StrncpyStrlenEqualTest<traits::StrncpyTag>>("strlen == n")
             .add<StrncpyStrlenLessTest<traits::StrncpyTag>>("strlen < n (padding)")
-            .add<PageCrossStringCopyTest<traits::StrncpyTag>>("Page-cross");
+            .add<PageBoundaryCopyTest<traits::StrncpyTag>>("Page boundary")
+            .add<PageOverrunCopyTest<traits::StrncpyTag>>("Page overrun");
     }
 };
 

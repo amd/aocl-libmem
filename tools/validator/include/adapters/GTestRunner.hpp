@@ -151,19 +151,22 @@ private:
         // --- MEMCPY ---
         registerTest<ZeroSizeCopyTest<traits::MemcpyTag>>("memcpy", "ZeroSize");
         registerTest<BasicCopyTest<traits::MemcpyTag>>("memcpy", "BasicCopy");
-        registerTest<PageCrossCopyTest<traits::MemcpyTag>>("memcpy", "PageCross");
+        registerTest<PageBoundaryCopyTest<traits::MemcpyTag>>("memcpy", "PageBoundary");
+        registerTest<PageOverrunCopyTest<traits::MemcpyTag>>("memcpy", "PageOverrun");
 
         // --- MEMCMP ---
         registerTest<ZeroSizeCompareTest<traits::MemcmpTag>>("memcmp", "ZeroSize");
         registerTest<EqualCompareTest<traits::MemcmpTag>>("memcmp", "EqualCompare");
         registerTest<MismatchCompareTest<traits::MemcmpTag>>("memcmp", "MismatchCompare");
         registerTest<ByteByByteMismatchTest<traits::MemcmpTag>>("memcmp", "ByteByByteMismatch");
-        registerTest<PageCrossCompareTest<traits::MemcmpTag>>("memcmp", "PageCross");
+        registerTest<PageBoundaryCompareTest<traits::MemcmpTag>>("memcmp", "PageBoundary");
+        registerTest<PageOverrunCompareTest<traits::MemcmpTag>>("memcmp", "PageOverrun");
 
         // --- MEMSET ---
         registerTest<ZeroSizeFillTest<traits::MemsetTag>>("memset", "ZeroSize");
         registerTest<BasicFillTest<traits::MemsetTag>>("memset", "BasicFill");
-        registerTest<PageCrossFillTest<traits::MemsetTag>>("memset", "PageCross");
+        registerTest<PageBoundaryFillTest<traits::MemsetTag>>("memset", "PageBoundary");
+        registerTest<PageOverrunFillTest<traits::MemsetTag>>("memset", "PageOverrun");
 
         // --- MEMMOVE ---
         registerTest<ZeroSizeCopyTest<traits::MemmoveTag>>("memmove", "ZeroSize");
@@ -171,12 +174,14 @@ private:
         registerTest<ForwardOverlapTest<traits::MemmoveTag>>("memmove", "ForwardOverlap");
         registerTest<BackwardOverlapTest<traits::MemmoveTag>>("memmove", "BackwardOverlap");
         registerTest<InPlaceCopyTest<traits::MemmoveTag>>("memmove", "InPlaceCopy");
-        registerTest<PageCrossCopyTest<traits::MemmoveTag>>("memmove", "PageCross");
+        registerTest<PageBoundaryCopyTest<traits::MemmoveTag>>("memmove", "PageBoundary");
+        registerTest<PageOverrunCopyTest<traits::MemmoveTag>>("memmove", "PageOverrun");
 
         // --- MEMPCPY ---
         registerTest<ZeroSizeCopyTest<traits::MempcpyTag>>("mempcpy", "ZeroSize");
         registerTest<BasicCopyTest<traits::MempcpyTag>>("mempcpy", "BasicCopy");
-        registerTest<PageCrossCopyTest<traits::MempcpyTag>>("mempcpy", "PageCross");
+        registerTest<PageBoundaryCopyTest<traits::MempcpyTag>>("mempcpy", "PageBoundary");
+        registerTest<PageOverrunCopyTest<traits::MempcpyTag>>("mempcpy", "PageOverrun");
 
         // --- MEMCHR ---
         registerTest<ZeroSizeSearchTest<traits::MemchrTag>>("memchr", "ZeroSize");
@@ -185,13 +190,15 @@ private:
         registerTest<SearchAtStartTest<traits::MemchrTag>>("memchr", "SearchAtStart");
         registerTest<SearchAtEndTest<traits::MemchrTag>>("memchr", "SearchAtEnd");
         registerTest<SearchNullCharTest<traits::MemchrTag>>("memchr", "SearchNullChar");
-        registerTest<PageCrossSearchTest<traits::MemchrTag>>("memchr", "PageCross");
+        registerTest<PageBoundaryMemchrTest<traits::MemchrTag>>("memchr", "PageBoundary");
+        registerTest<PageOverrunMemchrTest<traits::MemchrTag>>("memchr", "PageOverrun");
 
         // --- STRCPY ---
         registerTest<ZeroSizeStringCopyTest<traits::StrcpyTag>>("strcpy", "ZeroSize");
         registerTest<BasicCopyNoSizeTest<traits::StrcpyTag>>("strcpy", "BasicCopy");
         registerTest<MultiNullCopyTest<traits::StrcpyTag>>("strcpy", "MultiNull");
-        registerTest<PageCrossStringCopyTest<traits::StrcpyTag>>("strcpy", "PageCross");
+        registerTest<PageBoundaryCopyTest<traits::StrcpyTag>>("strcpy", "PageBoundary");
+        registerTest<PageOverrunCopyTest<traits::StrcpyTag>>("strcpy", "PageOverrun");
 
         // --- STRNCPY ---
         registerTest<ZeroSizeBoundedCopyTest<traits::StrncpyTag>>("strncpy", "ZeroSize");
@@ -199,7 +206,8 @@ private:
         registerTest<StrncpyStrlenGreaterTest<traits::StrncpyTag>>("strncpy", "StrlenGreater");
         registerTest<StrncpyStrlenEqualTest<traits::StrncpyTag>>("strncpy", "StrlenEqual");
         registerTest<StrncpyStrlenLessTest<traits::StrncpyTag>>("strncpy", "StrlenLess");
-        registerTest<PageCrossStringCopyTest<traits::StrncpyTag>>("strncpy", "PageCross");
+        registerTest<PageBoundaryCopyTest<traits::StrncpyTag>>("strncpy", "PageBoundary");
+        registerTest<PageOverrunCopyTest<traits::StrncpyTag>>("strncpy", "PageOverrun");
 
         // --- STRCMP ---
         registerTest<ZeroSizeStringCompareTest<traits::StrcmpTag>>("strcmp", "ZeroSize");
@@ -210,9 +218,10 @@ private:
         registerTest<CompareFirstShorterTest<traits::StrcmpTag>>("strcmp", "FirstShorter");
         registerTest<CompareSecondShorterTest<traits::StrcmpTag>>("strcmp", "SecondShorter");
         registerTest<MultiNullCompareTest<traits::StrcmpTag>>("strcmp", "MultiNull");
-        registerTest<PageCrossCompareTest<traits::StrcmpTag>>("strcmp", "PageCross");
+        registerTest<PageBoundaryCompareTest<traits::StrcmpTag>>("strcmp", "PageBoundary");
         registerTest<HighByteCompareTest<traits::StrcmpTag>>("strcmp", "HighByte");
         registerTest<ExtendedAsciiCompareTest<traits::StrcmpTag>>("strcmp", "ExtendedAscii");
+        registerTest<PageOverrunCompareTest<traits::StrcmpTag>>("strcmp", "PageOverrun");
 
         // --- STRNCMP ---
         registerTest<StrncmpZeroSizeTest>("strncmp", "ZeroSize");
@@ -224,42 +233,49 @@ private:
         registerTest<StrncmpNoNullInRangeTest<traits::StrncmpTag>>("strncmp", "NoNullInRange");
         registerTest<CompareStrlenBothGreaterTest<traits::StrncmpTag>>("strncmp", "BothLonger");
         registerTest<MultiNullCompareTest<traits::StrncmpTag>>("strncmp", "MultiNull");
-        registerTest<PageCrossCompareTest<traits::StrncmpTag>>("strncmp", "PageCross");
         registerTest<HighByteCompareTest<traits::StrncmpTag>>("strncmp", "HighByte");
         registerTest<ExtendedAsciiCompareTest<traits::StrncmpTag>>("strncmp", "ExtendedAscii");
+        registerTest<PageBoundaryCompareTest<traits::StrncmpTag>>("strncmp", "PageBoundary");
+        registerTest<PageOverrunCompareTest<traits::StrncmpTag>>("strncmp", "PageOverrun");
 
         // --- STRLEN ---
         registerTest<ZeroSizeLengthTest<traits::StrlenTag>>("strlen", "ZeroSize");
         registerTest<BasicLengthTest<traits::StrlenTag>>("strlen", "BasicLength");
-        registerTest<PageCrossLengthTest<traits::StrlenTag>>("strlen", "PageCross");
+        registerTest<PageBoundaryStrlenTest<traits::StrlenTag>>("strlen", "PageBoundary");
+        registerTest<PageOverrunLengthTest<traits::StrlenTag>>("strlen", "PageOverrun");
 
         // --- STRCAT ---
         registerTest<ZeroSizeConcatTest<traits::StrcatTag>>("strcat", "ZeroSize");
         registerTest<BasicConcatTest<traits::StrcatTag>>("strcat", "BasicConcat");
         registerTest<MultiNullConcatTest<traits::StrcatTag>>("strcat", "MultiNull");
-        registerTest<PageCrossConcatTest<traits::StrcatTag>>("strcat", "PageCross");
+        registerTest<PageBoundaryConcatTest<traits::StrcatTag>>("strcat", "PageBoundary");
+        registerTest<PageOverrunConcatTest<traits::StrcatTag>>("strcat", "PageOverrun");
 
         // --- STRNCAT ---
         registerTest<ZeroSizeBoundedConcatTest<traits::StrncatTag>>("strncat", "ZeroSize");
         registerTest<StrncatCopyTest<traits::StrncatTag>>("strncat", "BasicConcat");
-        registerTest<PageCrossConcatTest<traits::StrncatTag>>("strncat", "PageCross");
+        registerTest<PageBoundaryConcatTest<traits::StrncatTag>>("strncat", "PageBoundary");
+        registerTest<PageOverrunConcatTest<traits::StrncatTag>>("strncat", "PageOverrun");
 
         // --- STRCHR ---
         registerTest<StringSearchFoundTest<traits::StrchrTag>>("strchr", "CharFound");
         registerTest<StringSearchNotFoundTest<traits::StrchrTag>>("strchr", "CharNotFound");
         registerTest<StringSearchNullCharTest<traits::StrchrTag>>("strchr", "SearchNullChar");
-        registerTest<PageCrossStrchrTest<traits::StrchrTag>>("strchr", "PageCross");
+        registerTest<PageBoundaryStrchrTest<traits::StrchrTag>>("strchr", "PageBoundary");
+        registerTest<PageOverrunStrchrTest<traits::StrchrTag>>("strchr", "PageOverrun");
 
         // --- STRSTR ---
         registerTest<StrstrFoundTest<traits::StrstrTag>>("strstr", "SubstringFound");
         registerTest<StrstrNotFoundTest<traits::StrstrTag>>("strstr", "SubstringNotFound");
         registerTest<StrstrEmptyNeedleTest<traits::StrstrTag>>("strstr", "EmptyNeedle");
-        registerTest<PageCrossStrstrTest<traits::StrstrTag>>("strstr", "PageCross");
+        registerTest<PageBoundaryStrstrTest<traits::StrstrTag>>("strstr", "PageBoundary");
+        registerTest<PageOverrunStrstrTest<traits::StrstrTag>>("strstr", "PageOverrun");
 
         // --- STRSPN ---
         registerTest<ZeroSizeSpanTest<traits::StrspnTag>>("strspn", "ZeroSize");
         registerTest<StrspnTest<traits::StrspnTag>>("strspn", "BasicSpan");
-        registerTest<PageCrossStrspnTest<traits::StrspnTag>>("strspn", "PageCross");
+        registerTest<PageBoundaryStrspnTest<traits::StrspnTag>>("strspn", "PageBoundary");
+        registerTest<PageOverrunLengthTest<traits::StrspnTag>>("strspn", "PageOverrun");
     }
 };
 

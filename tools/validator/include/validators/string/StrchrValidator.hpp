@@ -44,7 +44,8 @@ public:
             .add<StringSearchFoundTest<traits::StrchrTag>>("Char found")
             .add<StringSearchNotFoundTest<traits::StrchrTag>>("Char not found")
             .add<StringSearchNullCharTest<traits::StrchrTag>>("Search NULL char")
-            .add<PageCrossStrchrTest<traits::StrchrTag>>("Page-cross");
+            .add<PageBoundaryStrchrTest<traits::StrchrTag>>("Page boundary")
+            .add<PageOverrunStrchrTest<traits::StrchrTag>>("Page overrun");
     }
 };
 

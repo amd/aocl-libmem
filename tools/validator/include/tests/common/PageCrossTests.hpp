@@ -28,13 +28,10 @@
 
 /**
  * @file PageCrossTests.hpp
- * @brief Comprehensive page boundary crossing tests
+ * @brief Page boundary and page overrun test implementations
  *
- * All tests inherit from PageCrossTestBase and provide:
- * - Multi-page spanning buffers
- * - Full byte range (0-255) to catch signed comparison bugs
- * - Multiple alignment combinations
- * - Positions at/near page boundaries
+ * PageBoundary tests: correctness when data crosses page boundaries
+ * PageOverrun tests: bounds safety with a trap page at buffer end
  */
 
 #include "core/PageCrossTestBase.hpp"
@@ -44,23 +41,31 @@ namespace libmem {
 namespace validator {
 
 // ============================================================================
-// Page-Cross Copy Test
+// ============================================================================
+//
+//  PAGE BOUNDARY TESTS
+//
+//  Tests correctness when buffers cross internal page boundaries.
+//  Inherits from PageBoundaryTestBase (offset x position iteration).
+//
+// ============================================================================
+// ============================================================================
+
+// ============================================================================
+// PageBoundaryCopyTest
 // ============================================================================
 
 /**
- * PageCrossCopyTest - Comprehensive copy function test with multi-page spanning
- *
- * Tests: memcpy, memmove, mempcpy
+ * Tests: memcpy, memmove, mempcpy, strcpy, strncpy
  * - Source and destination span multiple pages
- * - Full byte range data
- * - Various alignment combinations
+ * - Uses invoke_helper::copy for unified SFINAE dispatch
  */
 template<typename Tag>
-class PageCrossCopyTest : public PageCrossTestBase<Tag> {
+class PageBoundaryCopyTest : public PageBoundaryTestBase<Tag> {
 protected:
     bool usePositions() const override { return false; }
 
-    TestResult runPageCrossTest(size_t size, size_t /*pos*/,
+    TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t off2) override {
         PageCrossBuffer src_buf, dst_buf;
 
@@ -78,16 +83,19 @@ protected:
             return this->error("invalid boundary offset");
         }
 
-        if (src + size > src_buf.base() + src_buf.usableSize() ||
-            dst + size > dst_buf.base() + dst_buf.usableSize()) {
-            return TestResult::success();  // Skip this combination
+        if (!this->fitsInBuffer(src, size, src_buf) ||
+            !this->fitsInBuffer(dst, size, dst_buf)) {
+            return TestResult::success();
         }
 
         if (FunctionTest<Tag>::Traits::is_string_func) {
+            for (size_t i = 0; i < size - 1; ++i) {
+                if (src[i] == 0) src[i] = 1;
+            }
             src[size - 1] = '\0';
         }
 
-        this->invoke(dst, src, size);
+        invoke_helper::copy<Tag>(dst, src, size);
 
         for (size_t i = 0; i < size; ++i) {
             if (dst[i] != src[i]) {
@@ -100,23 +108,21 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross Compare Test
+// PageBoundaryCompareTest
 // ============================================================================
 
 /**
- * PageCrossCompareTest - Comprehensive compare function test
- *
- * Tests: strcmp, strncmp, memcmp
+ * Tests: memcmp, strcmp, strncmp
  * - Full byte range (catches signed comparison bug)
  * - Mismatch at various positions including page boundaries
  * - Different alignments trigger misaligned code path
  */
 template<typename Tag>
-class PageCrossCompareTest : public PageCrossTestBase<Tag> {
+class PageBoundaryCompareTest : public PageBoundaryTestBase<Tag> {
 protected:
     bool requiresDifferentOffsets() const override { return true; }
 
-    TestResult runPageCrossTest(size_t size, size_t mismatch_pos,
+    TestResult runPageBoundaryTest(size_t size, size_t mismatch_pos,
                             uint32_t off1, uint32_t off2) override {
         PageCrossBuffer buf1, buf2;
 
@@ -137,12 +143,11 @@ protected:
 
         if (str1 + size > buf1.base() + buf1.usableSize() ||
             str2 + size > buf2.base() + buf2.usableSize()) {
-            return TestResult::success();  // Skip this combination
+            return TestResult::success();
         }
 
         this->copyData(str2, str1, size);
 
-        // Create mismatch
         uint8_t val1 = str1[mismatch_pos];
         uint8_t val2 = (val1 > 140) ? (val1 - 20) : (val1 + 20);
         str2[mismatch_pos] = val2;
@@ -155,7 +160,7 @@ protected:
             str2[size - 1] = '\0';
         }
 
-        int ret = invokeCompare(str1, str2, size);
+        int ret = invoke_helper::compare<Tag>(str1, str2, size);
         int ret_sign = (ret > 0) ? 1 : ((ret < 0) ? -1 : 0);
 
         if (ret_sign != expected_sign) {
@@ -167,51 +172,23 @@ protected:
 
         return TestResult::success();
     }
-
-private:
-    template<typename T = Tag>
-    typename std::enable_if<traits::FunctionTraits<T>::has_size_param &&
-                           !traits::FunctionTraits<T>::is_string_func, int>::type
-    invokeCompare(uint8_t* s1, uint8_t* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
-    }
-
-    template<typename T = Tag>
-    typename std::enable_if<traits::FunctionTraits<T>::has_size_param &&
-                           traits::FunctionTraits<T>::is_string_func, int>::type
-    invokeCompare(uint8_t* s1, uint8_t* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(
-            reinterpret_cast<const char*>(s1),
-            reinterpret_cast<const char*>(s2), n);
-    }
-
-    template<typename T = Tag>
-    typename std::enable_if<!traits::FunctionTraits<T>::has_size_param &&
-                           traits::FunctionTraits<T>::is_string_func, int>::type
-    invokeCompare(uint8_t* s1, uint8_t* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(
-            reinterpret_cast<const char*>(s1),
-            reinterpret_cast<const char*>(s2));
-    }
 };
 
 // ============================================================================
-// Page-Cross Fill Test
+// PageBoundaryFillTest
 // ============================================================================
 
 /**
- * PageCrossFillTest - Comprehensive fill function test
- *
  * Tests: memset
  * - Destination spans multiple pages
  * - Various fill values including high-bytes
  */
 template<typename Tag>
-class PageCrossFillTest : public PageCrossTestBase<Tag> {
+class PageBoundaryFillTest : public PageBoundaryTestBase<Tag> {
 protected:
     bool usePositions() const override { return false; }
 
-    TestResult runPageCrossTest(size_t size, size_t /*pos*/,
+    TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t /*off2*/) override {
         auto setup = this->setupBuffer(size, off1);
         if (setup.should_skip) return TestResult::success();
@@ -219,7 +196,6 @@ protected:
 
         uint8_t* dst = setup.ptr;
 
-        // Test with various values including high-bytes
         static const int test_values[] = {0x00, 0x41, 0x7F, 0x80, 0xFF};
         for (int value : test_values) {
             this->invoke(dst, value, size);
@@ -237,32 +213,29 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross Search Test
+// PageBoundaryMemchrTest
 // ============================================================================
 
 /**
- * PageCrossSearchTest - Comprehensive search function test
- *
  * Tests: memchr
  * - Buffer spans multiple pages
  * - Search character at various positions including page boundaries
  */
 template<typename Tag>
-class PageCrossSearchTest : public PageCrossTestBase<Tag> {
+class PageBoundaryMemchrTest : public PageBoundaryTestBase<Tag> {
 protected:
-    TestResult runPageCrossTest(size_t size, size_t search_pos,
+    TestResult runPageBoundaryTest(size_t size, size_t search_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         auto setup = this->setupBuffer(size, off1);
         if (setup.should_skip) return TestResult::success();
         if (!setup.valid) return this->error("allocation failed");
 
         this->seedRandom(size, search_pos, off1, 0);
-        this->fillFullByteRange(setup.buffer.base(), setup.buffer.usableSize());
+        this->fillFullByteRange(setup.pcb.base(), setup.pcb.usableSize());
 
         uint8_t* str = setup.ptr;
 
-        // Place unique search character at position
-        const uint8_t search_char = 0xFF;  // Unlikely to appear naturally
+        const uint8_t search_char = 0xFF;
         for (size_t i = 0; i < size; ++i) {
             if (str[i] == search_char) str[i] = 0xFE;
         }
@@ -281,20 +254,18 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross Length Test
+// PageBoundaryStrlenTest
 // ============================================================================
 
 /**
- * PageCrossLengthTest - Comprehensive length function test
- *
  * Tests: strlen
  * - String spans multiple pages
  * - Null terminator at various positions including page boundaries
  */
 template<typename Tag>
-class PageCrossLengthTest : public PageCrossTestBase<Tag> {
+class PageBoundaryStrlenTest : public PageBoundaryTestBase<Tag> {
 protected:
-    TestResult runPageCrossTest(size_t size, size_t null_pos,
+    TestResult runPageBoundaryTest(size_t size, size_t null_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         PageCrossBuffer buf;
 
@@ -308,7 +279,7 @@ protected:
         uint8_t* str = buf.getAddressNearBoundary(off1);
 
         if (!str || str + null_pos + 1 > buf.base() + buf.usableSize()) {
-            return TestResult::success();  // Skip
+            return TestResult::success();
         }
 
         str[null_pos] = '\0';
@@ -325,99 +296,20 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross String Copy Test
+// PageBoundaryConcatTest
 // ============================================================================
 
 /**
- * PageCrossStringCopyTest - Comprehensive string copy test
- *
- * Tests: strcpy, strncpy
- * - Source spans multiple pages
- * - Full byte range data
- */
-template<typename Tag>
-class PageCrossStringCopyTest : public PageCrossTestBase<Tag> {
-protected:
-    bool usePositions() const override { return false; }
-
-    TestResult runPageCrossTest(size_t size, size_t /*pos*/,
-                            uint32_t off1, uint32_t off2) override {
-        PageCrossBuffer src_buf, dst_buf;
-
-        if (!src_buf.allocate(size) || !dst_buf.allocate(size)) {
-            return this->error("allocation failed");
-        }
-
-        this->seedRandom(size, 0, off1, off2);
-        this->fillFullByteRange(src_buf.base(), src_buf.usableSize());
-
-        uint8_t* src = src_buf.getAddressNearBoundary(off1);
-        uint8_t* dst = dst_buf.getAddressNearBoundary(off2);
-
-        if (!src || !dst) {
-            return this->error("invalid boundary offset");
-        }
-
-        if (src + size > src_buf.base() + src_buf.usableSize() ||
-            dst + size > dst_buf.base() + dst_buf.usableSize()) {
-            return TestResult::success();  // Skip
-        }
-
-        // Ensure no nulls except at end
-        for (size_t i = 0; i < size - 1; ++i) {
-            if (src[i] == 0) src[i] = 1;
-        }
-        src[size - 1] = '\0';
-
-        char* ret = invokeCopy(
-            reinterpret_cast<char*>(dst),
-            reinterpret_cast<const char*>(src),
-            size);
-
-        for (size_t i = 0; i < size; ++i) {
-            if (dst[i] != src[i]) {
-                return this->errorAt(i, "string copy mismatch");
-            }
-        }
-
-        if (ret != reinterpret_cast<char*>(dst)) {
-            return this->error("return value mismatch");
-        }
-
-        return TestResult::success();
-    }
-
-private:
-    template<typename T = Tag>
-    typename std::enable_if<traits::FunctionTraits<T>::has_size_param, char*>::type
-    invokeCopy(char* dst, const char* src, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(dst, src, n);
-    }
-
-    template<typename T = Tag>
-    typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, char*>::type
-    invokeCopy(char* dst, const char* src, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(dst, src);
-    }
-};
-
-// ============================================================================
-// Page-Cross Concat Test
-// ============================================================================
-
-/**
- * PageCrossConcatTest - Comprehensive concat test
- *
  * Tests: strcat, strncat
  * - Source spans multiple pages
  */
 template<typename Tag>
-class PageCrossConcatTest : public PageCrossTestBase<Tag> {
+class PageBoundaryConcatTest : public PageBoundaryTestBase<Tag> {
 protected:
     size_t minTestSize() const override { return 16; }
     bool usePositions() const override { return false; }
 
-    TestResult runPageCrossTest(size_t size, size_t /*pos*/,
+    TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t off2) override {
         size_t src_len = size / 2;
         PageCrossBuffer src_buf, dst_buf;
@@ -438,23 +330,18 @@ protected:
 
         if (src + src_len + 1 > src_buf.base() + src_buf.usableSize() ||
             dst + size + 2 > dst_buf.base() + dst_buf.usableSize()) {
-            return TestResult::success();  // Skip
+            return TestResult::success();
         }
 
-        // Prepare source (no internal nulls)
         for (size_t i = 0; i < src_len; ++i) {
             if (src[i] == 0) src[i] = 1;
         }
         src[src_len] = '\0';
 
-        // Prepare destination with prefix
         dst[0] = 'X';
         dst[1] = '\0';
 
-        char* ret = invokeConcat(
-            reinterpret_cast<char*>(dst),
-            reinterpret_cast<const char*>(src),
-            src_len);
+        char* ret = invoke_helper::concat<Tag>(dst, src, src_len);
 
         if (dst[0] != 'X') {
             return this->error("prefix modified");
@@ -472,36 +359,21 @@ protected:
 
         return TestResult::success();
     }
-
-private:
-    template<typename T = Tag>
-    typename std::enable_if<traits::FunctionTraits<T>::has_size_param, char*>::type
-    invokeConcat(char* dst, const char* src, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(dst, src, n);
-    }
-
-    template<typename T = Tag>
-    typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, char*>::type
-    invokeConcat(char* dst, const char* src, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(dst, src);
-    }
 };
 
 // ============================================================================
-// Page-Cross Strchr Test
+// PageBoundaryStrchrTest
 // ============================================================================
 
 /**
- * PageCrossStrchrTest - Comprehensive strchr test
- *
- * Tests: strchr, strrchr
+ * Tests: strchr
  * - String spans multiple pages
  * - Search character at various positions
  */
 template<typename Tag>
-class PageCrossStrchrTest : public PageCrossTestBase<Tag> {
+class PageBoundaryStrchrTest : public PageBoundaryTestBase<Tag> {
 protected:
-    TestResult runPageCrossTest(size_t size, size_t search_pos,
+    TestResult runPageBoundaryTest(size_t size, size_t search_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         PageCrossBuffer buf;
 
@@ -515,10 +387,9 @@ protected:
         uint8_t* str = buf.getAddressNearBoundary(off1);
 
         if (!str || str + size + 1 > buf.base() + buf.usableSize()) {
-            return TestResult::success();  // Skip
+            return TestResult::success();
         }
 
-        // Ensure no nulls except at end, and no search char except at position
         const char search_char = '!';
         for (size_t i = 0; i < size; ++i) {
             if (str[i] == 0 || str[i] == search_char) {
@@ -542,22 +413,20 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross Strstr Test
+// PageBoundaryStrstrTest
 // ============================================================================
 
 /**
- * PageCrossStrstrTest - Comprehensive strstr test
- *
  * Tests: strstr
  * - Haystack spans multiple pages
  * - Needle at various positions
  */
 template<typename Tag>
-class PageCrossStrstrTest : public PageCrossTestBase<Tag> {
+class PageBoundaryStrstrTest : public PageBoundaryTestBase<Tag> {
 protected:
     size_t minTestSize() const override { return 16; }
 
-    TestResult runPageCrossTest(size_t size, size_t needle_pos,
+    TestResult runPageBoundaryTest(size_t size, size_t needle_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         PageCrossBuffer buf;
 
@@ -570,21 +439,19 @@ protected:
         uint8_t* haystack = buf.getAddressNearBoundary(off1);
 
         if (!haystack || haystack + size + 1 > buf.base() + buf.usableSize()) {
-            return TestResult::success();  // Skip
+            return TestResult::success();
         }
 
-        // Fill with characters that won't match needle
         for (size_t i = 0; i < size; ++i) {
-            haystack[i] = 'a' + (i % 13);  // Only a-m
+            haystack[i] = 'a' + (i % 13);
         }
         haystack[size] = '\0';
 
-        // Place needle at position
         const char* needle = "xyz";
         size_t needle_len = 3;
 
         if (needle_pos + needle_len >= size) {
-            return TestResult::success();  // Skip invalid position
+            return TestResult::success();
         }
 
         for (size_t i = 0; i < needle_len; ++i) {
@@ -605,19 +472,17 @@ protected:
 };
 
 // ============================================================================
-// Page-Cross Strspn Test
+// PageBoundaryStrspnTest
 // ============================================================================
 
 /**
- * PageCrossStrspnTest - Comprehensive strspn test
- *
- * Tests: strspn, strcspn
+ * Tests: strspn
  * - String spans multiple pages
  */
 template<typename Tag>
-class PageCrossStrspnTest : public PageCrossTestBase<Tag> {
+class PageBoundaryStrspnTest : public PageBoundaryTestBase<Tag> {
 protected:
-    TestResult runPageCrossTest(size_t size, size_t span_len,
+    TestResult runPageBoundaryTest(size_t size, size_t span_len,
                             uint32_t off1, uint32_t /*off2*/) override {
         PageCrossBuffer buf;
 
@@ -628,18 +493,16 @@ protected:
         uint8_t* str = buf.getAddressNearBoundary(off1);
 
         if (!str || str + size + 1 > buf.base() + buf.usableSize()) {
-            return TestResult::success();  // Skip
+            return TestResult::success();
         }
 
-        // Fill with accepted characters up to span_len
         const char* accept = "abcdefghij";
         for (size_t i = 0; i < span_len && i < size; ++i) {
-            str[i] = 'a' + (i % 10);  // Only a-j (in accept set)
+            str[i] = 'a' + (i % 10);
         }
 
-        // Fill rest with rejected character
         for (size_t i = span_len; i < size; ++i) {
-            str[i] = 'z';  // Not in accept set
+            str[i] = 'z';
         }
         str[size] = '\0';
 
@@ -649,6 +512,379 @@ protected:
 
         if (ret != expected) {
             return this->error("strspn mismatch: expected=%zu got=%zu", expected, ret);
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// ============================================================================
+//
+//  PAGE OVERRUN TESTS
+//
+//  Tests bounds safety by positioning buffers so the operation region ends
+//  exactly at a trap page (PROT_NONE). Any read or write past the region
+//  causes an immediate SEGFAULT.
+//
+//  Inherits from PageOverrunTestBase.
+//
+// ============================================================================
+// ============================================================================
+
+// ============================================================================
+// PageOverrunCopyTest
+// ============================================================================
+
+/**
+ * Tests: memcpy, memmove, mempcpy, strcpy, strncpy
+ */
+template<typename Tag>
+class PageOverrunCopyTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto src = this->setupAtGuard(size);
+        if (!src.valid) return this->error("src allocation failed");
+        this->fillForTest(src.ptr, size);
+
+        auto dst = this->setupAtGuard(size);
+        if (!dst.valid) return this->error("dst allocation failed");
+        std::memset(dst.ptr, 0, size);
+
+        invoke_helper::copy<Tag>(dst.ptr, src.ptr, size);
+
+        for (size_t i = 0; i < size; ++i) {
+            if (dst.ptr[i] != src.ptr[i])
+                return this->errorAt(i, "copy mismatch");
+        }
+
+        if (FunctionTest<Tag>::Traits::is_bounded &&
+            FunctionTest<Tag>::Traits::is_string_func && size > 0) {
+            auto src_nn = this->setupAtGuard(size);
+            if (!src_nn.valid) return this->error("src no-null allocation failed");
+            this->fillNonNull(src_nn.ptr, size);
+
+            auto dst_nn = this->setupAtGuard(size);
+            if (!dst_nn.valid) return this->error("dst no-null allocation failed");
+            std::memset(dst_nn.ptr, 0, size);
+
+            invoke_helper::copy<Tag>(dst_nn.ptr, src_nn.ptr, size);
+
+            for (size_t i = 0; i < size; ++i) {
+                if (dst_nn.ptr[i] != src_nn.ptr[i])
+                    return this->errorAt(i, "no-null copy mismatch");
+            }
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunFillTest
+// ============================================================================
+
+/**
+ * Tests: memset
+ */
+template<typename Tag>
+class PageOverrunFillTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        static const int test_values[] = {0x00, 0x41, 0x7F, 0x80, 0xFF};
+        for (int value : test_values) {
+            this->invoke(buf.ptr, value, size);
+
+            for (size_t i = 0; i < size; ++i) {
+                if (buf.ptr[i] != static_cast<uint8_t>(value))
+                    return this->errorAt(i, "fill mismatch: expected=0x%02x got=0x%02x",
+                                         value, buf.ptr[i]);
+            }
+        }
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunCompareTest
+// ============================================================================
+
+/**
+ * Tests: memcmp, strcmp, strncmp
+ * - Both buffers end at their respective trap pages
+ * - Equal data forces full scan to the boundary
+ */
+template<typename Tag>
+class PageOverrunCompareTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf1 = this->setupAtGuard(size);
+        if (!buf1.valid) return this->error("buf1 allocation failed");
+        this->fillForTest(buf1.ptr, size);
+
+        auto buf2 = this->setupAtGuard(size);
+        if (!buf2.valid) return this->error("buf2 allocation failed");
+        std::memcpy(buf2.ptr, buf1.ptr, size);
+
+        int ret = invoke_helper::compare<Tag>(buf1.ptr, buf2.ptr, size);
+        if (ret != 0)
+            return this->error("equal compare returned %d, expected 0", ret);
+
+        size_t last = FunctionTest<Tag>::Traits::is_string_func ? size - 2 : size - 1;
+        if (last < size) {
+            uint8_t orig = buf2.ptr[last];
+            buf2.ptr[last] = (orig > 140) ? (orig - 20) : (orig + 20);
+
+            ret = invoke_helper::compare<Tag>(buf1.ptr, buf2.ptr, size);
+            int expected_sign = (buf1.ptr[last] > buf2.ptr[last]) ? 1 : -1;
+            int ret_sign = (ret > 0) ? 1 : ((ret < 0) ? -1 : 0);
+
+            if (ret_sign != expected_sign)
+                return this->error("mismatch compare: expected sign=%d got sign=%d",
+                                   expected_sign, ret_sign);
+
+            buf2.ptr[last] = orig;
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunMemchrTest
+// ============================================================================
+
+/**
+ * Tests: memchr
+ * - Buffer ends at trap page, search char not present forces full scan
+ */
+template<typename Tag>
+class PageOverrunMemchrTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        std::memset(buf.ptr, 0x42, size);
+
+        const uint8_t not_found = 0xFF;
+        void* ret = this->invoke(buf.ptr, static_cast<int>(not_found), size);
+        if (ret != nullptr)
+            return this->error("expected NULL for not-found, got %p", ret);
+
+        if (size > 0) {
+            buf.ptr[size - 1] = 0xAA;
+            ret = this->invoke(buf.ptr, 0xAA, size);
+            if (ret != buf.ptr + size - 1)
+                return this->error("search at end failed: expected=%p got=%p",
+                                   static_cast<void*>(buf.ptr + size - 1), ret);
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunStrchrTest
+// ============================================================================
+
+/**
+ * Tests: strchr
+ * - String ends at trap page with '\0' as last byte, search char not present
+ */
+template<typename Tag>
+class PageOverrunStrchrTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        const char search_char = '!';
+        for (size_t i = 0; i < size - 1; ++i)
+            buf.ptr[i] = 'a' + (i % 26);
+        buf.ptr[size - 1] = '\0';
+
+        char* ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<char*>(buf.ptr), static_cast<int>(search_char));
+        if (ret != nullptr)
+            return this->error("expected NULL for not-found");
+
+        if (size > 1) {
+            buf.ptr[size - 2] = search_char;
+            ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<char*>(buf.ptr), static_cast<int>(search_char));
+            char* expected = reinterpret_cast<char*>(buf.ptr + size - 2);
+            if (ret != expected)
+                return this->error("search at end failed: expected=%p got=%p",
+                                   static_cast<void*>(expected), static_cast<void*>(ret));
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunStrstrTest
+// ============================================================================
+
+/**
+ * Tests: strstr
+ * - Haystack ends at trap page, needle not present forces full scan
+ */
+template<typename Tag>
+class PageOverrunStrstrTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        if (size < 4) return TestResult::success();
+
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        for (size_t i = 0; i < size - 1; ++i)
+            buf.ptr[i] = 'a' + (i % 13);
+        buf.ptr[size - 1] = '\0';
+
+        const char* needle = "xyz";
+        char* ret = FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<char*>(buf.ptr), needle);
+        if (ret != nullptr)
+            return this->error("expected NULL for not-found needle");
+
+        size_t needle_len = 3;
+        if (size > needle_len + 1) {
+            size_t pos = size - 1 - needle_len;
+            buf.ptr[pos] = 'x';
+            buf.ptr[pos + 1] = 'y';
+            buf.ptr[pos + 2] = 'z';
+
+            ret = FunctionTest<Tag>::Traits::invoke(
+                reinterpret_cast<char*>(buf.ptr), needle);
+            char* expected = reinterpret_cast<char*>(buf.ptr + pos);
+            if (ret != expected)
+                return this->error("needle near end: expected=%p got=%p",
+                                   static_cast<void*>(expected), static_cast<void*>(ret));
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunLengthTest
+// ============================================================================
+
+/**
+ * Tests: strlen, strspn
+ * - String's '\0' is the last byte before trap page
+ */
+template<typename Tag>
+class PageOverrunLengthTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid) return this->error("allocation failed");
+
+        this->fillForTest(buf.ptr, size);
+
+        size_t expected = size - 1;
+        size_t ret = invokeLength(buf.ptr, size);
+
+        if (ret != expected)
+            return this->error("length mismatch: expected=%zu got=%zu", expected, ret);
+
+        return TestResult::success();
+    }
+
+private:
+    template<typename T = Tag, typename std::enable_if<
+        traits::FunctionTraits<T>::arg_count == 1, int>::type = 0>
+    size_t invokeLength(uint8_t* str, size_t /*size*/) {
+        return FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(str));
+    }
+
+    template<typename T = Tag, typename std::enable_if<
+        traits::FunctionTraits<T>::arg_count == 2, int>::type = 0>
+    size_t invokeLength(uint8_t* str, size_t size) {
+        const char* accept = "abcdefghijklmnopqrstuvwxyz";
+        for (size_t i = 0; i < size - 1; ++i)
+            str[i] = 'a' + (i % 26);
+        str[size - 1] = '\0';
+        return FunctionTest<Tag>::Traits::invoke(
+            reinterpret_cast<const char*>(str), accept);
+    }
+};
+
+// ============================================================================
+// PageOverrunConcatTest
+// ============================================================================
+
+/**
+ * Tests: strcat, strncat
+ * - Source string ends at trap page
+ */
+template<typename Tag>
+class PageOverrunConcatTest : public PageOverrunTestBase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        if (size < 4) return TestResult::success();
+
+        size_t src_len = size / 2;
+
+        auto src_buf = this->setupAtGuard(src_len + 1);
+        if (!src_buf.valid) return this->error("src allocation failed");
+
+        for (size_t i = 0; i < src_len; ++i)
+            src_buf.ptr[i] = 'a' + (i % 26);
+        src_buf.ptr[src_len] = '\0';
+
+        size_t dst_size = src_len + 2;
+        auto dst_buf = this->setupAtGuard(dst_size);
+        if (!dst_buf.valid) return this->error("dst allocation failed");
+        std::memset(dst_buf.ptr, 0, dst_size);
+        uint8_t* dst = dst_buf.ptr;
+        dst[0] = 'X';
+        dst[1] = '\0';
+
+        char* ret = invoke_helper::concat<Tag>(dst, src_buf.ptr, src_len);
+
+        if (dst[0] != 'X')
+            return this->error("prefix modified");
+
+        for (size_t i = 0; i < src_len; ++i) {
+            if (dst[1 + i] != src_buf.ptr[i])
+                return this->errorAt(i, "concat mismatch");
+        }
+
+        if (ret != reinterpret_cast<char*>(dst))
+            return this->error("return value mismatch");
+
+        if (FunctionTest<Tag>::Traits::is_bounded &&
+            FunctionTest<Tag>::Traits::is_string_func && size >= 4) {
+            size_t cat_len = size / 2;
+
+            auto src_nn = this->setupAtGuard(cat_len);
+            if (!src_nn.valid) return this->error("src no-null concat allocation failed");
+            this->fillNonNull(src_nn.ptr, cat_len);
+
+            size_t dst_nn_size = cat_len + 2;
+            auto dst_nn_buf = this->setupAtGuard(dst_nn_size);
+            if (!dst_nn_buf.valid) return this->error("dst no-null concat allocation failed");
+            std::memset(dst_nn_buf.ptr, 0, dst_nn_size);
+            dst_nn_buf.ptr[0] = 'X';
+            dst_nn_buf.ptr[1] = '\0';
+
+            invoke_helper::concat<Tag>(dst_nn_buf.ptr, src_nn.ptr, cat_len);
+
+            if (dst_nn_buf.ptr[0] != 'X')
+                return this->error("no-null concat prefix modified");
+            for (size_t i = 0; i < cat_len; ++i) {
+                if (dst_nn_buf.ptr[1 + i] != src_nn.ptr[i])
+                    return this->errorAt(i, "no-null concat mismatch");
+            }
         }
 
         return TestResult::success();

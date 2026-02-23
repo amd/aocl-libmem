@@ -44,7 +44,8 @@ public:
         tests()
             .zeroSize<ZeroSizeSpanTest<traits::StrspnTag>>("Empty string")
             .add<StrspnTest<traits::StrspnTag>>("Basic span")
-            .add<PageCrossStrspnTest<traits::StrspnTag>>("Page-cross");
+            .add<PageBoundaryStrspnTest<traits::StrspnTag>>("Page boundary")
+            .add<PageOverrunLengthTest<traits::StrspnTag>>("Page overrun");
     }
 };
 

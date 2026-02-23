@@ -48,7 +48,8 @@ public:
             .add<ForwardOverlapTest<traits::MemmoveTag>>("Forward overlap")
             .add<BackwardOverlapTest<traits::MemmoveTag>>("Backward overlap")
             .add<InPlaceCopyTest<traits::MemmoveTag>>("In-place copy")
-            .add<PageCrossCopyTest<traits::MemmoveTag>>("Page cross");
+            .add<PageBoundaryCopyTest<traits::MemmoveTag>>("Page boundary")
+            .add<PageOverrunCopyTest<traits::MemmoveTag>>("Page overrun");
     }
 };
 REGISTER_VALIDATOR(MemmoveValidator)

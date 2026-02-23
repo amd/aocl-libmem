@@ -28,13 +28,12 @@
 
 /**
  * @file PageCrossTestBase.hpp
- * @brief Base class for comprehensive page boundary testing
+ * @brief Base classes and shared helpers for page-level tests
  *
- * Provides common infrastructure for testing functions with:
- * - Multi-page spanning buffers
- * - Full byte range (0-255) to catch signed comparison bugs
- * - Multiple alignment combinations
- * - Positions at/near page boundaries
+ * Layout:
+ *   1. PageBoundaryTestBase  - tests correctness across page boundaries
+ *   2. PageOverrunTestBase   - tests bounds safety via trap page
+ *   3. invoke_helper         - shared SFINAE dispatch used by test subclasses
  */
 
 #include "core/FunctionTest.hpp"
@@ -45,61 +44,18 @@
 namespace libmem {
 namespace validator {
 
-/**
- * PageCrossTestBase - Base class for comprehensive page boundary testing
- *
- * Provides:
- *  - Standard test loop over sizes, offsets, and positions
- *  - Position generation based on size and page boundaries
- *  - Alignment offset combinations
- *  - Deterministic random seeding
- *
- * Subclasses implement:
- *  - runPageCrossTest() - Actual function-specific test logic
- *  - Optionally override minTestSize(), requiresDifferentOffsets(), usePositions()
- */
-/**
- * BufferSetupResult - Result of buffer allocation and positioning
- */
-struct BufferSetupResult {
-    PageCrossBuffer buffer;
-    uint8_t* ptr;
-    bool valid;
-    bool should_skip;
-
-    BufferSetupResult() : ptr(nullptr), valid(false), should_skip(false) {}
-
-    static BufferSetupResult success(PageCrossBuffer&& buf, uint8_t* p) {
-        BufferSetupResult r;
-        r.buffer = std::move(buf);
-        r.ptr = p;
-        r.valid = true;
-        r.should_skip = false;
-        return r;
-    }
-
-    static BufferSetupResult skip() {
-        BufferSetupResult r;
-        r.should_skip = true;
-        return r;
-    }
-
-    static BufferSetupResult failure() {
-        BufferSetupResult r;
-        r.valid = false;
-        r.should_skip = false;
-        return r;
-    }
-};
+// ============================================================================
+// PageBoundaryTestBase
+//
+// Positions buffers so data crosses internal page boundaries.
+// Iterates over alignment offsets and positions near boundaries.
+// Subclasses implement runPageBoundaryTest() with function-specific logic.
+// ============================================================================
 
 template<typename Tag>
-class PageCrossTestBase : public FunctionTest<Tag> {
+class PageBoundaryTestBase : public FunctionTest<Tag> {
 public:
-    /**
-     * Test name - all page-cross tests share this name
-     * Combined with function name: e.g., "memcpy:PageCross"
-     */
-    const char* name() const override { return "PageCross"; }
+    const char* name() const override { return "PageBoundary"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
@@ -109,20 +65,16 @@ public:
             return TestResult::success();
         }
 
-        // Get test positions (for tests that use position parameter)
         auto positions = usePositions() ? getTestPositions(size) : std::vector<size_t>{0};
 
-        // Test various alignment combinations
         for (uint32_t off1 : START_OFFSETS) {
             for (uint32_t off2 : START_OFFSETS) {
-                // Skip same offsets if different alignments required
                 if (requiresDifferentOffsets() && off1 == off2) continue;
 
                 for (size_t pos : positions) {
-                    // Skip invalid positions
                     if (usePositions() && pos >= size - 1) continue;
 
-                    auto result = runPageCrossTest(size, pos, off1, off2);
+                    auto result = runPageBoundaryTest(size, pos, off1, off2);
                     if (!result.passed) {
                         return result;
                     }
@@ -134,51 +86,16 @@ public:
     }
 
 protected:
-    // ========================================================================
-    // Subclasses override these
-    // ========================================================================
-
-    /**
-     * Minimum size to run this test (default: 8 bytes)
-     */
     virtual size_t minTestSize() const { return 8; }
-
-    /**
-     * Whether test requires different offsets for buf1 vs buf2
-     * (e.g., compare tests need different alignments to trigger misaligned path)
-     */
     virtual bool requiresDifferentOffsets() const { return false; }
-
-    /**
-     * Whether test uses position parameter (e.g., mismatch position, search position)
-     * If false, position loop runs once with pos=0
-     */
     virtual bool usePositions() const { return true; }
 
-    /**
-     * Run the page-cross test for a specific scenario - subclasses MUST implement
-     *
-     * @param size Buffer/string size to test
-     * @param pos Position parameter (mismatch pos, search pos, null pos, etc.)
-     * @param off1 Offset from page boundary for buffer 1
-     * @param off2 Offset from page boundary for buffer 2
-     * @return TestResult indicating pass/fail
-     */
-    virtual TestResult runPageCrossTest(size_t size, size_t pos,
-                                         uint32_t off1, uint32_t off2) = 0;
+    virtual TestResult runPageBoundaryTest(size_t size, size_t pos,
+                                           uint32_t off1, uint32_t off2) = 0;
 
-    // ========================================================================
-    // Common utilities for subclasses
-    // ========================================================================
-
-    /**
-     * Get test positions based on size
-     * Includes early positions, page boundary positions, and near-end position
-     */
     std::vector<size_t> getTestPositions(size_t size) const {
         std::vector<size_t> positions = {4, 16, 32};
 
-        // Add positions around first page boundary
         if (size > PAGE_SZ) {
             positions.push_back(PAGE_SZ - 6);
             positions.push_back(PAGE_SZ - 1);
@@ -187,14 +104,12 @@ protected:
             positions.push_back(PAGE_SZ + 100);
         }
 
-        // Add positions around second page boundary
         if (size > 2 * PAGE_SZ) {
             positions.push_back(2 * PAGE_SZ - 1);
             positions.push_back(2 * PAGE_SZ);
             positions.push_back(2 * PAGE_SZ + 1);
         }
 
-        // Add position near end
         if (size > 64) {
             positions.push_back(size - 10);
         }
@@ -202,60 +117,182 @@ protected:
         return positions;
     }
 
-    /**
-     * Seed random number generator deterministically
-     * Ensures reproducible test results
-     */
     void seedRandom(size_t size, size_t pos, uint32_t off1, uint32_t off2) const {
         std::srand(static_cast<unsigned>(size ^ pos ^ off1 ^ off2));
     }
 
-    /**
-     * Setup a buffer with proper allocation and positioning
-     *
-     * @param size Size needed for the buffer
-     * @param offset Offset from page boundary
-     * @return BufferSetupResult with buffer and positioned pointer
-     */
-    BufferSetupResult setupBuffer(size_t size, uint32_t offset) {
+    PageTestBuffer setupBuffer(size_t size, uint32_t offset) {
         PageCrossBuffer buf;
 
         if (!buf.allocate(size)) {
-            return BufferSetupResult::failure();
+            return PageTestBuffer::failure();
         }
 
         uint8_t* ptr = buf.getAddressNearBoundary(offset);
 
         if (!ptr || ptr + size > buf.base() + buf.usableSize()) {
-            return BufferSetupResult::skip();
+            return PageTestBuffer::skip();
         }
 
-        return BufferSetupResult::success(std::move(buf), ptr);
+        return PageTestBuffer::success(std::move(buf), ptr);
     }
 
-    /**
-     * Check if a pointer with given size fits within buffer bounds
-     *
-     * @param ptr Pointer to check
-     * @param size Size needed
-     * @param buf Buffer to check against
-     * @return true if fits, false if should skip
-     */
     bool fitsInBuffer(uint8_t* ptr, size_t size, const PageCrossBuffer& buf) const {
         return ptr && (ptr + size <= buf.base() + buf.usableSize());
     }
 
-    /**
-     * Start offsets from page boundary to test
-     * Covers various vector alignments (1, 16, 31, 32, 48, 63, 64)
-     */
     static constexpr uint32_t START_OFFSETS[] = {1, 16, 31, 32, 48, 63, 64};
     static constexpr size_t NUM_OFFSETS = sizeof(START_OFFSETS) / sizeof(START_OFFSETS[0]);
 };
 
-// Define static member
 template<typename Tag>
-constexpr uint32_t PageCrossTestBase<Tag>::START_OFFSETS[];
+constexpr uint32_t PageBoundaryTestBase<Tag>::START_OFFSETS[];
+
+// ============================================================================
+// PageOverrunTestBase
+//
+// Positions buffers so the operation region ends exactly at a trap page
+// (PROT_NONE). Any read/write past the region causes an immediate SEGFAULT.
+// Subclasses implement runPageOverrunTest() with function-specific logic.
+// ============================================================================
+
+template<typename Tag>
+class PageOverrunTestBase : public FunctionTest<Tag> {
+public:
+    const char* name() const override { return "PageOverrun"; }
+
+    TestResult execute(const TestContext& ctx) override {
+        this->ctx_ = ctx;
+        if (ctx.size == 0) return TestResult::success();
+        return runPageOverrunTest(ctx.size);
+    }
+
+protected:
+    using Traits = typename FunctionTest<Tag>::Traits;
+
+    /**
+     * Allocate buffer with ptr+size ending exactly at the trap page.
+     * Any access past ptr[size-1] will SEGFAULT.
+     */
+    PageTestBuffer setupAtGuard(size_t size) {
+        PageTestBuffer ptb;
+        if (!ptb.pcb.allocate(size)) return ptb;
+        ptb.ptr = ptb.pcb.getAddressEndingAtGuard(size);
+        if (!ptb.ptr) return ptb;
+        ptb.valid = true;
+        return ptb;
+    }
+
+    /**
+     * Fill buffer with appropriate data based on function type.
+     * String functions: non-null bytes + '\0' at buf[size-1]
+     * Memory functions: full byte range (0-255)
+     */
+    void fillForTest(uint8_t* buf, size_t size) {
+        if (Traits::is_string_func) {
+            this->fillNonNull(buf, size);
+            buf[size - 1] = '\0';
+        } else {
+            this->fillFullByteRange(buf, size);
+        }
+    }
+
+    /**
+     * Replace all occurrences of a character in buffer (for search tests).
+     */
+    void removeChar(uint8_t* buf, size_t size, uint8_t ch,
+                    uint8_t replacement = 0xFE) {
+        for (size_t i = 0; i < size; ++i) {
+            if (buf[i] == ch) buf[i] = replacement;
+        }
+    }
+
+    virtual TestResult runPageOverrunTest(size_t size) = 0;
+};
+
+// ============================================================================
+// 3. invoke_helper
+//
+// Shared SFINAE dispatch for function invocation. Used by test subclasses
+// in PageCrossTests.hpp to call functions without per-class SFINAE boilerplate.
+// Dispatches based on has_size_param / is_string_func traits.
+// ============================================================================
+
+namespace invoke_helper {
+
+// --- copy: memcpy/memmove/mempcpy/strcpy/strncpy ---
+
+template<typename Tag, typename std::enable_if<
+    traits::FunctionTraits<Tag>::has_size_param &&
+    !traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+void copy(uint8_t* dst, const uint8_t* src, size_t n) {
+    traits::FunctionTraits<Tag>::invoke(dst, src, n);
+}
+
+template<typename Tag, typename std::enable_if<
+    traits::FunctionTraits<Tag>::has_size_param &&
+    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+void copy(uint8_t* dst, const uint8_t* src, size_t n) {
+    traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<char*>(dst),
+        reinterpret_cast<const char*>(src), n);
+}
+
+template<typename Tag, typename std::enable_if<
+    !traits::FunctionTraits<Tag>::has_size_param &&
+    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+void copy(uint8_t* dst, const uint8_t* src, size_t /*n*/) {
+    traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<char*>(dst),
+        reinterpret_cast<const char*>(src));
+}
+
+// --- compare: memcmp/strcmp/strncmp ---
+
+template<typename Tag, typename std::enable_if<
+    traits::FunctionTraits<Tag>::has_size_param &&
+    !traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+int compare(const uint8_t* s1, const uint8_t* s2, size_t n) {
+    return traits::FunctionTraits<Tag>::invoke(s1, s2, n);
+}
+
+template<typename Tag, typename std::enable_if<
+    traits::FunctionTraits<Tag>::has_size_param &&
+    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+int compare(const uint8_t* s1, const uint8_t* s2, size_t n) {
+    return traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<const char*>(s1),
+        reinterpret_cast<const char*>(s2), n);
+}
+
+template<typename Tag, typename std::enable_if<
+    !traits::FunctionTraits<Tag>::has_size_param &&
+    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
+int compare(const uint8_t* s1, const uint8_t* s2, size_t /*n*/) {
+    return traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<const char*>(s1),
+        reinterpret_cast<const char*>(s2));
+}
+
+// --- concat: strcat/strncat ---
+
+template<typename Tag, typename std::enable_if<
+    traits::FunctionTraits<Tag>::has_size_param, int>::type = 0>
+char* concat(uint8_t* dst, const uint8_t* src, size_t n) {
+    return traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<char*>(dst),
+        reinterpret_cast<const char*>(src), n);
+}
+
+template<typename Tag, typename std::enable_if<
+    !traits::FunctionTraits<Tag>::has_size_param, int>::type = 0>
+char* concat(uint8_t* dst, const uint8_t* src, size_t /*n*/) {
+    return traits::FunctionTraits<Tag>::invoke(
+        reinterpret_cast<char*>(dst),
+        reinterpret_cast<const char*>(src));
+}
+
+} // namespace invoke_helper
 
 } // namespace validator
 } // namespace libmem

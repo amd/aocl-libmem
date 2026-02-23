@@ -34,15 +34,8 @@ namespace libmem {
 namespace validator {
 
 /**
- * PageCrossBuffer - RAII wrapper for page boundary testing
- *
- * Allocates multiple page-aligned pages with a guard page at the end.
+ * PageCrossBuffer allocates multiple page-aligned pages with a guard page at the end.
  * Useful for testing code that must cross page boundaries during iteration.
- *
- * Memory layout:
- *   [Page 0][Page 1]...[Page N-1][GUARD PAGE]
- *   └─────── usable memory ──────┘└─ PROT_NONE ─┘
- *
  * The guard page (PROT_NONE) causes SEGFAULT if code reads/writes beyond bounds.
  */
 class PageCrossBuffer {
@@ -129,6 +122,20 @@ public:
         return base_ + PAGE_SZ - offset;
     }
 
+    /**
+     * Get address such that (ptr + size) ends exactly at the guard page boundary.
+     * Any read past 'size' will SEGFAULT.
+     *
+     * @param size Size of buffer to position
+     * @return Pointer where ptr + size = guard page start, or nullptr if doesn't fit
+     */
+    uint8_t* getAddressEndingAtGuard(size_t size) const {
+        if (!valid_) return nullptr;
+        size_t usable = usableSize();
+        if (size > usable) return nullptr;
+        return base_ + usable - size;
+    }
+
     bool isValid() const { return valid_; }
 
 private:
@@ -145,6 +152,67 @@ private:
     uint8_t* base_;
     size_t total_pages_;
     bool valid_;
+};
+
+
+/**
+ * PageTestBuffer pairs a PageCrossBuffer with a positioned pointer. Used by both
+ * PageBoundaryTestBase (near-boundary positioning) and PageOverrunTestBase
+ * (end-at-guard positioning).
+ */
+struct PageTestBuffer {
+    PageCrossBuffer pcb;
+    uint8_t* ptr;
+    bool valid;
+    bool should_skip;
+
+    PageTestBuffer() : ptr(nullptr), valid(false), should_skip(false) {}
+
+    static PageTestBuffer success(PageCrossBuffer&& buf, uint8_t* p) {
+        PageTestBuffer ptb;
+        ptb.pcb = std::move(buf);
+        ptb.ptr = p;
+        ptb.valid = true;
+        ptb.should_skip = false;
+        return ptb;
+    }
+
+    static PageTestBuffer skip() {
+        PageTestBuffer ptb;
+        ptb.should_skip = true;
+        return ptb;
+    }
+
+    static PageTestBuffer failure() {
+        PageTestBuffer ptb;
+        ptb.valid = false;
+        ptb.should_skip = false;
+        return ptb;
+    }
+
+    PageTestBuffer(const PageTestBuffer&) = delete;
+    PageTestBuffer& operator=(const PageTestBuffer&) = delete;
+
+    PageTestBuffer(PageTestBuffer&& other) noexcept
+        : pcb(std::move(other.pcb)), ptr(other.ptr),
+          valid(other.valid), should_skip(other.should_skip) {
+        other.ptr = nullptr;
+        other.valid = false;
+        other.should_skip = false;
+    }
+
+    PageTestBuffer& operator=(PageTestBuffer&& other) noexcept {
+        if (this != &other) {
+            pcb = std::move(other.pcb);
+            ptr = other.ptr;
+            valid = other.valid;
+            should_skip = other.should_skip;
+            other.ptr = nullptr;
+            other.valid = false;
+            other.should_skip = false;
+        }
+        return *this;
+    }
 };
 
 } // namespace validator

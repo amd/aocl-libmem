@@ -44,7 +44,8 @@ public:
             .add<StrstrFoundTest<traits::StrstrTag>>("Substring found")
             .add<StrstrNotFoundTest<traits::StrstrTag>>("Substring not found")
             .add<StrstrEmptyNeedleTest<traits::StrstrTag>>("Empty needle")
-            .add<PageCrossStrstrTest<traits::StrstrTag>>("Page-cross");
+            .add<PageBoundaryStrstrTest<traits::StrstrTag>>("Page boundary")
+            .add<PageOverrunStrstrTest<traits::StrstrTag>>("Page overrun");
     }
 };
 

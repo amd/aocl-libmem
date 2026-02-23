@@ -44,7 +44,8 @@ public:
         tests()
             .zeroSize<ZeroSizeFillTest<traits::MemsetTag>>("Size zero")
             .add<BasicFillTest<traits::MemsetTag>>("Basic fill")
-            .add<PageCrossFillTest<traits::MemsetTag>>("Page cross");
+            .add<PageBoundaryFillTest<traits::MemsetTag>>("Page boundary")
+            .add<PageOverrunFillTest<traits::MemsetTag>>("Page overrun");
     }
 };
 
