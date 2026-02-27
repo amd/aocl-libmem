@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -37,9 +37,57 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
 
     if (likely(size <= 4 * YMM_SZ)) //128B
     {
-        if (likely(size <= 2 * YMM_SZ)) //64B
-            return __load_store_le_2ymm_vec(dst, src, (uint8_t)size);
-        __load_store_le_4ymm_vec(dst, src, size);
+        if (size < YMM_SZ)
+        {
+            if (size >= XMM_SZ) //16-31B
+            {
+                __m128i x0 = _mm_loadu_si128((const __m128i *)src);
+                __m128i x1 = _mm_loadu_si128((const __m128i *)(src + size - XMM_SZ));
+                _mm_storeu_si128((__m128i *)dst, x0);
+                _mm_storeu_si128((__m128i *)(dst + size - XMM_SZ), x1);
+                return ret;
+            }
+            if (size >= QWORD_SZ) //8-15B
+            {
+                *((uint64_t *)dst) = *((const uint64_t *)src);
+                *((uint64_t *)(dst + size - QWORD_SZ)) = *((const uint64_t *)(src + size - QWORD_SZ));
+                return ret;
+            }
+            if (size >= DWORD_SZ) //4-7B
+            {
+                *((uint32_t *)dst) = *((const uint32_t *)src);
+                *((uint32_t *)(dst + size - DWORD_SZ)) = *((const uint32_t *)(src + size - DWORD_SZ));
+                return ret;
+            }
+            if (size >= WORD_SZ) //2-3B
+            {
+                *((uint16_t *)dst) = *((const uint16_t *)src);
+                *((uint16_t *)(dst + size - WORD_SZ)) = *((const uint16_t *)(src + size - WORD_SZ));
+                return ret;
+            }
+            if (size)
+                *((uint8_t *)dst) = *((const uint8_t *)src);
+            return ret;
+        }
+
+        __m256i y0 = _mm256_loadu_si256((const __m256i *)src);
+        __m256i y1 = _mm256_loadu_si256((const __m256i *)(src + size - YMM_SZ));
+
+        if (likely(size <= 2 * YMM_SZ)) //32-64B
+        {
+            _mm256_storeu_si256((__m256i *)dst, y0);
+            _mm256_storeu_si256((__m256i *)(dst + size - YMM_SZ), y1);
+            return ret;
+        }
+
+        // 65-128B
+        __m256i y2 = _mm256_loadu_si256((const __m256i *)(src + YMM_SZ));
+        __m256i y3 = _mm256_loadu_si256((const __m256i *)(src + size - 2 * YMM_SZ));
+        ALM_MEM_BARRIER();
+        _mm256_storeu_si256((__m256i *)dst, y0);
+        _mm256_storeu_si256((__m256i *)(dst + YMM_SZ), y2);
+        _mm256_storeu_si256((__m256i *)(dst + size - 2 * YMM_SZ), y3);
+        _mm256_storeu_si256((__m256i *)(dst + size - YMM_SZ), y1);
         return ret;
     }
     else if (likely(size <= 8 * YMM_SZ)) //256B
@@ -66,15 +114,15 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
 
         switch (rem_vecs)
         {
-            case 1:
-                __load_store_ymm_vec(dst + size - YMM_SZ, src + size -  YMM_SZ, 0);
-                break;
-            case 2:
-                __load_store_le_2ymm_vec(dst + size - 2 * YMM_SZ, src + size - 2 * YMM_SZ, 2 * YMM_SZ);
-                break;
-            case 3:
-            case 4:
-                __load_store_le_4ymm_vec(dst + size - 4 * YMM_SZ, src + size - 4 * YMM_SZ, 4 * YMM_SZ);
+        case 1:
+            __load_store_ymm_vec(dst + size - YMM_SZ, src + size - YMM_SZ, 0);
+            break;
+        case 2:
+            __load_store_le_2ymm_vec(dst + size - 2 * YMM_SZ, src + size - 2 * YMM_SZ, 2 * YMM_SZ);
+            break;
+        case 3:
+        case 4:
+            __load_store_le_4ymm_vec(dst + size - 4 * YMM_SZ, src + size - 4 * YMM_SZ, 4 * YMM_SZ);
         }
         return ret;
     }
@@ -86,7 +134,7 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
         {
            __aligned_load_and_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
         }
-	    else
+        else
         {
            __aligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
         }
@@ -98,7 +146,7 @@ static inline void *_memcpy_avx2(void * __restrict dst, const void * __restrict 
         {
            __unaligned_load_aligned_store_4ymm_vec_loop_pftch(dst, src, size - 4 * YMM_SZ, dst_align);
         }
-	    else
+        else
         {
            __unaligned_load_nt_store_4ymm_vec_loop(dst, src, size - 4 * YMM_SZ, dst_align);
         }
