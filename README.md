@@ -18,10 +18,12 @@ This release of AOCL-LibMem library supports the following functions:
 + strcmp
 + strncmp
 + strlen
++ strnlen
 + strcat
-+ strstr
-+ strchr
 + strncat
++ strstr
++ strspn
++ strchr
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:

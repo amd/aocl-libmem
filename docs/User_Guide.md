@@ -24,9 +24,11 @@ functions:
 -  strcmp
 -  strncmp
 -  strlen
+-  strnlen
 -  strcat
 -  strncat
 -  strstr
+-  strspn
 -  strchr
 
 `Note:` _Behavior might be undefined if AVX512 is disabled in the BIOS configuration on the Zen5 platform.._

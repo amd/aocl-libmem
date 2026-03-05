@@ -106,7 +106,9 @@ $ ./validator.py -r [start] [end] -a[src] [dst] -t[iterator count] <mem_function
     -r Range       = [Start] and [End] range in Bytes.
     -a alignment   = [src] and [dst] alignments. Default alignment is 64B for both source and destination.
     -t <iterator>  = specify the iteration pattern. Default is "2x" of starting size - '<<1'
-    <mem_function> = memcpy,memset,memcmp,memmove,mempcpy,strcpy,strncpy
+    <function>     = memcpy,memset,memcmp,memmove,mempcpy,memchr,
+                     strcpy,strncpy,strcmp,strncmp,strlen,strnlen,
+                     strcat,strncat,strstr,strspn,strchr
 ```
 
 ### Example
@@ -153,14 +155,15 @@ The following test categories are supported:
 ```
 $ ctest -R <Matching test regex> -E <Exclude regex> -j [<jobs>]
 <regex>:      function_[MODE]
-              "memcpy","memset","memmove","memcmp", "mempcpy"
-              "strcpy","strncpy","strcmp","strncmp","strlen"   (Runs all the test cases iter,shift and alignment)
-              "iter"                                 (Runs Iterator test cases on all the functions)
-              "shift"                                (Runs Shift test cases on all the functions)
-              "align"                                (Runs Alignment test cases on all the functions)
-              "threshold"                            (Runs threshold specific test cases based on L2 and threshold_nt values)
-              "aligned_vector"                       (Runs ZEN5 specific aligned vector threshold checks)
-              "function_MODE"                        (Runs the specified MODE:iter,shift,align, and threshold on the input function)
+              "memcpy","memset","memmove","memcmp","mempcpy",
+              "strcpy","strncpy","strcmp","strncmp","strlen",
+              "strnlen","strspn"                     (Runs all the test cases iter,shift and alignment)
+              "iter"                                  (Runs Iterator test cases on all the functions)
+              "shift"                                 (Runs Shift test cases on all the functions)
+              "align"                                 (Runs Alignment test cases on all the functions)
+              "threshold"                             (Runs threshold specific test cases based on L2 and threshold_nt values)
+              "aligned_vector"                        (Runs ZEN5 specific aligned vector threshold checks)
+              "function_MODE"                         (Runs the specified MODE:iter,shift,align, and threshold on the input function)
 
 jobs:         Optional parameter for maximum no. of concurrent processes to be used. [0...$(nproc)]
 ```
@@ -285,7 +288,7 @@ libmem_validator_unified <function> <size> [src_align] [dst_align] [all_alignmen
 Arguments:
 
 - **function**: `memcpy`, `mempcpy`, `memmove`, `memset`, `memcmp`, `memchr`,
-  `strcpy`, `strncpy`, `strcmp`, `strncmp`, `strlen`, `strcat`, `strncat`,
+  `strcpy`, `strncpy`, `strcmp`, `strncmp`, `strlen`, `strnlen`, `strcat`, `strncat`,
   `strstr`, `strspn`, `strchr`
 - **size**: Size parameter for the function
 - **src_align**: Source alignment offset (default: `0`)

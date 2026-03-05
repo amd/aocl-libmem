@@ -76,7 +76,7 @@ build/test/glibc-functionality-tests/bin/test-strlen
 
 **String functions:**
 - strcpy, strncpy, strcmp, strncmp, strcat, strncat
-- strstr, strlen, strchr
+- strstr, strspn, strlen, strnlen, strchr
 
 ## Test Output Structure
 
