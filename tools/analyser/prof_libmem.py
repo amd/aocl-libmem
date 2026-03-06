@@ -541,16 +541,18 @@ def main():
         FuncInfo('c', 'memchr',  'memchr'),
         FuncInfo('c', 'strncpy', 'strncpy'),
         FuncInfo('c', 'strncmp', 'strncmp'),
-        FuncInfo('c', 'strncat', 'strncat')
+        FuncInfo('c', 'strncat', 'strncat'),
+        FuncInfo('c', 'strnlen', 'strnlen', argSZ=2, argSRC=1, argDST=0)
     ]
     TARGET_CNT_FUNCTIONS = [
         # Functions without size parameters
         FuncInfo('c', 'strcpy',  'strcpy', argSZ = 0),
         FuncInfo('c', 'strcmp',  'strcmp', argSZ = 0),
         FuncInfo('c', 'strcat',  'strcat', argSZ = 0),
-        FuncInfo('c', 'strlen',  'strlen', argSZ = 0, argSRC = 0),
+        FuncInfo('c', 'strlen',  'strlen', argSZ = 0, argSRC = 1, argDST = 0),
         FuncInfo('c', 'strchr',  'strchr', argSZ = 0),
         FuncInfo('c', 'strstr',  'strstr', argSZ = 0),
+        FuncInfo('c', 'strspn',  'strspn', argSZ = 0, argSRC = 1, argDST = 2),
     ]
 
     # Combine function names for argument parsing
