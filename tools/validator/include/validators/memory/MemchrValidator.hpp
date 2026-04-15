@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_MEMCHR_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_MEMCHR_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/MemoryTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * MemchrValidator - Validates memchr implementation
  */
-class MemchrValidator : public FunctionValidator<traits::MemchrTag, MemchrValidator> {
+class MemchrValidator : public TestRunner<traits::MemchrTag, MemchrValidator> {
 public:
     void registerTests() {
         tests()
@@ -53,7 +53,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(MemchrValidator)
+REGISTER_VALIDATOR(MemchrValidator, "memchr")
 
 } // namespace validator
 } // namespace libmem

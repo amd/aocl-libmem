@@ -23,8 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_STRING_TRAITS_HPP
-#define LIBMEM_VALIDATOR_STRING_TRAITS_HPP
+#ifndef LIBMEM_COMMON_STRING_TRAITS_HPP
+#define LIBMEM_COMMON_STRING_TRAITS_HPP
 
 /**
  * @file StringTraits.hpp
@@ -35,13 +35,10 @@
 #include <cstring>
 
 namespace libmem {
-namespace validator {
+namespace common {
 namespace traits {
 
-// ============================================================================
-// String Function Tag Types
-// ============================================================================
-
+// Tag types
 struct StrcpyTag {};
 struct StrncpyTag {};
 struct StrcatTag {};
@@ -54,16 +51,8 @@ struct StrchrTag {};
 struct StrstrTag {};
 struct StrspnTag {};
 
-// ============================================================================
-// String Copy Function Traits
-// ============================================================================
-
-/**
- * strcpy traits
- * char* strcpy(char* dest, const char* src)
- */
 template<>
-struct FunctionTraits<StrcpyTag> : StringTraitsBase<FunctionTraits<StrcpyTag>> {
+struct FunctionTraits<StrcpyTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(char*, const char*);
 
@@ -79,12 +68,8 @@ struct FunctionTraits<StrcpyTag> : StringTraitsBase<FunctionTraits<StrcpyTag>> {
     }
 };
 
-/**
- * strncpy traits
- * char* strncpy(char* dest, const char* src, size_t n)
- */
 template<>
-struct FunctionTraits<StrncpyTag> : StringTraitsBase<FunctionTraits<StrncpyTag>> {
+struct FunctionTraits<StrncpyTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(char*, const char*, size_t);
 
@@ -102,16 +87,8 @@ struct FunctionTraits<StrncpyTag> : StringTraitsBase<FunctionTraits<StrncpyTag>>
     }
 };
 
-// ============================================================================
-// String Concatenation Function Traits
-// ============================================================================
-
-/**
- * strcat traits
- * char* strcat(char* dest, const char* src)
- */
 template<>
-struct FunctionTraits<StrcatTag> : StringTraitsBase<FunctionTraits<StrcatTag>> {
+struct FunctionTraits<StrcatTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(char*, const char*);
 
@@ -127,12 +104,8 @@ struct FunctionTraits<StrcatTag> : StringTraitsBase<FunctionTraits<StrcatTag>> {
     }
 };
 
-/**
- * strncat traits
- * char* strncat(char* dest, const char* src, size_t n)
- */
 template<>
-struct FunctionTraits<StrncatTag> : StringTraitsBase<FunctionTraits<StrncatTag>> {
+struct FunctionTraits<StrncatTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(char*, const char*, size_t);
 
@@ -150,16 +123,8 @@ struct FunctionTraits<StrncatTag> : StringTraitsBase<FunctionTraits<StrncatTag>>
     }
 };
 
-// ============================================================================
-// String Comparison Function Traits
-// ============================================================================
-
-/**
- * strcmp traits
- * int strcmp(const char* s1, const char* s2)
- */
 template<>
-struct FunctionTraits<StrcmpTag> : StringTraitsBase<FunctionTraits<StrcmpTag>> {
+struct FunctionTraits<StrcmpTag> : StringTraitsBase {
     using ReturnType = int;
     using FunctionPtr = int(*)(const char*, const char*);
 
@@ -174,12 +139,8 @@ struct FunctionTraits<StrcmpTag> : StringTraitsBase<FunctionTraits<StrcmpTag>> {
     }
 };
 
-/**
- * strncmp traits
- * int strncmp(const char* s1, const char* s2, size_t n)
- */
 template<>
-struct FunctionTraits<StrncmpTag> : StringTraitsBase<FunctionTraits<StrncmpTag>> {
+struct FunctionTraits<StrncmpTag> : StringTraitsBase {
     using ReturnType = int;
     using FunctionPtr = int(*)(const char*, const char*, size_t);
 
@@ -196,16 +157,8 @@ struct FunctionTraits<StrncmpTag> : StringTraitsBase<FunctionTraits<StrncmpTag>>
     }
 };
 
-// ============================================================================
-// String Length Function Traits
-// ============================================================================
-
-/**
- * strlen traits
- * size_t strlen(const char* s)
- */
 template<>
-struct FunctionTraits<StrlenTag> : StringTraitsBase<FunctionTraits<StrlenTag>> {
+struct FunctionTraits<StrlenTag> : StringTraitsBase {
     using ReturnType = size_t;
     using FunctionPtr = size_t(*)(const char*);
 
@@ -220,12 +173,8 @@ struct FunctionTraits<StrlenTag> : StringTraitsBase<FunctionTraits<StrlenTag>> {
     }
 };
 
-/**
- * strnlen traits
- * size_t strnlen(const char* s, size_t maxlen)
- */
 template<>
-struct FunctionTraits<StrnlenTag> : StringTraitsBase<FunctionTraits<StrnlenTag>> {
+struct FunctionTraits<StrnlenTag> : StringTraitsBase {
     using ReturnType = size_t;
     using FunctionPtr = size_t(*)(const char*, size_t);
 
@@ -242,12 +191,8 @@ struct FunctionTraits<StrnlenTag> : StringTraitsBase<FunctionTraits<StrnlenTag>>
     }
 };
 
-/**
- * strspn traits
- * size_t strspn(const char* s, const char* accept)
- */
 template<>
-struct FunctionTraits<StrspnTag> : StringTraitsBase<FunctionTraits<StrspnTag>> {
+struct FunctionTraits<StrspnTag> : StringTraitsBase {
     using ReturnType = size_t;
     using FunctionPtr = size_t(*)(const char*, const char*);
 
@@ -262,16 +207,8 @@ struct FunctionTraits<StrspnTag> : StringTraitsBase<FunctionTraits<StrspnTag>> {
     }
 };
 
-// ============================================================================
-// String Search Function Traits
-// ============================================================================
-
-/**
- * strchr traits
- * char* strchr(const char* s, int c)
- */
 template<>
-struct FunctionTraits<StrchrTag> : StringTraitsBase<FunctionTraits<StrchrTag>> {
+struct FunctionTraits<StrchrTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(const char*, int);
 
@@ -286,12 +223,8 @@ struct FunctionTraits<StrchrTag> : StringTraitsBase<FunctionTraits<StrchrTag>> {
     }
 };
 
-/**
- * strstr traits
- * char* strstr(const char* haystack, const char* needle)
- */
 template<>
-struct FunctionTraits<StrstrTag> : StringTraitsBase<FunctionTraits<StrstrTag>> {
+struct FunctionTraits<StrstrTag> : StringTraitsBase {
     using ReturnType = char*;
     using FunctionPtr = char*(*)(const char*, const char*);
 
@@ -307,8 +240,7 @@ struct FunctionTraits<StrstrTag> : StringTraitsBase<FunctionTraits<StrstrTag>> {
 };
 
 } // namespace traits
-} // namespace validator
+} // namespace common
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_STRING_TRAITS_HPP
-
+#endif // LIBMEM_COMMON_STRING_TRAITS_HPP

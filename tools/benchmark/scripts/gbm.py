@@ -27,15 +27,11 @@
 import subprocess
 import os
 from os import environ as env
-from pandas import read_csv
-import argparse
 import re
 import csv
-import datetime
-from statistics import mean
 from libmem_defs import *
 import sys
-sys.path.insert(0, '../tools/benchmarks')
+sys.path.insert(0, '../tools/benchmark')
 from bench import BaseBench
 
 
@@ -46,7 +42,7 @@ class GBM(BaseBench):
         self.align = str(self.MYPARSER['ARGS']['align'])
         self.spill = str(self.MYPARSER['ARGS']['spill'])
         self.page = str(self.MYPARSER['ARGS']['page'])
-        self.path = "../tools/benchmarks/external/gbench/"
+        self.path = "../tools/benchmark/external/gbench/"
         self.isExist = ""
         self.memory_operation = self.MYPARSER['ARGS']['memory_operation']
         self.iterator = self.MYPARSER['ARGS']['iterator']

@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRNCAT_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRNCAT_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrncatValidator - Validates strncat implementation
  */
-class StrncatValidator : public FunctionValidator<traits::StrncatTag, StrncatValidator> {
+class StrncatValidator : public TestRunner<traits::StrncatTag, StrncatValidator> {
 public:
     void registerTests() {
         tests()
@@ -49,7 +49,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrncatValidator)
+REGISTER_VALIDATOR(StrncatValidator, "strncat")
 
 } // namespace validator
 } // namespace libmem

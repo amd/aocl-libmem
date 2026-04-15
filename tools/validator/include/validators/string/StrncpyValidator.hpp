@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRNCPY_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRNCPY_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrncpyCopyTest - Custom test for strncpy
  */
-class StrncpyCopyTest : public FunctionTest<traits::StrncpyTag> {
+class StrncpyCopyTest : public TestCase<traits::StrncpyTag> {
 public:
     const char* name() const override { return "BasicCopy"; }
     
@@ -46,10 +46,10 @@ public:
         this->ctx_ = ctx;
         auto buf = this->allocate(ctx);
         
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
         
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->nullTerminate(buf.src, ctx.size - 1);
+        fillLowercaseLetters(buf.src, ctx.size);
+        nullTerminate(buf.src, ctx.size - 1);
         
         char* ret = traits::FunctionTraits<traits::StrncpyTag>::invoke(
             reinterpret_cast<char*>(buf.dst),
@@ -74,7 +74,7 @@ public:
 /**
  * StrncpyValidator - Validates strncpy implementation
  */
-class StrncpyValidator : public FunctionValidator<traits::StrncpyTag, StrncpyValidator> {
+class StrncpyValidator : public TestRunner<traits::StrncpyTag, StrncpyValidator> {
 public:
     void registerTests() {
         tests()
@@ -88,7 +88,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrncpyValidator)
+REGISTER_VALIDATOR(StrncpyValidator, "strncpy")
 
 } // namespace validator
 } // namespace libmem

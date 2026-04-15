@@ -35,7 +35,7 @@ import datetime
 from statistics import mean
 from libmem_defs import *
 import sys
-sys.path.insert(0, '../tools/benchmarks')
+sys.path.insert(0, '../tools/benchmark')
 from bench import BaseBench
 
 
@@ -43,7 +43,7 @@ class FBM(BaseBench):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # FBM-specific attributes
-        self.path = "../tools/benchmarks/external/"
+        self.path = "../tools/benchmark/external/"
         self.isExist = ""
         self.last = 9
         self.allocator = self.MYPARSER['ARGS']['mem_alloc']
@@ -86,7 +86,7 @@ class FBM(BaseBench):
                     print("ERROR: Bazel version 8.0.0 and above causes BUILD failure")
                     print(f"Current Bazel version: {version_str}")
                     print("FleetBench is not compatible with Bazel 8.0.0+ due to WORKSPACE deprecation.")
-                    print("Please downgrade to Bazel 7.x refer to Benchmark_Framework.md for installing bazel")
+                    print("Please downgrade to Bazel 7.x refer to benchmark_guide.md for installing bazel")
                     print("="*80 + "\n")
                     return False
 
@@ -97,7 +97,7 @@ class FBM(BaseBench):
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("Error: Bazel is not installed or not available in PATH")
             print("Please install bazel to use FleetBench (fbm) benchmark")
-            print("Installation instructions: Benchmark_Framework.md")
+            print("Installation instructions: benchmark_guide.md")
             return False
 
         self.isExist = os.path.exists(self.path + '/fleetbench')

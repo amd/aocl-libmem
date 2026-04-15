@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRNCMP_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRNCMP_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrncmpZeroSizeTest - Custom zero-size test for strncmp
  */
-class StrncmpZeroSizeTest : public FunctionTest<traits::StrncmpTag> {
+class StrncmpZeroSizeTest : public TestCase<traits::StrncmpTag> {
 public:
     const char* name() const override { return "ZeroSize"; }
 
@@ -61,7 +61,7 @@ public:
 /**
  * StrncmpValidator - Validates strncmp implementation
  */
-class StrncmpValidator : public FunctionValidator<traits::StrncmpTag, StrncmpValidator> {
+class StrncmpValidator : public TestRunner<traits::StrncmpTag, StrncmpValidator> {
 public:
     void registerTests() {
         tests()
@@ -81,7 +81,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrncmpValidator)
+REGISTER_VALIDATOR(StrncmpValidator, "strncmp")
 
 } // namespace validator
 } // namespace libmem

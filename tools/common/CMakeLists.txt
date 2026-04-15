@@ -1,4 +1,4 @@
-# Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,28 +22,21 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+# Shared header-only library used by both validator and benchmark frameworks
+add_library(libmem_common INTERFACE)
 
-#copy source files to build/test directory
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/tbm.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/fbm.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gbm.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/dcperf.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/GetParser.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
+target_include_directories(libmem_common INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 
-# Below source files will be built along the fetched Google bench Source
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gbench/gbench.cpp
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/gbench)
+target_compile_features(libmem_common INTERFACE cxx_std_17)
 
-# Below source files will be built along the fetched Tinymem bench Source
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/tinybench/tbm.patch
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/tinybench)
+if(HAS_AVX512)
+    target_compile_definitions(libmem_common INTERFACE AVX512_FEATURE_ENABLED)
+endif()
 
-# Copy DCPerf patch file
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wdl_bench_memcpy_memset_only.patch
- DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external)
+# Install common headers to build tree so gbm.py runtime compilation can find them
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION ${CMAKE_BINARY_DIR}/tools/common/include)
 
+message(STATUS "libmem_common: header-only shared library configured")

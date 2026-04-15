@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRLEN_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRLEN_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrlenValidator - Validates strlen implementation
  */
-class StrlenValidator : public FunctionValidator<traits::StrlenTag, StrlenValidator> {
+class StrlenValidator : public TestRunner<traits::StrlenTag, StrlenValidator> {
 public:
     void registerTests() {
         tests()
@@ -49,7 +49,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrlenValidator)
+REGISTER_VALIDATOR(StrlenValidator, "strlen")
 
 } // namespace validator
 } // namespace libmem

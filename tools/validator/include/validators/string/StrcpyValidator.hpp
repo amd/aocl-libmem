@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRCPY_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRCPY_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrcpyValidator - Validates strcpy implementation
  */
-class StrcpyValidator : public FunctionValidator<traits::StrcpyTag, StrcpyValidator> {
+class StrcpyValidator : public TestRunner<traits::StrcpyTag, StrcpyValidator> {
 public:
     void registerTests() {
         tests()
@@ -50,7 +50,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrcpyValidator)
+REGISTER_VALIDATOR(StrcpyValidator, "strcpy")
 
 } // namespace validator
 } // namespace libmem

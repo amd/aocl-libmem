@@ -23,45 +23,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_FUNCTION_VALIDATOR_HPP
-#define LIBMEM_VALIDATOR_FUNCTION_VALIDATOR_HPP
+#ifndef LIBMEM_VALIDATOR_TEST_RUNNER_HPP
+#define LIBMEM_VALIDATOR_TEST_RUNNER_HPP
 
-#include "core/FunctionTest.hpp"
+#include "config/Logging.hpp"
+#include "core/TestCase.hpp"
 #include "traits/FunctionTraits.hpp"
 #include "config/Constants.hpp"
 #include <vector>
 #include <memory>
 #include <functional>
 #include <cstdio>
-
-// ============================================================================
-// Debug Logging Infrastructure
-// ============================================================================
-
-#ifdef LIBMEM_VALIDATOR_VERBOSE
-    // Debug level logging - detailed information for developers
-    #define DEBUG_LOG(fmt, ...) std::printf("[DEBUG] " fmt "\n", ##__VA_ARGS__)
-
-    // Info level logging - key events and state changes
-    #define INFO_LOG(fmt, ...) std::printf("[INFO]  " fmt "\n", ##__VA_ARGS__)
-
-    // Test result logging - pass/fail with context
-    #define PASS_LOG(fmt, ...) std::printf("[PASS]  " fmt "\n", ##__VA_ARGS__)
-
-    // Section separator for readability (major sections use =, subsections use -)
-    #define DEBUG_SEPARATOR() std::printf("[DEBUG] ========================================\n")
-    #define DEBUG_SUBSEPARATOR() std::printf("[DEBUG] ----------------------------------------\n")
-
-    // Legacy macro for backward compatibility
-    #define UNIFIED_LOG_VERBOSE(fmt, ...) std::printf(fmt, ##__VA_ARGS__)
-#else
-    #define DEBUG_LOG(fmt, ...) do {} while(0)
-    #define INFO_LOG(fmt, ...) do {} while(0)
-    #define PASS_LOG(fmt, ...) do {} while(0)
-    #define DEBUG_SEPARATOR() do {} while(0)
-    #define DEBUG_SUBSEPARATOR() do {} while(0)
-    #define UNIFIED_LOG_VERBOSE(fmt, ...) do {} while(0)
-#endif
 
 namespace libmem {
 namespace validator {
@@ -71,15 +43,16 @@ namespace validator {
 // ============================================================================
 
 /**
- * TestEntry - Entry in the test registry
+ * TestEntry - Entry in the test registry. Holds the test instance directly;
+ * one instance per registered test, reused across all validate() calls.
  */
 struct TestEntry {
-    std::function<std::unique_ptr<IFunctionTest>()> factory;
+    std::unique_ptr<ITestCase> instance;
     const char* description;
     bool is_zero_size;
 
-    TestEntry(std::function<std::unique_ptr<IFunctionTest>()> f, const char* desc, bool zero)
-        : factory(f), description(desc), is_zero_size(zero) {}
+    TestEntry(std::unique_ptr<ITestCase> inst, const char* desc, bool zero)
+        : instance(std::move(inst)), description(desc), is_zero_size(zero) {}
 };
 
 /**
@@ -90,28 +63,27 @@ class TestRegistry {
 
 public:
     /**
-     * Register a regular test
+     * Register a regular test. Instance is constructed once at registration
+     * and reused across every validate() call.
      */
     template<typename TestType>
     TestRegistry& add(const char* description) {
-        entries_.push_back(TestEntry(
-            []() { return std::unique_ptr<IFunctionTest>(new FunctionTestWrapper<TestType>()); },
+        entries_.emplace_back(
+            std::unique_ptr<ITestCase>(new TestCaseWrapper<TestType>()),
             description,
-            false
-        ));
+            false);
         return *this;
     }
 
     /**
-     * Register a zero-size test
+     * Register a zero-size test.
      */
     template<typename TestType>
     TestRegistry& zeroSize(const char* description) {
-        entries_.push_back(TestEntry(
-            []() { return std::unique_ptr<IFunctionTest>(new FunctionTestWrapper<TestType>()); },
+        entries_.emplace_back(
+            std::unique_ptr<ITestCase>(new TestCaseWrapper<TestType>()),
             description,
-            true
-        ));
+            true);
         return *this;
     }
 
@@ -136,8 +108,7 @@ public:
     std::vector<std::string> getTestNames() const {
         std::vector<std::string> names;
         for (const auto& e : entries_) {
-            auto test = e.factory();
-            names.push_back(test->name());
+            names.push_back(e.instance->name());
         }
         return names;
     }
@@ -185,26 +156,31 @@ public:
     virtual void validate(size_t size, uint32_t align1, uint32_t align2) = 0;
     virtual const TestStats& getStats() const = 0;
     virtual std::vector<std::string> getTestNames() const = 0;
+    virtual const std::vector<TestEntry>& getTestEntries() const = 0;
+
+    common::AllocParams alloc_params;
 };
 
 // ============================================================================
-// FunctionValidator - Unified validator base
+// TestRunner - Unified validator base
 // ============================================================================
 
 /**
- * FunctionValidator - Unified base class for all validators
+ * TestRunner - Unified base class for all validators
  */
 template<typename Tag, typename Derived>
-class FunctionValidator : public IValidator {
+class TestRunner : public IValidator {
 public:
     using Traits = traits::FunctionTraits<Tag>;
 
-    FunctionValidator() {
-        // Use CRTP to call derived registerTests at compile-time
+    TestRunner() {
+        // Runs during base construction -- derived data members are NOT yet
+        // initialized. registerTests() must only call tests().add<>() and
+        // must NOT access any derived-class data members.
         static_cast<Derived*>(this)->registerTests();
     }
 
-    virtual ~FunctionValidator() = default;
+    virtual ~TestRunner() = default;
 
     // ========================================================================
     // IValidator interface
@@ -219,21 +195,21 @@ public:
         uint32_t src_align = align1 % VEC_SZ;
         uint32_t dst_align = align2 % VEC_SZ;
 
-        DEBUG_LOG("Function: %s", Traits::name());
-        DEBUG_LOG("  Size: %zu bytes", size);
-        DEBUG_LOG("  Src alignment offset: %u (original: %u)", src_align, align1);
-        DEBUG_LOG("  Dst alignment offset: %u (original: %u)", dst_align, align2);
-        DEBUG_LOG("  VEC_SZ: %zu bytes", static_cast<size_t>(VEC_SZ));
+        LIBMEM_DEBUG("Function: %s", Traits::name());
+        LIBMEM_DEBUG("  Size: %zu bytes", size);
+        LIBMEM_DEBUG("  Src alignment offset: %u (original: %u)", src_align, align1);
+        LIBMEM_DEBUG("  Dst alignment offset: %u (original: %u)", dst_align, align2);
+        LIBMEM_DEBUG("  VEC_SZ: %zu bytes", static_cast<size_t>(VEC_SZ));
 
         // Handle size==0 with zero-size tests
         if (size == 0) {
-            DEBUG_LOG("  Mode: Zero-size tests");
+            LIBMEM_DEBUG("  Mode: Zero-size tests");
             runZeroSizeTests(dst_align, src_align);
             return;
         }
 
-        DEBUG_LOG("  Mode: Regular tests");
-        DEBUG_LOG("  Registered tests: %zu", registry_.size());
+        LIBMEM_DEBUG("  Mode: Regular tests");
+        LIBMEM_DEBUG("  Registered tests: %zu", registry_.size());
 
         // Run regular tests
         runRegularTests(size, dst_align, src_align);
@@ -251,6 +227,10 @@ public:
         return registry_.getTestNames();
     }
 
+    const std::vector<TestEntry>& getTestEntries() const override {
+        return registry_.entries();
+    }
+
 protected:
     /**
      * Get the test registry
@@ -266,6 +246,7 @@ private:
      */
     void runRegularTests(size_t size, uint32_t dst_align, uint32_t src_align) {
         TestContext ctx(size, dst_align, src_align);
+        ctx.alloc_params = this->alloc_params;
 
         size_t test_num = 0;
         size_t total_regular = 0;
@@ -275,25 +256,25 @@ private:
             if (!entry.is_zero_size) total_regular++;
         }
 
-        DEBUG_SUBSEPARATOR();
-        DEBUG_LOG("Running %zu regular tests for %s", total_regular, Traits::name());
+        LIBMEM_SUBSEPARATOR();
+        LIBMEM_DEBUG("Running %zu regular tests for %s", total_regular, Traits::name());
 
         for (const auto& entry : registry_.entries()) {
             if (entry.is_zero_size) continue;
 
-            auto test = entry.factory();
+            ITestCase* test = entry.instance.get();
             test_num++;
 
-            DEBUG_LOG("Test [%zu/%zu]: %s::%s", test_num, total_regular,
+            LIBMEM_DEBUG("Test [%zu/%zu]: %s::%s", test_num, total_regular,
                      Traits::name(), test->name());
-            DEBUG_LOG("  Parameters: size=%zu, dst_align=%u, src_align=%u",
+            LIBMEM_DEBUG("  Parameters: size=%zu, dst_align=%u, src_align=%u",
                      size, dst_align, src_align);
 
             TestResult result = test->execute(ctx);
 
             if (result.passed) {
                 stats_.passed++;
-                PASS_LOG("%s::%s [size=%zu, dst=%u, src=%u]",
+                LIBMEM_PASS("%s::%s [size=%zu, dst=%u, src=%u]",
                         Traits::name(), test->name(), size, dst_align, src_align);
             } else {
                 stats_.failed++;
@@ -303,7 +284,7 @@ private:
             }
         }
 
-        DEBUG_LOG("Completed: %zu passed, %zu failed",
+        LIBMEM_DEBUG("Completed: %zu passed, %zu failed",
                  stats_.passed, stats_.failed);
     }
 
@@ -312,6 +293,7 @@ private:
      */
     void runZeroSizeTests(uint32_t dst_align, uint32_t src_align) {
         TestContext ctx(0, dst_align, src_align);
+        ctx.alloc_params = this->alloc_params;
 
         size_t test_num = 0;
         size_t total_zero = 0;
@@ -322,29 +304,29 @@ private:
         }
 
         if (total_zero == 0) {
-            DEBUG_LOG("No zero-size tests registered for %s", Traits::name());
+            LIBMEM_DEBUG("No zero-size tests registered for %s", Traits::name());
             return;
         }
 
-        DEBUG_SUBSEPARATOR();
-        DEBUG_LOG("Running %zu zero-size tests for %s", total_zero, Traits::name());
+        LIBMEM_SUBSEPARATOR();
+        LIBMEM_DEBUG("Running %zu zero-size tests for %s", total_zero, Traits::name());
 
         for (const auto& entry : registry_.entries()) {
             if (!entry.is_zero_size) continue;
 
-            auto test = entry.factory();
+            ITestCase* test = entry.instance.get();
             test_num++;
 
-            DEBUG_LOG("Test [%zu/%zu]: %s::%s (zero-size)", test_num, total_zero,
+            LIBMEM_DEBUG("Test [%zu/%zu]: %s::%s (zero-size)", test_num, total_zero,
                      Traits::name(), test->name());
-            DEBUG_LOG("  Parameters: size=0, dst_align=%u, src_align=%u",
+            LIBMEM_DEBUG("  Parameters: size=0, dst_align=%u, src_align=%u",
                      dst_align, src_align);
 
             TestResult result = test->execute(ctx);
 
             if (result.passed) {
                 stats_.passed++;
-                PASS_LOG("%s::%s [size=0, dst=%u, src=%u]",
+                LIBMEM_PASS("%s::%s [size=0, dst=%u, src=%u]",
                         Traits::name(), test->name(), dst_align, src_align);
             } else {
                 stats_.failed++;
@@ -354,7 +336,7 @@ private:
             }
         }
 
-        DEBUG_LOG("Completed: %zu passed, %zu failed",
+        LIBMEM_DEBUG("Completed: %zu passed, %zu failed",
                  stats_.passed, stats_.failed);
     }
 };
@@ -423,12 +405,12 @@ private:
 /**
  * Helper macro to auto-register validators
  */
-#define REGISTER_VALIDATOR(ValidatorClass) \
+#define REGISTER_VALIDATOR(ValidatorClass, Name) \
     namespace { \
         struct ValidatorClass##Registrar { \
             ValidatorClass##Registrar() { \
                 ValidatorRegistry::instance().registerValidator( \
-                    ValidatorClass().getName(), \
+                    Name, \
                     []() { return std::unique_ptr<IValidator>(new ValidatorClass()); } \
                 ); \
             } \
@@ -438,5 +420,5 @@ private:
 } // namespace validator
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_FUNCTION_VALIDATOR_HPP
+#endif // LIBMEM_VALIDATOR_TEST_RUNNER_HPP
 

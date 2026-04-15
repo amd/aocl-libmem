@@ -1,4 +1,4 @@
-# Build & Run Guide for **_AOCL-LibMem Benchmarking Tool_**
+# AOCL-LibMem Benchmark Guide
 
 ## Description
 - AOCL-LibMem Benchmarking Framework is used for performance analysis of LibMem supported functions  against the  Glibc installed host machine under test.

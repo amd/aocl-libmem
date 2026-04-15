@@ -23,14 +23,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_CONSTANTS_HPP
-#define LIBMEM_VALIDATOR_CONSTANTS_HPP
+#ifndef LIBMEM_COMMON_CONSTANTS_HPP
+#define LIBMEM_COMMON_CONSTANTS_HPP
 
 #include <cstddef>
 #include <cstdint>
 
 namespace libmem {
-namespace validator {
+namespace common {
 
 // Memory and alignment constants
 constexpr size_t CACHE_LINE_SZ = 64;
@@ -39,6 +39,10 @@ constexpr size_t PAGE_SZ = 4096;
 constexpr size_t XMM_SZ = 16;
 constexpr size_t YMM_SZ = 32;
 constexpr size_t ZMM_SZ = 64;
+
+// Cacheline spill offset (used by benchmark alignment modes)
+constexpr size_t CL_SPILL_OFFSET = 8;
+constexpr size_t CACHELINE_MULTIPLE = 6;
 
 // String constants
 constexpr char NULL_TERM_CHAR = '\0';
@@ -54,6 +58,12 @@ constexpr size_t NULL_BYTE = 1;
 constexpr size_t LOWER_CHARS = 26;
 constexpr size_t SIZE_MIN = 0;
 
+// Hard cap on per-benchmark size. Set by CMake; #ifndef is the fallback.
+#ifndef LIBMEM_MAX_BENCHMARK_SIZE_BYTES
+#define LIBMEM_MAX_BENCHMARK_SIZE_BYTES (1ULL << 30)   // 1 GiB
+#endif
+constexpr size_t MAX_BENCHMARK_SIZE = LIBMEM_MAX_BENCHMARK_SIZE_BYTES;
+
 // Vector size based on AVX feature
 #ifdef AVX512_FEATURE_ENABLED
     constexpr size_t VEC_SZ = ZMM_SZ;
@@ -61,17 +71,8 @@ constexpr size_t SIZE_MIN = 0;
     constexpr size_t VEC_SZ = YMM_SZ;
 #endif
 
-// Buffer allocation modes
-enum class BufferMode : uint8_t {
-    OVERLAP = 0,
-    NON_OVERLAP = 1,
-    DEFAULT = 2,
-    NON_OVERLAP_EXTRA = 3
-};
-
-// Helper macros converted to inline functions
 inline constexpr size_t PAGE_CNT(size_t size) {
-    return (size + NULL_BYTE + CACHE_LINE_SZ) / PAGE_SZ + 
+    return (size + NULL_BYTE + CACHE_LINE_SZ) / PAGE_SZ +
            !!((size + NULL_BYTE + CACHE_LINE_SZ) % PAGE_SZ);
 }
 
@@ -79,7 +80,7 @@ inline constexpr size_t NO_VECS(size_t size) {
     return size / VEC_SZ + !!(size % VEC_SZ);
 }
 
-} // namespace validator
+} // namespace common
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_CONSTANTS_HPP
+#endif // LIBMEM_COMMON_CONSTANTS_HPP

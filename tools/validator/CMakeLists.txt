@@ -22,49 +22,59 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Validator_tool.md
-DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/)
+# ============================================================================
+# Validator build configuration
+# ============================================================================
 
-# Create glibc directory and copy the test script
+# Documentation and support files
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/validator_guide.md
+    DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/)
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tools/validator/glibc/)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/glibc/glibc_validator.sh
-DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/glibc/)
+    DESTINATION ${CMAKE_BINARY_DIR}/tools/validator/glibc/)
 
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/validator.py
-  DESTINATION ${CMAKE_BINARY_DIR}/test)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validator.py
+    DESTINATION ${CMAKE_BINARY_DIR}/test)
 
 install(PROGRAMS ${CMAKE_BINARY_DIR}/tools/validator/CTestTestfile.cmake
-  DESTINATION ${CMAKE_BINARY_DIR}/test)
+    DESTINATION ${CMAKE_BINARY_DIR}/test)
 
 
-# LEGACY C VALIDATOR
-add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/libmem_validator.c)
+# ---------------------------------------------------------------------------
+# Legacy C validator  (source: legacy/)
+# ---------------------------------------------------------------------------
+add_executable(libmem_validator ${CMAKE_CURRENT_SOURCE_DIR}/legacy/libmem_validator.c)
 
 target_compile_options(libmem_validator PRIVATE -Wall -Wextra -O0)
-option(LIBMEM_VALIDATOR_DEBUG "Enable debug mode for libmem_validator" OFF)
-if(LIBMEM_VALIDATOR_DEBUG)
+# Diagnostic output for legacy and unified validators is driven by the same
+# umbrella flag (LIBMEM_TOOLS_VERBOSE, declared in tools/CMakeLists.txt).
+# The internal C-source macro name (LIBMEM_VALIDATOR_DEBUG) is preserved
+# only because the legacy .c uses it at #ifdef sites.
+if(LIBMEM_TOOLS_VERBOSE)
     target_compile_definitions(libmem_validator PRIVATE LIBMEM_VALIDATOR_DEBUG=1)
     message(STATUS "libmem_validator: DEBUG mode enabled")
 endif()
 target_link_libraries(libmem_validator m)
 
 
-# MODULAR C++ VALIDATOR
+# ---------------------------------------------------------------------------
+# Modular C++ validator
+# ---------------------------------------------------------------------------
 add_executable(libmem_validator_unified
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
 )
 
-target_compile_features(libmem_validator_unified PRIVATE cxx_std_11)
+target_compile_features(libmem_validator_unified PRIVATE cxx_std_17)
 target_compile_options(libmem_validator_unified PRIVATE -Wall -Wextra -O0)
 
 target_include_directories(libmem_validator_unified PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_link_libraries(libmem_validator_unified libmem_common)
 
-# Optional verbose mode
-option(UNIFIED_VALIDATOR_VERBOSE "Enable verbose output for unified validator" OFF)
-if(UNIFIED_VALIDATOR_VERBOSE)
-    target_compile_definitions(libmem_validator_unified PRIVATE LIBMEM_VALIDATOR_VERBOSE=1)
+if(LIBMEM_TOOLS_VERBOSE)
+    target_compile_definitions(libmem_validator_unified PRIVATE LIBMEM_VERBOSE=1)
 endif()
 
 target_link_libraries(libmem_validator_unified m)
@@ -72,10 +82,32 @@ target_link_libraries(libmem_validator_unified m)
 message(STATUS "Building validators: libmem_validator (C), libmem_validator_unified (C++)")
 
 
+# ---------------------------------------------------------------------------
+# Dynamic GTest validator
+# ---------------------------------------------------------------------------
+add_executable(libmem_validator_gtest
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtest/gtest_main.cpp
+)
 
-# HELPER FUNCTIONS FOR TEST GENERATION
+target_compile_features(libmem_validator_gtest PRIVATE cxx_std_17)
+target_compile_options(libmem_validator_gtest PRIVATE -Wall -Wextra -O0)
 
-# Function: Generate range of sizes (increment by 1)
+target_include_directories(libmem_validator_gtest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(libmem_validator_gtest libmem_common)
+target_link_libraries(libmem_validator_gtest m)
+
+
+# ============================================================================
+# CTest configuration
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Helper functions for test generation
+# ---------------------------------------------------------------------------
+
+# Generate range of sizes (increment by 1)
 function(generate_size_range OUTPUT_VAR START END)
     set(values "")
     set(current ${START})
@@ -86,8 +118,7 @@ function(generate_size_range OUTPUT_VAR START END)
     set(${OUTPUT_VAR} ${values} PARENT_SCOPE)
 endfunction()
 
-
-# Function: Generate powers of 2 sizes
+# Generate powers of 2 sizes
 function(generate_power_of_2_sizes OUTPUT_VAR START END)
     set(values "")
     set(current ${START})
@@ -98,8 +129,7 @@ function(generate_power_of_2_sizes OUTPUT_VAR START END)
     set(${OUTPUT_VAR} ${values} PARENT_SCOPE)
 endfunction()
 
-
-# Function: Generate threshold boundary values
+# Generate threshold boundary values
 function(generate_threshold_values OUTPUT_VAR THRESHOLD RANGE VALUES_LIST)
     set(result "")
     math(EXPR th_start "${THRESHOLD} - ${RANGE}")
@@ -122,8 +152,7 @@ function(generate_threshold_values OUTPUT_VAR THRESHOLD RANGE VALUES_LIST)
     set(${OUTPUT_VAR} ${result} PARENT_SCOPE)
 endfunction()
 
-
-# Function: Generate power-of-2 offset values for threshold testing
+# Generate power-of-2 offset values for threshold testing
 function(generate_offset_values OUTPUT_VAR MAX_SHIFT)
     set(values "")
     foreach(shift RANGE 0 ${MAX_SHIFT})
@@ -133,10 +162,12 @@ function(generate_offset_values OUTPUT_VAR MAX_SHIFT)
     set(${OUTPUT_VAR} ${values} PARENT_SCOPE)
 endfunction()
 
-
-# Function: Add validator tests for a list of functions and sizes
+# Add validator tests for a list of functions and sizes
+# PREFIX (e.g. "legacy_" or "unified_") is also used as the ctest LABEL
+# (trailing underscore stripped), enabling `ctest -L legacy` / `ctest -L unified`.
 function(add_validator_tests PREFIX VALIDATOR_EXEC FUNC_LIST SIZE_LIST SUFFIX)
     set(extra_args ${ARGN})
+    string(REGEX REPLACE "_$" "" test_label "${PREFIX}")
 
     foreach(pattern IN LISTS FUNC_LIST)
         string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
@@ -150,18 +181,19 @@ function(add_validator_tests PREFIX VALIDATOR_EXEC FUNC_LIST SIZE_LIST SUFFIX)
             set_tests_properties("${test_name}"
                 PROPERTIES
                 FAIL_REGULAR_EXPRESSION "ERROR"
+                LABELS "${test_label}"
             )
         endforeach()
     endforeach()
 endfunction()
 
-
-# Function: Add shift tests with readable names (KB, MB) and timeout
+# Add shift tests with readable names (KB, MB) and timeout
 function(add_shift_tests PREFIX VALIDATOR_EXEC FUNC_LIST SIZE_LIST TIMEOUT)
+    string(REGEX REPLACE "_$" "" test_label "${PREFIX}")
+
     foreach(pattern IN LISTS FUNC_LIST)
         string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
         foreach(size IN LISTS SIZE_LIST)
-            # Format size for test name
             if(${size} LESS 1024)
                 set(value ${size})
                 set(unit "B")
@@ -183,37 +215,29 @@ function(add_shift_tests PREFIX VALIDATOR_EXEC FUNC_LIST SIZE_LIST TIMEOUT)
                 PROPERTIES
                 TIMEOUT ${TIMEOUT}
                 FAIL_REGULAR_EXPRESSION "ERROR"
+                LABELS "${test_label}"
             )
         endforeach()
     endforeach()
 endfunction()
 
-
-# Macro: Add tests for both legacy and unified validators
+# Add tests for both legacy and unified validators
 macro(add_dual_validator_tests TEST_TYPE FUNC_LIST SIZE_LIST)
     set(_extra_args ${ARGN})
 
-    # Legacy C validator tests
-    add_validator_tests("" "${VALIDATOR_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TEST_TYPE}" ${_extra_args})
-
-    # Unified C++ validator tests
+    add_validator_tests("legacy_" "${VALIDATOR_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TEST_TYPE}" ${_extra_args})
     add_validator_tests("unified_" "${VALIDATOR_UNIFIED_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TEST_TYPE}" ${_extra_args})
 endmacro()
 
-
-# Macro: Add shift tests for both validators
+# Add shift tests for both validators
 macro(add_dual_shift_tests FUNC_LIST SIZE_LIST TIMEOUT)
-    # Legacy C validator shift tests
-    add_shift_tests("" "${VALIDATOR_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TIMEOUT}")
-
-    # Unified C++ validator shift tests
+    add_shift_tests("legacy_" "${VALIDATOR_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TIMEOUT}")
     add_shift_tests("unified_" "${VALIDATOR_UNIFIED_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TIMEOUT}")
 endmacro()
 
-
-
-# TEST CONFIGURATION
-enable_testing()
+# ---------------------------------------------------------------------------
+# CPU/ISA detection and test variables
+# ---------------------------------------------------------------------------
 
 set(AMD_CPU 1)
 set(ARCH_ZEN5 5)
@@ -222,7 +246,7 @@ set(CPU_DETECT_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
 
 try_run(CPU_VENDOR COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "vendor")
+    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "vendor")
 
 if (${CPU_VENDOR} MATCHES ${AMD_CPU})
     set(CPU "AMD")
@@ -258,15 +282,19 @@ set(VALIDATOR_UNIFIED_EXEC ${CMAKE_BINARY_DIR}/tools/validator/libmem_validator_
 set(supp_func "memcpy" "memcmp" "memset" "memmove" "mempcpy" "memchr"
     "strcpy" "strncpy" "strcmp" "strncmp" "strlen" "strnlen" "strcat" "strncat" "strstr" "strspn" "strchr")
 
-#Threshold specific functions
 set(load_store_func "memcpy" "mempcpy" "memmove")
 set(store_func "memset")
+
+# ---------------------------------------------------------------------------
+# Test registration
+# ---------------------------------------------------------------------------
+
+enable_testing()
 
 generate_size_range(ITER_SIZES 0 ${PAGE_SIZE})
 generate_power_of_2_sizes(SHIFT_SIZES 1 ${MAX_SIZE})
 
 message(STATUS "Adding validator tests for: ${supp_func}")
-
 
 add_dual_validator_tests("iter" "${supp_func}" "${ITER_SIZES}")
 add_dual_shift_tests("${supp_func}" "${SHIFT_SIZES}" "${MAX_TIMEOUT}")
@@ -274,20 +302,22 @@ add_dual_validator_tests("align" "${supp_func}" "${ITER_SIZES}" 0 0 1)
 
 message(STATUS "Basic validator tests added: iterator, shift, and alignment tests")
 
-# THRESHOLD TESTING FOR AMD CPUS
+# ---------------------------------------------------------------------------
+# AMD-specific threshold testing
+# ---------------------------------------------------------------------------
 if(CPU STREQUAL "AMD")
     message(STATUS "Adding AMD-specific threshold tests")
 
     try_run(L2_CACHE_512KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l2_cache")
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l2_cache")
     math(EXPR L2_CACHE "${L2_CACHE_512KB} * 512 * 1024")
 
     try_run(L3_CACHE_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l3_cache")
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l3_cache")
     math(EXPR L3_CACHE "${L3_CACHE_MB} * 1024 * 1024")
 
     try_run(NT_TH_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-    COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "nt_threshold")
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "nt_threshold")
     math(EXPR NT_TH "${NT_TH_MB} * 1024 * 1024")
 
     if(ISA STREQUAL "AVX512")
@@ -320,19 +350,19 @@ if(CPU STREQUAL "AMD")
         message(STATUS "Adding ${ARCH}-specific threshold tests")
 
         try_run(ALIGNED_VEC_CPY_TH_KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_cpy_threshold")
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_cpy_threshold")
         math(EXPR ALIGNED_VEC_CPY_TH "${ALIGNED_VEC_CPY_TH_KB} * 1024")
         generate_threshold_values(ALIGNED_VEC_CPY_SIZES ${ALIGNED_VEC_CPY_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("aligned_vector" "${load_store_func}" "${ALIGNED_VEC_CPY_SIZES}" 0 0 1)
 
         try_run(ALIGNED_VEC_SET_TH_KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_set_threshold")
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_set_threshold")
         math(EXPR ALIGNED_VEC_SET_TH "${ALIGNED_VEC_SET_TH_KB} * 1024")
         generate_threshold_values(ALIGNED_VEC_SET_SIZES ${ALIGNED_VEC_SET_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("aligned_vector" "${store_func}" "${ALIGNED_VEC_SET_SIZES}" 0 0 1)
 
         try_run(ZEN5_NT_TH_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "zen5_nt_store_threshold")
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "zen5_nt_store_threshold")
         math(EXPR ZEN5_NT_TH "${ZEN5_NT_TH_MB} * 1024 * 1024")
         generate_threshold_values(ZEN5_NT_SIZES ${ZEN5_NT_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("threshold_nt" "${store_func}" "${ZEN5_NT_SIZES}" 0 0 1)
@@ -343,17 +373,3 @@ if(CPU STREQUAL "AMD")
 endif()
 
 message(STATUS "Validator test configuration complete")
-
-# Dynamic Validator - runs specific tests with any size/alignment
-add_executable(libmem_validator_gtest
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtest/gtest_main.cpp
-)
-
-target_compile_features(libmem_validator_gtest PRIVATE cxx_std_11)
-target_compile_options(libmem_validator_gtest PRIVATE -Wall -Wextra -O0)
-
-target_include_directories(libmem_validator_gtest PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(libmem_validator_gtest m)

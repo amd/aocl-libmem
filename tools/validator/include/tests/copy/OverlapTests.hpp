@@ -32,7 +32,7 @@
  * - ctx.size/2 for general overlap coverage
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 #include <vector>
 #include <array>
 
@@ -46,7 +46,7 @@ enum class OverlapDirection {
 
 
 template<typename Tag, OverlapDirection Dir>
-class OverlapTest : public FunctionTest<Tag> {
+class OverlapTest : public TestCase<Tag> {
 public:
     const char* name() const override {
         return Dir == OverlapDirection::Forward ? "ForwardOverlap" : "BackwardOverlap";
@@ -80,25 +80,16 @@ private:
      * - Backward: dst = base, src = base + offset
      */
     BufferPair allocateWithOffset(size_t size, size_t offset) {
-        BufferPair buf;
-        buf.size = size;
+        auto buf = this->allocateOverlapBuf(size, offset);
+        if (!buf.valid()) return buf;
 
-        size_t alloc_size = size + offset + CACHE_LINE_SZ;
-        void* mem = nullptr;
-        if (posix_memalign(&mem, CACHE_LINE_SZ, alloc_size) != 0) {
-            return buf;  // Allocation failed
-        }
-
-        buf.base = static_cast<uint8_t*>(mem);
-
+        uint8_t* base = static_cast<uint8_t*>(buf.src_block.ptr);
         if constexpr (Dir == OverlapDirection::Forward) {
-            // Forward: dst starts after src
-            buf.src = buf.base;
-            buf.dst = buf.base + offset;
+            buf.src = base;
+            buf.dst = base + offset;
         } else {
-            // Backward: src starts after dst
-            buf.dst = buf.base;
-            buf.src = buf.base + offset;
+            buf.dst = base;
+            buf.src = base + offset;
         }
 
         return buf;
@@ -109,7 +100,7 @@ private:
      */
     TestResult testAtOffset(const TestContext& ctx, size_t offset) {
         BufferPair buf = allocateWithOffset(ctx.size, offset);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer [offset=%zu]", offset);
         }
 
@@ -171,15 +162,15 @@ using BackwardOverlapTest = OverlapTest<Tag, OverlapDirection::Backward>;
 
 // InPlaceCopyTest where dst == src (complete overlap)
 template<typename Tag>
-class InPlaceCopyTest : public FunctionTest<Tag> {
+class InPlaceCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "InPlaceCopy"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
 
-        BufferPair buf = this->allocateSingle(ctx.size, ctx.dst_align);
-        if (!buf.base) {
+        BufferPair buf = this->allocateSingleBuf(ctx.size, ctx.dst_align);
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
 

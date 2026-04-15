@@ -49,10 +49,10 @@ Upstream repository contains LibMem reference manual that has all the informatio
 **Refer to [User_Guide](https://github.com/amd/aocl-libmem/blob/main/docs/User_Guide.md)**
 
 ## Validator Tool Guide:
-**Refer to tools/validator/Validator_tool.md**
+**Refer to tools/validator/validator_guide.md**
 
 ## AOCL-LibMem Benchmarking Tool Guide:
-**Refer to tools/benchmarks/Benchmark_Framework.md**
+**Refer to tools/benchmark/benchmark_guide.md**
 
 Also, please read the LICENSE file for information on copying and distributing this software.
 

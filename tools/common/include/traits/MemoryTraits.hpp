@@ -23,8 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_MEMORY_TRAITS_HPP
-#define LIBMEM_VALIDATOR_MEMORY_TRAITS_HPP
+#ifndef LIBMEM_COMMON_MEMORY_TRAITS_HPP
+#define LIBMEM_COMMON_MEMORY_TRAITS_HPP
 
 /**
  * @file MemoryTraits.hpp
@@ -35,13 +35,10 @@
 #include <cstring>
 
 namespace libmem {
-namespace validator {
+namespace common {
 namespace traits {
 
-// ============================================================================
-// Memory Function Tag Types
-// ============================================================================
-
+// Tag types
 struct MemcpyTag {};
 struct MemmoveTag {};
 struct MemsetTag {};
@@ -49,16 +46,8 @@ struct MemcmpTag {};
 struct MemchrTag {};
 struct MempcpyTag {};
 
-// ============================================================================
-// Memory Function Traits Specializations
-// ============================================================================
-
-/**
- * memcpy traits
- * void* memcpy(void* dest, const void* src, size_t n)
- */
 template<>
-struct FunctionTraits<MemcpyTag> : MemoryTraitsBase<FunctionTraits<MemcpyTag>> {
+struct FunctionTraits<MemcpyTag> : MemoryTraitsBase {
     using ReturnType = void*;
     using FunctionPtr = void*(*)(void*, const void*, size_t);
 
@@ -74,12 +63,8 @@ struct FunctionTraits<MemcpyTag> : MemoryTraitsBase<FunctionTraits<MemcpyTag>> {
     }
 };
 
-/**
- * memmove traits
- * void* memmove(void* dest, const void* src, size_t n)
- */
 template<>
-struct FunctionTraits<MemmoveTag> : MemoryTraitsBase<FunctionTraits<MemmoveTag>> {
+struct FunctionTraits<MemmoveTag> : MemoryTraitsBase {
     using ReturnType = void*;
     using FunctionPtr = void*(*)(void*, const void*, size_t);
 
@@ -87,7 +72,7 @@ struct FunctionTraits<MemmoveTag> : MemoryTraitsBase<FunctionTraits<MemmoveTag>>
 
     static constexpr FunctionCategory category = FunctionCategory::COPY;
     static constexpr ReturnCategory return_category = ReturnCategory::DEST_PTR;
-    static constexpr bool handles_overlap = true;  ///< Key difference from memcpy
+    static constexpr bool handles_overlap = true;
     static constexpr bool returns_dest = true;
     static constexpr size_t arg_count = 3;
 
@@ -96,12 +81,8 @@ struct FunctionTraits<MemmoveTag> : MemoryTraitsBase<FunctionTraits<MemmoveTag>>
     }
 };
 
-/**
- * memset traits
- * void* memset(void* s, int c, size_t n)
- */
 template<>
-struct FunctionTraits<MemsetTag> : MemoryTraitsBase<FunctionTraits<MemsetTag>> {
+struct FunctionTraits<MemsetTag> : MemoryTraitsBase {
     using ReturnType = void*;
     using FunctionPtr = void*(*)(void*, int, size_t);
 
@@ -117,12 +98,8 @@ struct FunctionTraits<MemsetTag> : MemoryTraitsBase<FunctionTraits<MemsetTag>> {
     }
 };
 
-/**
- * memcmp traits
- * int memcmp(const void* s1, const void* s2, size_t n)
- */
 template<>
-struct FunctionTraits<MemcmpTag> : MemoryTraitsBase<FunctionTraits<MemcmpTag>> {
+struct FunctionTraits<MemcmpTag> : MemoryTraitsBase {
     using ReturnType = int;
     using FunctionPtr = int(*)(const void*, const void*, size_t);
 
@@ -137,12 +114,8 @@ struct FunctionTraits<MemcmpTag> : MemoryTraitsBase<FunctionTraits<MemcmpTag>> {
     }
 };
 
-/**
- * memchr traits
- * void* memchr(const void* s, int c, size_t n)
- */
 template<>
-struct FunctionTraits<MemchrTag> : MemoryTraitsBase<FunctionTraits<MemchrTag>> {
+struct FunctionTraits<MemchrTag> : MemoryTraitsBase {
     using ReturnType = void*;
     using FunctionPtr = void*(*)(const void*, int, size_t);
 
@@ -157,13 +130,8 @@ struct FunctionTraits<MemchrTag> : MemoryTraitsBase<FunctionTraits<MemchrTag>> {
     }
 };
 
-/**
- * mempcpy traits (GNU extension)
- * void* mempcpy(void* dest, const void* src, size_t n)
- * Returns pointer to byte AFTER last copied byte
- */
 template<>
-struct FunctionTraits<MempcpyTag> : MemoryTraitsBase<FunctionTraits<MempcpyTag>> {
+struct FunctionTraits<MempcpyTag> : MemoryTraitsBase {
     using ReturnType = void*;
     using FunctionPtr = void*(*)(void*, const void*, size_t);
 
@@ -179,8 +147,7 @@ struct FunctionTraits<MempcpyTag> : MemoryTraitsBase<FunctionTraits<MempcpyTag>>
 };
 
 } // namespace traits
-} // namespace validator
+} // namespace common
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_MEMORY_TRAITS_HPP
-
+#endif // LIBMEM_COMMON_MEMORY_TRAITS_HPP

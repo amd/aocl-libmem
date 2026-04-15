@@ -23,8 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_FUNCTION_TRAITS_HPP
-#define LIBMEM_VALIDATOR_FUNCTION_TRAITS_HPP
+#ifndef LIBMEM_COMMON_FUNCTION_TRAITS_HPP
+#define LIBMEM_COMMON_FUNCTION_TRAITS_HPP
 
 /**
  * @file FunctionTraits.hpp
@@ -39,16 +39,9 @@
 #include <cstddef>
 
 namespace libmem {
-namespace validator {
+namespace common {
 namespace traits {
 
-// ============================================================================
-// Function Category Enumeration
-// ============================================================================
-
-/**
- * FunctionCategory - Classifies functions by their primary operation
- */
 enum class FunctionCategory {
     COPY,       // memcpy, memmove, strcpy, strncpy
     SET,        // memset
@@ -58,9 +51,6 @@ enum class FunctionCategory {
     CONCAT      // strcat, strncat
 };
 
-/**
- * ReturnCategory - Classifies functions by their return type semantics
- */
 enum class ReturnCategory {
     DEST_PTR,       // Returns destination pointer (memcpy, strcpy, etc.)
     END_PTR,        // Returns pointer past copied data (mempcpy)
@@ -70,26 +60,9 @@ enum class ReturnCategory {
     VOID            // Returns void (none currently)
 };
 
-// ============================================================================
-// FunctionTraits Primary Template
-// ============================================================================
-
-/**
- * FunctionTraits - Type traits for memory/string functions
- *
- * Provides compile-time information about each function:
- * - Function signature (return type, argument types)
- * - Category (copy, compare, search, etc.)
- * - Behavioral flags (has size param, is string func, etc.)
- */
 template<typename Tag>
 struct FunctionTraits;
 
-// ============================================================================
-// Base Trait Classes with Defaults
-// ============================================================================
-
-template<typename Derived>
 struct MemoryTraitsBase {
     static constexpr bool has_size_param = true;
     static constexpr bool is_string_func = false;
@@ -99,7 +72,6 @@ struct MemoryTraitsBase {
     static constexpr bool returns_dest = false;
 };
 
-template<typename Derived>
 struct StringTraitsBase {
     static constexpr bool has_size_param = false;
     static constexpr bool is_string_func = true;
@@ -109,48 +81,8 @@ struct StringTraitsBase {
     static constexpr bool returns_dest = false;
 };
 
-// ============================================================================
-// Trait Helper Utilities
-// ============================================================================
-
-/**
- * Check if a function is a bounded variant (has size parameter)
- */
-template<typename Tag>
-constexpr bool is_bounded_v = FunctionTraits<Tag>::is_bounded;
-
-/**
- * Check if a function is a string function (NULL-terminated)
- */
-template<typename Tag>
-constexpr bool is_string_func_v = FunctionTraits<Tag>::is_string_func;
-
-/**
- * Check if a function returns destination pointer
- */
-template<typename Tag>
-constexpr bool returns_dest_v = FunctionTraits<Tag>::returns_dest;
-
-/**
- * Check if a function handles overlapping memory
- */
-template<typename Tag>
-constexpr bool handles_overlap_v = FunctionTraits<Tag>::handles_overlap;
-
-/**
- * Get the function category
- */
-template<typename Tag>
-constexpr FunctionCategory category_v = FunctionTraits<Tag>::category;
-
-/**
- * Get the return category
- */
-template<typename Tag>
-constexpr ReturnCategory return_category_v = FunctionTraits<Tag>::return_category;
-
 } // namespace traits
-} // namespace validator
+} // namespace common
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_FUNCTION_TRAITS_HPP
+#endif // LIBMEM_COMMON_FUNCTION_TRAITS_HPP

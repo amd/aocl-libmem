@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRNLEN_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRNLEN_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -42,7 +42,7 @@ namespace validator {
  * - BasicStrnlenTest runs all 4 maxlen scenarios per size
  * - Page boundary and page overrun for bounds safety
  */
-class StrnlenValidator : public FunctionValidator<traits::StrnlenTag, StrnlenValidator> {
+class StrnlenValidator : public TestRunner<traits::StrnlenTag, StrnlenValidator> {
 public:
     void registerTests() {
         tests()
@@ -53,7 +53,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrnlenValidator)
+REGISTER_VALIDATOR(StrnlenValidator, "strnlen")
 
 } // namespace validator
 } // namespace libmem

@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRCHR_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRCHR_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/PageCrossTests.hpp"
 #include "tests/search/SearchTests.hpp"
@@ -37,7 +37,7 @@ namespace validator {
 /**
  * StrchrValidator - Validates strchr implementation
  */
-class StrchrValidator : public FunctionValidator<traits::StrchrTag, StrchrValidator> {
+class StrchrValidator : public TestRunner<traits::StrchrTag, StrchrValidator> {
 public:
     void registerTests() {
         tests()
@@ -49,7 +49,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrchrValidator)
+REGISTER_VALIDATOR(StrchrValidator, "strchr")
 
 } // namespace validator
 } // namespace libmem

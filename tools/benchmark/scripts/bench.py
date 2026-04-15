@@ -36,8 +36,14 @@ import datetime
 from statistics import mean
 import sys
 
-sys.path.insert(0, '../tools/benchmarks/external')
-import GetParser as ParserConfig
+sys.path.insert(0, '../tools/benchmark/external')
+import get_parser as ParserConfig
+
+# Make CMake-generated libmem_defs (build/test/) importable.
+_libmem_defs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "../../../test")
+if _libmem_defs_dir not in sys.path:
+    sys.path.insert(0, _libmem_defs_dir)
 
 def check_root_access():
     try:
@@ -92,6 +98,13 @@ def get_prefetch_aggressiveness_level(bits):
     }
     return levels.get(bits, 'Unknown')
 
+# CAP-COUPLED sites depend on this <= 2 GiB. Grep "CAP-COUPLED" before raising.
+try:
+    from libmem_defs import MAX_BENCHMARK_SIZE
+except ImportError:
+    MAX_BENCHMARK_SIZE = 1024 * 1024 * 1024   # 1 GiB
+
+
 def parse_size_with_unit(size_str):
     """
     Parse a string representing a size with units (B, KB, MB, GB) and convert to bytes.
@@ -133,6 +146,31 @@ def parse_size_with_unit(size_str):
         return value * 1024 * 1024 * 1024
     else:
         raise argparse.ArgumentTypeError(f"Unknown unit: {unit}")
+
+
+def _detect_l3_cache_bytes():
+    """Return per-CCD L3 size in bytes, or None. CMake value first, sysfs fallback."""
+    try:
+        from libmem_defs import L3_CACHE_MB
+        if L3_CACHE_MB > 0:
+            return L3_CACHE_MB * 1024 * 1024
+    except (ImportError, AttributeError):
+        pass
+
+    try:
+        with open("/sys/devices/system/cpu/cpu0/cache/index3/size") as f:
+            raw = f.read().strip()
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+    try:
+        if raw.endswith(('M', 'm')):
+            return int(raw[:-1]) * 1024 * 1024
+        if raw.endswith(('K', 'k')):
+            return int(raw[:-1]) * 1024
+        return int(raw)
+    except ValueError:
+        return None
+
 
 class BaseBench:
     """Base class containing common benchmarking functionality"""
@@ -501,14 +539,14 @@ def main():
                                 is random.",\
                                 type = str, choices = ['a','u','d'],  default = 'd')
 
-    group.add_argument("-p", "--page", help = "Page boundary options\
-                                x - page_cross, t - page_tail",\
-                                type = str, choices = ['x','t'],  default = 'n')
+    group.add_argument("-p", "--page", help = "Page boundary options:\
+                                x - page_cross, t - page_tail, g - page_guarded (tail + guard)",\
+                                type = str, choices = ['x','t','g'],  default = 'n')
 
-    gbm_parser.add_argument("-s", "--spill", help = "cache spilling mode applicable only for\
-                                aligned and unaligned: l - less_spill,\
-                                m - more_spill, default is no-spill",\
-                                type = str, choices = ['l', 'm',],  default = 'n')
+    gbm_parser.add_argument("-s", "--spill", help = "cache line spill (only with -a u):\
+                                l - less spill (1-8 bytes past boundary, default),\
+                                m - more spill (56-63 bytes, near end of cache line)",\
+                                type = str, choices = ['l', 'm'],  default = 'l')
 
     # Only add the overlap argument for memmove function
     class OverlapAction(argparse.Action):
@@ -534,6 +572,30 @@ def main():
 
     gbm_parser.add_argument("-preload", help = "Enables LD_PRELOAD for running bench",
                           type = str, choices = ['y', 'n'], default = 'y')
+
+    gbm_parser.add_argument("--backend", help = "Allocation backend: "
+                          "p - posix_memalign (default), "
+                          "n - operator new",
+                          type = str, choices = ['p', 'n'], default = 'p')
+
+    class LayoutAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            if hasattr(namespace, 'page') and namespace.page not in (None, 'n'):
+                parser.error("--layout and -p/--page are mutually exclusive")
+            if hasattr(namespace, 'overlap') and namespace.overlap not in (None, 'd', 'n'):
+                parser.error("--layout and -o/--overlap are mutually exclusive")
+            setattr(namespace, self.dest, values)
+
+    gbm_parser.add_argument("--layout", help = "Buffer layout for dual-buffer functions: "
+                          "i - independent allocations (default), "
+                          "c - contiguous (single block). "
+                          "Mutually exclusive with -p and -o.",
+                          type = str, choices = ['i', 'c'], default = 'i',
+                          action=LayoutAction)
+
+    gbm_parser.add_argument("--heap", help = "Path to heap runtime library for LD_PRELOAD "
+                          "(e.g. /usr/lib/libjemalloc.so). Empty = system default.",
+                          type = str, default = '')
 
     # Subparser for TBM
     tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TinyMembench Benchmarking Tool')
@@ -627,18 +689,46 @@ def main():
         # Collect system information
         collect_system_info(output_file, args.core_id)
 
-    # Set the default range based on the func argument
+    # Default range: string = 4KB; memory = 2 x L3 (clamped to cap).
     if args.range is None:
         if args.func in libmem_string:
-            args.range = [8, 4096]  # 8B to 4KB for string functions
+            args.range = [8, 4096]
         else:
-            args.range = [8, 32 * 1024 * 1024]  # 8B to 32MB for memory functions
+            l3_bytes = _detect_l3_cache_bytes()
+            if l3_bytes is not None:
+                args.range = [8, min(2 * l3_bytes, MAX_BENCHMARK_SIZE)]
+                print(f"[INFO] Default range (memory, L3={l3_bytes // (1024*1024)}MB): "
+                      f"8 B -> {args.range[1] // (1024*1024)} MB",
+                      file=sys.stderr)
+            else:
+                args.range = [8, 32 * 1024 * 1024]
+                print(f"[INFO] Default range (memory, L3 undetected): 8 B -> 32 MB (fallback)",
+                      file=sys.stderr)
 
-    # Check if the range is valid
-    if args.range[0] > args.range[1] :
+    if args.range[0] > args.range[1]:
         raise argparse.ArgumentTypeError(
             f"The first size must be less than or equal to the second size: {args.range[0]} < {args.range[1]}"
         )
+
+    # Hard-cap user input loudly (defaults are clamped silently above).
+    if args.range[0] > MAX_BENCHMARK_SIZE or args.range[1] > MAX_BENCHMARK_SIZE:
+        print(f"ERROR: requested size exceeds MAX_BENCHMARK_SIZE ({MAX_BENCHMARK_SIZE} bytes).\n"
+              f"  size_start = {args.range[0]}, size_end = {args.range[1]}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    # Warn about ignored/overridden option combinations
+    if args.benchmark == 'gbm':
+        page = getattr(args, 'page', 'n')
+        align = getattr(args, 'align', 'd')
+        spill = getattr(args, 'spill', 'n')
+        backend = getattr(args, 'backend', 'p')
+
+        if page == 'g' and backend == 'n':
+            print("WARNING: --backend=n ignored with -p g (page-guarded forces posix_memalign)")
+
+        if spill in ('l', 'm') and align != 'u':
+            print(f"WARNING: -s {spill} ignored (spill only applies with -a u)")
 
     return vars(args)
 

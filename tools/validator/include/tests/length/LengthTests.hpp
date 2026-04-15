@@ -31,7 +31,7 @@
  * @brief Length tests for strlen, strspn
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 
 namespace libmem {
 namespace validator {
@@ -44,22 +44,22 @@ namespace validator {
  * BasicLengthTest - Basic string length test
  */
 template<typename Tag>
-class BasicLengthTest : public FunctionTest<Tag> {
+class BasicLengthTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicLength"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);  // +1 for NULL
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);  // +1 for NULL
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
-        size_t ret = FunctionTest<Tag>::Traits::invoke(
+        size_t ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst)
         );
 
@@ -79,27 +79,27 @@ public:
  * StrspnTest - Basic strspn test with randomized accept set
  */
 template<typename Tag>
-class StrspnTest : public FunctionTest<Tag> {
+class StrspnTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicSpan"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
-        if (!buf.base) return this->error("allocation failed");
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
+        if (!buf.valid()) return this->error("allocation failed");
 
-        char alpha[27];
-        for (int i = 0; i < 26; ++i) alpha[i] = 'a' + i;
-        alpha[26] = '\0';
-        this->shuffleChars(alpha, 26);
+        char alpha[LOWER_CHARS + 1];
+        for (size_t i = 0; i < LOWER_CHARS; ++i) alpha[i] = 'a' + i;
+        alpha[LOWER_CHARS] = '\0';
+        shuffleChars(alpha, static_cast<int>(LOWER_CHARS));
         const int accept_len = 10;
         alpha[accept_len] = '\0';
 
         for (size_t i = 0; i < ctx.size; ++i)
             buf.dst[i] = alpha[rand() % accept_len];
-        this->nullTerminate(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
-        size_t ret = FunctionTest<Tag>::Traits::invoke(
+        size_t ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst), alpha);
 
         if (ret != ctx.size) {
@@ -118,7 +118,7 @@ public:
  * StrspnSingleCharAcceptTest - accept has exactly one random character
  */
 template<typename Tag>
-class StrspnSingleCharAcceptTest : public FunctionTest<Tag> {
+class StrspnSingleCharAcceptTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SingleCharAccept"; }
 
@@ -126,17 +126,17 @@ public:
         this->ctx_ = ctx;
         if (ctx.size < 1) return TestResult::success();
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
-        if (!buf.base) return this->error("allocation failed");
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
+        if (!buf.valid()) return this->error("allocation failed");
 
-        char c = 'a' + (rand() % 26);
+        char c = 'a' + (rand() % LOWER_CHARS);
         char accept_buf[2] = { c, '\0' };
         char reject = (c == 'z') ? 'a' : (char)(c + 1);
 
-        this->fillWithByte(buf.dst, ctx.size, (uint8_t)c);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillWithByte(buf.dst, ctx.size, (uint8_t)c);
+        nullTerminate(buf.dst, ctx.size);
 
-        size_t ret = FunctionTest<Tag>::Traits::invoke(
+        size_t ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst), accept_buf);
 
         if (ret != ctx.size) {
@@ -147,7 +147,7 @@ public:
             size_t mid = ctx.size / 2;
             buf.dst[mid] = reject;
 
-            ret = FunctionTest<Tag>::Traits::invoke(
+            ret = TestCase<Tag>::Traits::invoke(
                 reinterpret_cast<const char*>(buf.dst), accept_buf);
 
             if (ret != mid) {
@@ -164,7 +164,7 @@ public:
  * (boundary between PCMPISTRI and LUT paths).
  */
 template<typename Tag>
-class StrspnAccept16Test : public FunctionTest<Tag> {
+class StrspnAccept16Test : public TestCase<Tag> {
 public:
     const char* name() const override { return "Accept16Boundary"; }
 
@@ -172,22 +172,22 @@ public:
         this->ctx_ = ctx;
         if (ctx.size < 1) return TestResult::success();
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
-        if (!buf.base) return this->error("allocation failed");
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
+        if (!buf.valid()) return this->error("allocation failed");
 
-        char alpha[27];
-        for (int i = 0; i < 26; ++i) alpha[i] = 'a' + i;
-        alpha[26] = '\0';
-        this->shuffleChars(alpha, 26);
+        char alpha[LOWER_CHARS + 1];
+        for (size_t i = 0; i < LOWER_CHARS; ++i) alpha[i] = 'a' + i;
+        alpha[LOWER_CHARS] = '\0';
+        shuffleChars(alpha, static_cast<int>(LOWER_CHARS));
         const int accept_len = 16;
         char reject = alpha[accept_len];
         alpha[accept_len] = '\0';
 
         for (size_t i = 0; i < ctx.size; ++i)
             buf.dst[i] = alpha[rand() % accept_len];
-        this->nullTerminate(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
-        size_t ret = FunctionTest<Tag>::Traits::invoke(
+        size_t ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst), alpha);
 
         if (ret != ctx.size) {
@@ -198,7 +198,7 @@ public:
             size_t mid = ctx.size / 2;
             buf.dst[mid] = reject;
 
-            ret = FunctionTest<Tag>::Traits::invoke(
+            ret = TestCase<Tag>::Traits::invoke(
                 reinterpret_cast<const char*>(buf.dst), alpha);
 
             if (ret != mid) {
@@ -225,27 +225,27 @@ public:
  *   5. null before maxlen    → should stop at null, not maxlen
  */
 template<typename Tag>
-class BasicStrnlenTest : public FunctionTest<Tag> {
+class BasicStrnlenTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicStrnlen"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
         const char* str = reinterpret_cast<const char*>(buf.dst);
         size_t ret;
         size_t maxlen;
 
         maxlen = ctx.size + 1 + (rand() % 100);
-        ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+        ret = TestCase<Tag>::Traits::invoke(str, maxlen);
         if (ret != ctx.size) {
             return this->error("(maxlen > strlen) expected=%zu, actual=%zu, maxlen=%zu",
                                ctx.size, ret, maxlen);
@@ -253,7 +253,7 @@ public:
 
         if (ctx.size > 1) {
             maxlen = ctx.size / 2;
-            ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+            ret = TestCase<Tag>::Traits::invoke(str, maxlen);
             if (ret != maxlen) {
                 return this->error("(maxlen < strlen) expected=%zu, actual=%zu, strlen=%zu",
                                    maxlen, ret, ctx.size);
@@ -261,13 +261,13 @@ public:
         }
 
         maxlen = ctx.size;
-        ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+        ret = TestCase<Tag>::Traits::invoke(str, maxlen);
         if (ret != ctx.size) {
             return this->error("(maxlen == strlen) expected=%zu, actual=%zu",
                                ctx.size, ret);
         }
 
-        ret = FunctionTest<Tag>::Traits::invoke(str, static_cast<size_t>(0));
+        ret = TestCase<Tag>::Traits::invoke(str, static_cast<size_t>(0));
         if (ret != 0) {
             return this->error("(maxlen == 0) expected=0, actual=%zu", ret);
         }
@@ -276,7 +276,7 @@ public:
             size_t null_pos = ctx.size / 2;
             buf.dst[null_pos] = '\0';
             maxlen = ctx.size;
-            ret = FunctionTest<Tag>::Traits::invoke(str, maxlen);
+            ret = TestCase<Tag>::Traits::invoke(str, maxlen);
             if (ret != null_pos) {
                 return this->error("(null before maxlen) expected=%zu, actual=%zu, maxlen=%zu",
                                    null_pos, ret, maxlen);

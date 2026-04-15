@@ -31,7 +31,7 @@
  * @brief Concatenation tests for strcat, strncat
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 #include <cstring>
 
 namespace libmem {
@@ -45,7 +45,7 @@ namespace validator {
  * BasicConcatTest - Basic concatenation test for strcat
  */
 template<typename Tag>
-class BasicConcatTest : public FunctionTest<Tag> {
+class BasicConcatTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicConcat"; }
 
@@ -58,7 +58,7 @@ public:
 
         auto buf = this->allocate(TestContext(ctx.size * 2, ctx.dst_align, ctx.src_align));
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
@@ -66,10 +66,10 @@ public:
         buf.dst[1] = '\0';
 
         size_t src_len = ctx.size > 2 ? ctx.size / 2 : 1;
-        this->fillLowercaseLetters(buf.src, src_len);
+        fillLowercaseLetters(buf.src, src_len);
         buf.src[src_len] = '\0';
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );
@@ -105,7 +105,7 @@ public:
  * StrncatCopyTest - Basic test for strncat
  */
 template<typename Tag>
-class StrncatCopyTest : public FunctionTest<Tag> {
+class StrncatCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicConcat"; }
 
@@ -114,16 +114,16 @@ public:
 
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
         buf.dst[0] = 'X';
         buf.dst[1] = '\0';
 
         size_t src_len = ctx.size > 2 ? ctx.size / 2 : 1;
-        this->fillLowercaseLetters(buf.src, src_len);
+        fillLowercaseLetters(buf.src, src_len);
         buf.src[src_len] = '\0';
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             src_len
@@ -149,7 +149,7 @@ public:
  * MultiNullConcatTest - Test concat with NULL in source
  */
 template<typename Tag>
-class MultiNullConcatTest : public FunctionTest<Tag> {
+class MultiNullConcatTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "MultiNullConcat"; }
 
@@ -161,7 +161,7 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
@@ -170,12 +170,12 @@ public:
         std::memset(buf.dst + 2, 0xFF, ctx.size - 2);
 
         size_t src_len = ctx.size / 2;
-        this->fillLowercaseLetters(buf.src, src_len);
+        fillLowercaseLetters(buf.src, src_len);
         size_t null_pos = src_len / 2;
         buf.src[null_pos] = '\0';
         buf.src[src_len] = '\0';
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );

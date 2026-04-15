@@ -37,7 +37,7 @@
  * - Search functions should return NULL
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 #include <cstring>
 
 namespace libmem {
@@ -54,7 +54,7 @@ namespace validator {
  * Expected: Return NULL (or dst for memmove), no crash
  */
 template<typename Tag>
-class ZeroSizeCopyTest : public FunctionTest<Tag> {
+class ZeroSizeCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -83,7 +83,7 @@ public:
  * For: memset
  */
 template<typename Tag>
-class ZeroSizeFillTest : public FunctionTest<Tag> {
+class ZeroSizeFillTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -111,7 +111,7 @@ public:
  * Expected: Return 0 (equal)
  */
 template<typename Tag>
-class ZeroSizeCompareTest : public FunctionTest<Tag> {
+class ZeroSizeCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -134,7 +134,7 @@ public:
  * ZeroSizeStringCompareTest - For strcmp with empty strings
  */
 template<typename Tag>
-class ZeroSizeStringCompareTest : public FunctionTest<Tag> {
+class ZeroSizeStringCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -144,7 +144,7 @@ public:
         const char* empty1 = "";
         const char* empty2 = "";
         
-        int ret = FunctionTest<Tag>::Traits::invoke(empty1, empty2);
+        int ret = TestCase<Tag>::Traits::invoke(empty1, empty2);
         
         if (ret != 0) {
             return this->error("expected 0 for empty strings, got %d", ret);
@@ -165,7 +165,7 @@ public:
  * Expected: Return NULL
  */
 template<typename Tag>
-class ZeroSizeSearchTest : public FunctionTest<Tag> {
+class ZeroSizeSearchTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -191,7 +191,7 @@ public:
  * ZeroSizeLengthTest - strlen of empty string
  */
 template<typename Tag>
-class ZeroSizeLengthTest : public FunctionTest<Tag> {
+class ZeroSizeLengthTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeLength"; }
     
@@ -199,7 +199,7 @@ public:
         this->ctx_ = ctx;
         
         const char* empty = "";
-        size_t ret = FunctionTest<Tag>::Traits::invoke(empty);
+        size_t ret = TestCase<Tag>::Traits::invoke(empty);
         
         if (ret != 0) {
             return this->error("expected 0 for empty string, got %zu", ret);
@@ -215,7 +215,7 @@ public:
  * strnlen(s, 0) must return 0 regardless of the string content.
  */
 template<typename Tag>
-class ZeroSizeBoundedLengthTest : public FunctionTest<Tag> {
+class ZeroSizeBoundedLengthTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeBoundedLength"; }
 
@@ -223,14 +223,14 @@ public:
         this->ctx_ = ctx;
 
         const char* str = "non-empty string";
-        size_t ret = FunctionTest<Tag>::Traits::invoke(str, static_cast<size_t>(0));
+        size_t ret = TestCase<Tag>::Traits::invoke(str, static_cast<size_t>(0));
 
         if (ret != 0) {
             return this->error("expected 0 for maxlen=0, got %zu", ret);
         }
 
         const char* empty = "";
-        ret = FunctionTest<Tag>::Traits::invoke(empty, static_cast<size_t>(0));
+        ret = TestCase<Tag>::Traits::invoke(empty, static_cast<size_t>(0));
 
         if (ret != 0) {
             return this->error("expected 0 for empty string with maxlen=0, got %zu", ret);
@@ -244,7 +244,7 @@ public:
  * ZeroSizeSpanTest - strspn with empty string
  */
 template<typename Tag>
-class ZeroSizeSpanTest : public FunctionTest<Tag> {
+class ZeroSizeSpanTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeSpan"; }
     
@@ -254,7 +254,7 @@ public:
         const char* empty = "";
         const char* accept = "abc";
         
-        size_t ret = FunctionTest<Tag>::Traits::invoke(empty, accept);
+        size_t ret = TestCase<Tag>::Traits::invoke(empty, accept);
         
         if (ret != 0) {
             return this->error("expected 0 for empty string, got %zu", ret);
@@ -272,7 +272,7 @@ public:
  * ZeroSizeStringCopyTest - For strcpy with empty string
  */
 template<typename Tag>
-class ZeroSizeStringCopyTest : public FunctionTest<Tag> {
+class ZeroSizeStringCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSize"; }
     
@@ -282,7 +282,7 @@ public:
         char dst[4] = "???";
         const char* src = "";
         
-        char* ret = FunctionTest<Tag>::Traits::invoke(dst, src);
+        char* ret = TestCase<Tag>::Traits::invoke(dst, src);
         
         if (dst[0] != '\0') {
             return this->error("expected dst[0]='\\0', got '%c'", dst[0]);
@@ -303,7 +303,7 @@ public:
  * ZeroSizeConcatTest - strcat/strncat with empty source
  */
 template<typename Tag>
-class ZeroSizeConcatTest : public FunctionTest<Tag> {
+class ZeroSizeConcatTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeConcat"; }
     
@@ -313,7 +313,7 @@ public:
         char dst[16] = "test";
         const char* empty_src = "";
         
-        char* ret = FunctionTest<Tag>::Traits::invoke(dst, empty_src);
+        char* ret = TestCase<Tag>::Traits::invoke(dst, empty_src);
         
         if (std::strcmp(dst, "test") != 0) {
             return this->error("dst modified when concatenating empty string");
@@ -331,7 +331,7 @@ public:
  * ZeroSizeBoundedConcatTest - strncat with n=0
  */
 template<typename Tag>
-class ZeroSizeBoundedConcatTest : public FunctionTest<Tag> {
+class ZeroSizeBoundedConcatTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeBoundedConcat"; }
     
@@ -341,7 +341,7 @@ public:
         char dst[16] = "test";
         const char* src = "append";
         
-        char* ret = FunctionTest<Tag>::Traits::invoke(dst, src, static_cast<size_t>(0));
+        char* ret = TestCase<Tag>::Traits::invoke(dst, src, static_cast<size_t>(0));
         
         if (std::strcmp(dst, "test") != 0) {
             return this->error("dst modified when n=0");
@@ -359,7 +359,7 @@ public:
  * ZeroSizeBoundedCopyTest - strncpy with n=0
  */
 template<typename Tag>
-class ZeroSizeBoundedCopyTest : public FunctionTest<Tag> {
+class ZeroSizeBoundedCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ZeroSizeBoundedCopy"; }
     
@@ -369,7 +369,7 @@ public:
         char dst[16] = "original";
         const char* src = "replace";
         
-        char* ret = FunctionTest<Tag>::Traits::invoke(dst, src, static_cast<size_t>(0));
+        char* ret = TestCase<Tag>::Traits::invoke(dst, src, static_cast<size_t>(0));
         
         if (std::strcmp(dst, "original") != 0) {
             return this->error("dst modified when n=0");

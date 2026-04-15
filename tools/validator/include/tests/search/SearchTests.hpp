@@ -31,7 +31,7 @@
  * @brief Search tests for memchr, strchr, strstr
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 
 namespace libmem {
 namespace validator {
@@ -44,7 +44,7 @@ namespace validator {
  * FoundSearchTest - Test search that finds the target
  */
 template<typename Tag>
-class FoundSearchTest : public FunctionTest<Tag> {
+class FoundSearchTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "FoundSearch"; }
 
@@ -56,13 +56,13 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
 
         size_t pos = ctx.size > 1 ? (rand() % (ctx.size - 1)) : 0;
         buf.dst[pos] = '!';
@@ -82,19 +82,19 @@ public:
  * NotFoundSearchTest - Test search that doesn't find the target
  */
 template<typename Tag>
-class NotFoundSearchTest : public FunctionTest<Tag> {
+class NotFoundSearchTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "NotFoundSearch"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
 
         void* ret = this->invoke(buf.dst, '#', ctx.size);
 
@@ -110,7 +110,7 @@ public:
  * SearchAtStartTest - Character found at position 0
  */
 template<typename Tag>
-class SearchAtStartTest : public FunctionTest<Tag> {
+class SearchAtStartTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SearchAtStart"; }
 
@@ -121,13 +121,13 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
         buf.dst[0] = '!';  // Place at start
         buf.dst[ctx.size] = '\0';
 
@@ -145,7 +145,7 @@ public:
  * SearchAtEndTest - Character found at last position
  */
 template<typename Tag>
-class SearchAtEndTest : public FunctionTest<Tag> {
+class SearchAtEndTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SearchAtEnd"; }
 
@@ -156,13 +156,13 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
         buf.dst[ctx.size - 1] = '!';
         buf.dst[ctx.size] = '\0';
 
@@ -181,7 +181,7 @@ public:
  * SearchNullCharTest - Search for null character '\0' in buffer
  */
 template<typename Tag>
-class SearchNullCharTest : public FunctionTest<Tag> {
+class SearchNullCharTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SearchNullChar"; }
 
@@ -192,15 +192,15 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
         // Fill with non-null characters
         for (size_t i = 0; i < ctx.size; ++i) {
-            buf.dst[i] = 'a' + (rand() % 26);
+            buf.dst[i] = 'a' + (rand() % LOWER_CHARS);
         }
 
         // Place null character at a random position
@@ -226,7 +226,7 @@ public:
  * StringSearchFoundTest - For strchr
  */
 template<typename Tag>
-class StringSearchFoundTest : public FunctionTest<Tag> {
+class StringSearchFoundTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "CharFound"; }
 
@@ -237,17 +237,17 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
         size_t pos = ctx.size > 1 ? (rand() % ctx.size) : 0;
         buf.dst[pos] = '!';
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), static_cast<int>('!'));
 
         char* expected = reinterpret_cast<char*>(buf.dst + pos);
@@ -263,20 +263,20 @@ public:
  * StringSearchNotFoundTest - For strchr with character not in string
  */
 template<typename Tag>
-class StringSearchNotFoundTest : public FunctionTest<Tag> {
+class StringSearchNotFoundTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "CharNotFound"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), static_cast<int>('#'));
 
         if (ret != nullptr) {
@@ -291,22 +291,22 @@ public:
  * StringSearchNullCharTest - strchr searching for NULL terminator
  */
 template<typename Tag>
-class StringSearchNullCharTest : public FunctionTest<Tag> {
+class StringSearchNullCharTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SearchNullChar"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
         buf.dst[ctx.size] = '\0';
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), static_cast<int>('\0'));
 
         char* expected = reinterpret_cast<char*>(buf.dst + ctx.size);
@@ -326,7 +326,7 @@ public:
  * StrstrFoundTest - Substring search that finds the target
  */
 template<typename Tag>
-class StrstrFoundTest : public FunctionTest<Tag> {
+class StrstrFoundTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SubstringFound"; }
 
@@ -338,12 +338,12 @@ public:
             return TestResult::success();
         }
 
-        auto buf = this->allocateSingle(ctx.size + 10, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 10, ctx.dst_align);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
-        this->nullTerminate(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
         char needle[4] = "abc";
         size_t needle_len = 3;
@@ -355,7 +355,7 @@ public:
             }
         }
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), needle);
 
         if (ret == nullptr && pos + needle_len < ctx.size) {
@@ -370,24 +370,24 @@ public:
  * StrstrNotFoundTest - Substring not in haystack
  */
 template<typename Tag>
-class StrstrNotFoundTest : public FunctionTest<Tag> {
+class StrstrNotFoundTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SubstringNotFound"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
         buf.dst[ctx.size] = '\0';
 
         const char* needle = "XYZ";
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), needle);
 
         if (ret != nullptr) {
@@ -402,24 +402,24 @@ public:
  * StrstrEmptyNeedleTest - Empty needle returns haystack
  */
 template<typename Tag>
-class StrstrEmptyNeedleTest : public FunctionTest<Tag> {
+class StrstrEmptyNeedleTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "EmptyNeedle"; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.dst, ctx.size);
+        fillLowercaseLetters(buf.dst, ctx.size);
         buf.dst[ctx.size] = '\0';
 
         const char* empty_needle = "";
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst), empty_needle);
 
         if (ret != reinterpret_cast<char*>(buf.dst)) {

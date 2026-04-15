@@ -36,14 +36,14 @@ import datetime
 import filecmp
 from statistics import mean
 from libmem_defs import *
-sys.path.insert(0, '../tools/benchmarks')
+sys.path.insert(0, '../tools/benchmark')
 from bench import BaseBench
 
 class TBM(BaseBench):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # TBM-specific attributes
-        self.path = "../tools/benchmarks/external/tinybench"
+        self.path = "../tools/benchmark/external/tinybench"
         self.isExist = ""
         self.iterator = self.MYPARSER['ARGS']['iterator']
 
@@ -70,7 +70,7 @@ class TBM(BaseBench):
         if (not self.isExist):
             print("Preparing Tinymem benchmark")
             subprocess.run(["git", "clone", "https://github.com/ssvb/tinymembench.git"], cwd=self.path)
-            os.system("cp ../tools/benchmarks/external/tinybench/tbm.patch ../tools/benchmarks/external/tinybench/tinymembench/")
+            os.system("cp ../tools/benchmark/external/tinybench/tbm.patch ../tools/benchmark/external/tinybench/tinymembench/")
             # Apply patch to main.c, util.c, util.h and Makefiles
             if not self.apply_tbm_patch():
                 print("Failed to patch TBM files")

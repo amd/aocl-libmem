@@ -23,21 +23,21 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBMEM_VALIDATOR_PAGE_CROSS_TEST_BASE_HPP
-#define LIBMEM_VALIDATOR_PAGE_CROSS_TEST_BASE_HPP
+#ifndef LIBMEM_VALIDATOR_PAGE_CROSS_TEST_CASE_HPP
+#define LIBMEM_VALIDATOR_PAGE_CROSS_TEST_CASE_HPP
 
 /**
- * @file PageCrossTestBase.hpp
- * @brief Base classes and shared helpers for page-level tests
+ * @file PageCrossTestCase.hpp
+ * @brief Base classes for page-level tests
  *
  * Layout:
- *   1. PageBoundaryTestBase  - tests correctness across page boundaries
- *   2. PageOverrunTestBase   - tests bounds safety via trap page
- *   3. invoke_helper         - shared SFINAE dispatch used by test subclasses
+ *   1. PageBoundaryTestCase  - tests correctness across page boundaries
+ *   2. PageOverrunTestCase   - tests bounds safety via trap page
  */
 
-#include "core/FunctionTest.hpp"
-#include "core/PageCrossBuffer.hpp"
+#include "core/TestCase.hpp"
+#include "invoke/InvokeAdapter.hpp"
+#include "buffer/BufferFactory.hpp"
 #include <cstdlib>
 #include <vector>
 
@@ -45,7 +45,7 @@ namespace libmem {
 namespace validator {
 
 // ============================================================================
-// PageBoundaryTestBase
+// PageBoundaryTestCase
 //
 // Positions buffers so data crosses internal page boundaries.
 // Iterates over alignment offsets and positions near boundaries.
@@ -53,7 +53,7 @@ namespace validator {
 // ============================================================================
 
 template<typename Tag>
-class PageBoundaryTestBase : public FunctionTest<Tag> {
+class PageBoundaryTestCase : public TestCase<Tag> {
 public:
     const char* name() const override { return "PageBoundary"; }
 
@@ -110,7 +110,7 @@ protected:
             positions.push_back(2 * PAGE_SZ + 1);
         }
 
-        if (size > 64) {
+        if (size > CACHE_LINE_SZ) {
             positions.push_back(size - 10);
         }
 
@@ -121,24 +121,16 @@ protected:
         std::srand(static_cast<unsigned>(size ^ pos ^ off1 ^ off2));
     }
 
-    PageTestBuffer setupBuffer(size_t size, uint32_t offset) {
-        PageCrossBuffer buf;
-
-        if (!buf.allocate(size)) {
-            return PageTestBuffer::failure();
-        }
-
-        uint8_t* ptr = buf.getAddressNearBoundary(offset);
-
-        if (!ptr || ptr + size > buf.base() + buf.usableSize()) {
-            return PageTestBuffer::skip();
-        }
-
-        return PageTestBuffer::success(std::move(buf), ptr);
+    BufferPair setupPageCross(size_t size, uint32_t offset) {
+        AllocParams p = this->ctx_.alloc_params;
+        p.page_mode = PageMode::PageCross;
+        p.cross_offset = offset;
+        return allocateSingle(size, p);
     }
 
-    bool fitsInBuffer(uint8_t* ptr, size_t size, const PageCrossBuffer& buf) const {
-        return ptr && (ptr + size <= buf.base() + buf.usableSize());
+    bool fitsInAlloc(const BufferPair& buf, uint8_t* ptr, size_t needed) const {
+        return ptr && buf.valid() &&
+               (ptr + needed <= buf.srcAllocBase() + buf.srcAllocSize());
     }
 
     static constexpr uint32_t START_OFFSETS[] = {1, 16, 31, 32, 48, 63, 64};
@@ -146,10 +138,10 @@ protected:
 };
 
 template<typename Tag>
-constexpr uint32_t PageBoundaryTestBase<Tag>::START_OFFSETS[];
+constexpr uint32_t PageBoundaryTestCase<Tag>::START_OFFSETS[];
 
 // ============================================================================
-// PageOverrunTestBase
+// PageOverrunTestCase
 //
 // Positions buffers so the operation region ends exactly at a trap page
 // (PROT_NONE). Any read/write past the region causes an immediate SEGFAULT.
@@ -157,7 +149,7 @@ constexpr uint32_t PageBoundaryTestBase<Tag>::START_OFFSETS[];
 // ============================================================================
 
 template<typename Tag>
-class PageOverrunTestBase : public FunctionTest<Tag> {
+class PageOverrunTestCase : public TestCase<Tag> {
 public:
     const char* name() const override { return "PageOverrun"; }
 
@@ -168,19 +160,16 @@ public:
     }
 
 protected:
-    using Traits = typename FunctionTest<Tag>::Traits;
+    using Traits = typename TestCase<Tag>::Traits;
 
     /**
      * Allocate buffer with ptr+size ending exactly at the trap page.
      * Any access past ptr[size-1] will SEGFAULT.
      */
-    PageTestBuffer setupAtGuard(size_t size) {
-        PageTestBuffer ptb;
-        if (!ptb.pcb.allocate(size)) return ptb;
-        ptb.ptr = ptb.pcb.getAddressEndingAtGuard(size);
-        if (!ptb.ptr) return ptb;
-        ptb.valid = true;
-        return ptb;
+    BufferPair setupAtGuard(size_t size) {
+        AllocParams p = this->ctx_.alloc_params;
+        p.page_mode = PageMode::PageGuarded;
+        return allocateSingle(size, p);
     }
 
     /**
@@ -190,10 +179,10 @@ protected:
      */
     void fillForTest(uint8_t* buf, size_t size) {
         if (Traits::is_string_func) {
-            this->fillNonNull(buf, size);
+            fillNonNull(buf, size);
             buf[size - 1] = '\0';
         } else {
-            this->fillFullByteRange(buf, size);
+            fillFullByteRange(buf, size);
         }
     }
 
@@ -210,91 +199,7 @@ protected:
     virtual TestResult runPageOverrunTest(size_t size) = 0;
 };
 
-// ============================================================================
-// 3. invoke_helper
-//
-// Shared SFINAE dispatch for function invocation. Used by test subclasses
-// in PageCrossTests.hpp to call functions without per-class SFINAE boilerplate.
-// Dispatches based on has_size_param / is_string_func traits.
-// ============================================================================
-
-namespace invoke_helper {
-
-// --- copy: memcpy/memmove/mempcpy/strcpy/strncpy ---
-
-template<typename Tag, typename std::enable_if<
-    traits::FunctionTraits<Tag>::has_size_param &&
-    !traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-void copy(uint8_t* dst, const uint8_t* src, size_t n) {
-    traits::FunctionTraits<Tag>::invoke(dst, src, n);
-}
-
-template<typename Tag, typename std::enable_if<
-    traits::FunctionTraits<Tag>::has_size_param &&
-    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-void copy(uint8_t* dst, const uint8_t* src, size_t n) {
-    traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<char*>(dst),
-        reinterpret_cast<const char*>(src), n);
-}
-
-template<typename Tag, typename std::enable_if<
-    !traits::FunctionTraits<Tag>::has_size_param &&
-    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-void copy(uint8_t* dst, const uint8_t* src, size_t /*n*/) {
-    traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<char*>(dst),
-        reinterpret_cast<const char*>(src));
-}
-
-// --- compare: memcmp/strcmp/strncmp ---
-
-template<typename Tag, typename std::enable_if<
-    traits::FunctionTraits<Tag>::has_size_param &&
-    !traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-int compare(const uint8_t* s1, const uint8_t* s2, size_t n) {
-    return traits::FunctionTraits<Tag>::invoke(s1, s2, n);
-}
-
-template<typename Tag, typename std::enable_if<
-    traits::FunctionTraits<Tag>::has_size_param &&
-    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-int compare(const uint8_t* s1, const uint8_t* s2, size_t n) {
-    return traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<const char*>(s1),
-        reinterpret_cast<const char*>(s2), n);
-}
-
-template<typename Tag, typename std::enable_if<
-    !traits::FunctionTraits<Tag>::has_size_param &&
-    traits::FunctionTraits<Tag>::is_string_func, int>::type = 0>
-int compare(const uint8_t* s1, const uint8_t* s2, size_t /*n*/) {
-    return traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<const char*>(s1),
-        reinterpret_cast<const char*>(s2));
-}
-
-// --- concat: strcat/strncat ---
-
-template<typename Tag, typename std::enable_if<
-    traits::FunctionTraits<Tag>::has_size_param, int>::type = 0>
-char* concat(uint8_t* dst, const uint8_t* src, size_t n) {
-    return traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<char*>(dst),
-        reinterpret_cast<const char*>(src), n);
-}
-
-template<typename Tag, typename std::enable_if<
-    !traits::FunctionTraits<Tag>::has_size_param, int>::type = 0>
-char* concat(uint8_t* dst, const uint8_t* src, size_t /*n*/) {
-    return traits::FunctionTraits<Tag>::invoke(
-        reinterpret_cast<char*>(dst),
-        reinterpret_cast<const char*>(src));
-}
-
-} // namespace invoke_helper
-
 } // namespace validator
 } // namespace libmem
 
-#endif // LIBMEM_VALIDATOR_PAGE_CROSS_TEST_BASE_HPP
+#endif // LIBMEM_VALIDATOR_PAGE_CROSS_TEST_CASE_HPP
