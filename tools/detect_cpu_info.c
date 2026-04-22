@@ -35,6 +35,7 @@
 #define ARCH_ZEN3 3
 #define ARCH_ZEN4 4
 #define ARCH_ZEN5 5
+#define ARCH_ZEN6 6
 #define ARCH_UNDF 255
 
 #define NON_AMD_CPU 0
@@ -73,6 +74,8 @@ int main(int argc, char **argv)
         __get_cpu_id(&cpuid_regs);
         if (cpuid_regs.ebx & AVX512_MASK)
         {
+            if (cpuid_regs.edx & AVX512_FP16_MASK)
+                return ARCH_ZEN6;
             if (cpuid_regs.ecx & MOVDIRI_MASK)
                 return ARCH_ZEN5;
             return ARCH_ZEN4;
@@ -155,9 +158,10 @@ int main(int argc, char **argv)
         cpuid_regs.eax = 0x7;
         cpuid_regs.ecx = 0;
         __get_cpu_id(&cpuid_regs);
-        /* Zen5: NT moves/stores start from L3 */
-        if (cpuid_regs.ecx & MOVDIRI_MASK)
-            return (int) (COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) >> 20);
+        /* Zen5/Zen6: NT moves/stores start from L3 */
+        if ((cpuid_regs.ecx & MOVDIRI_MASK) ||
+            (cpuid_regs.edx & AVX512_FP16_MASK))
+            return (int) (COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) >> 20); // TODO: Check for zen6 thresholds 
         /* Pre-Zen5: NT moves start from 3/4 of L3 */
         return (int) (COMPUTE_NT_MOV_THRESHOLD(l3_bytes) >> 20);
     }

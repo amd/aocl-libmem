@@ -32,6 +32,9 @@
 #define AMD_ZEN_CPU_RESOLVER(func) \
     __builtin_cpu_init(); \
     do { \
+        /* TODO: uncomment when GCC 16 support is enabled */ \
+        /* if (__builtin_cpu_is("znver6")) */ \
+        /*     return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); */ \
         if (__builtin_cpu_is("znver5")) \
             return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5); \
         if (__builtin_cpu_is("znver4")) \
@@ -45,9 +48,7 @@
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system); \
     } while (0)
 
-
-#else //Compilers that do not detect the latest architecture: 'znver5'
-
+#else // Compilers that do not detect the latest architecture: 'znver6'
 #define AMD_ZEN_CPU_RESOLVER(func) \
    do { \
     uint32_t eax= 0x7;        \
@@ -59,6 +60,8 @@
      :"0"(eax), "2"(ecx) ); \
     if (ebx & AVX512_MASK)   \
     {       \
+         if (edx & AVX512_FP16_MASK) \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); \
          if (ecx & MOVDIRI_MASK) \
             return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5); \
          return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen4); \

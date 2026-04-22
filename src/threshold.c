@@ -50,10 +50,11 @@ static inline void compute_sys_thresholds(cpu_info *zen_info)
         zen_info->zen_thresholds.repstore_start_threshold = 0;
         zen_info->zen_thresholds.repstore_stop_threshold = 0;
     }
-    // Zen5
-    if (zen_info->zen_cpu_features.movdiri == ENABLED)
+    // Zen5/Zen6
+    if (zen_info->zen_cpu_features.movdiri == ENABLED ||
+        zen_info->zen_cpu_features.avx512_fp16 == ENABLED) // TODO: Check for zen6 thresholds 
         zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_THRESHOLD_ZEN5(zen_info->zen_cache_info.l3_per_ccx);
-    // ZEN4 and earlier (NT stores start from 3/4 of L3 cache)
+    // Zen4 and earlier (NT stores start from 3/4 of L3 cache)
     else
         zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_MOV_THRESHOLD(zen_info->zen_cache_info.l3_per_ccx);
     zen_info->zen_thresholds.nt_stop_threshold = -1;

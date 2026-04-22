@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern void * __memchr_zen2(const void *, int, size_t);
 HIDDEN_SYMBOL extern void * __memchr_zen3(const void *, int, size_t);
 HIDDEN_SYMBOL extern void * __memchr_zen4(const void *, int, size_t);
 HIDDEN_SYMBOL extern void * __memchr_zen5(const void *, int, size_t);
+HIDDEN_SYMBOL extern void * __memchr_zen6(const void *, int, size_t);
 
 //System solution which takes in system config and  threshold values.
 HIDDEN_SYMBOL extern void * __memchr_system(const void *, int, size_t);

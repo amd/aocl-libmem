@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern void * __memset_zen2(void *mem,int val, size_t size);
 HIDDEN_SYMBOL extern void * __memset_zen3(void *mem,int val, size_t size);
 HIDDEN_SYMBOL extern void * __memset_zen4(void *mem,int val, size_t size);
 HIDDEN_SYMBOL extern void * __memset_zen5(void *mem,int val, size_t size);
+HIDDEN_SYMBOL extern void * __memset_zen6(void *mem, int val, size_t size);
 
 //System solution which takes in system config and  threshold values.
 HIDDEN_SYMBOL extern void * __memset_system(void *mem,int val, size_t size);

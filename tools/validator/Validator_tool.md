@@ -138,7 +138,7 @@ The following test categories are supported:
 - Shift testing (Tests for standard sizes)  [8B,16B,32B...32MB]
 - Alignment testing (Modifies the src and dst alignment)  [1B-4KB]   src [0-63]   dst [0-63]
 - Threshold testing (AMD-specific) for L2/NT boundaries
-- ZEN5 aligned vector threshold testing (when applicable)
+- ZEN5/ZEN6 aligned vector threshold testing (when applicable)
 
 ### Report Description
   - ctest validation report will be stored in this PATH
@@ -162,7 +162,7 @@ $ ctest -R <Matching test regex> -E <Exclude regex> -j [<jobs>]
               "shift"                                 (Runs Shift test cases on all the functions)
               "align"                                 (Runs Alignment test cases on all the functions)
               "threshold"                             (Runs threshold specific test cases based on L2 and threshold_nt values)
-              "aligned_vector"                        (Runs ZEN5 specific aligned vector threshold checks)
+              "aligned_vector"                        (Runs ZEN5/ZEN6 specific aligned vector threshold checks)
               "function_MODE"                         (Runs the specified MODE:iter,shift,align, and threshold on the input function)
 
 jobs:         Optional parameter for maximum no. of concurrent processes to be used. [0...$(nproc)]
@@ -329,7 +329,7 @@ The following test categories are supported:
 - Shift testing (Tests for standard sizes)  [1B,2B,4B...32MB]
 - Alignment testing (Modifies the src and dst alignment)  [0B-4KB]   src [0-63]   dst [0-63]
 - Threshold testing (AMD-specific) for L2/NT boundaries
-- ZEN5 aligned vector threshold testing (when applicable)
+- ZEN5/ZEN6 aligned vector threshold testing (when applicable)
 
 ### Examples
 

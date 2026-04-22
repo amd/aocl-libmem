@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern char * __strcpy_zen2(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcpy_zen3(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcpy_zen4(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcpy_zen5(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcpy_zen6(char *, const char *);
 
 //System solution which takes in system config.
 HIDDEN_SYMBOL extern char * __strcpy_system(char *,const char *);

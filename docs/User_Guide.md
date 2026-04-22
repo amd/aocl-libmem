@@ -31,7 +31,7 @@ functions:
 -  strspn
 -  strchr
 
-`Note:` _Behavior might be undefined if AVX512 is disabled in the BIOS configuration on the Zen5 platform.._
+`Note:` _Behavior might be undefined if AVX512 is disabled in the BIOS configuration on the Zen4+ platform._
 
 ## 1. Building AOCL-LibMem for Linux
 Refer to the [BUILD_RUN.md](../BUILD_RUN.md)

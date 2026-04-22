@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern int __memcmp_zen2(const void *mem1,const void *mem2, size_t
 HIDDEN_SYMBOL extern int __memcmp_zen3(const void *mem1,const void *mem2, size_t size);
 HIDDEN_SYMBOL extern int __memcmp_zen4(const void *mem1,const void *mem2, size_t size);
 HIDDEN_SYMBOL extern int __memcmp_zen5(const void *mem1,const void *mem2, size_t size);
+HIDDEN_SYMBOL extern int __memcmp_zen6(const void *mem1, const void *mem2, size_t size);
 
 //System solution which takes in system config and  threshold values.
 HIDDEN_SYMBOL extern int __memcmp_system(const void *mem1,const void *mem2, size_t size);

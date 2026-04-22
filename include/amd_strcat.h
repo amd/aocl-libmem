@@ -38,6 +38,7 @@ HIDDEN_SYMBOL extern char * __strcat_zen2(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcat_zen3(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcat_zen4(char *,const char *);
 HIDDEN_SYMBOL extern char * __strcat_zen5(char *,const char *);
+HIDDEN_SYMBOL extern char * __strcat_zen6(char *, const char *);
 
 //System solution which takes in system config.
 HIDDEN_SYMBOL extern char * __strcat_system(char *,const char *);

@@ -217,6 +217,7 @@ enable_testing()
 
 set(AMD_CPU 1)
 set(ARCH_ZEN5 5)
+set(ARCH_ZEN6 6)
 set(CPU_DETECT_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
 
@@ -234,7 +235,9 @@ if (HAS_AVX512)
     target_compile_definitions(libmem_validator PRIVATE AVX512_FEATURE_ENABLED)
     try_run(ARCH_VER COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
     COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "arch")
-    if (${ARCH_VER} MATCHES ${ARCH_ZEN5})
+    if (${ARCH_VER} MATCHES ${ARCH_ZEN6})
+        SET(ARCH "ZEN6")
+    elseif (${ARCH_VER} MATCHES ${ARCH_ZEN5})
         SET(ARCH "ZEN5")
     endif()
 else()
@@ -312,9 +315,9 @@ if(CPU STREQUAL "AMD")
 
     message(STATUS "AMD threshold tests added: L2 and NT thresholds")
 
-    # ZEN5-SPECIFIC THRESHOLD TESTING
-    if(ARCH STREQUAL "ZEN5")
-        message(STATUS "Adding ZEN5-specific threshold tests")
+    # ZEN5/ZEN6-SPECIFIC THRESHOLD TESTING
+    if(ARCH STREQUAL "ZEN5" OR ARCH STREQUAL "ZEN6")
+        message(STATUS "Adding ${ARCH}-specific threshold tests")
 
         try_run(ALIGNED_VEC_CPY_TH_KB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
         COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "aligned_vec_cpy_threshold")
@@ -334,7 +337,7 @@ if(CPU STREQUAL "AMD")
         generate_threshold_values(ZEN5_NT_SIZES ${ZEN5_NT_TH} ${TH_RANGE} "${OFFSET_VALUES}")
         add_dual_validator_tests("threshold_nt" "${store_func}" "${ZEN5_NT_SIZES}" 0 0 1)
 
-        message(STATUS "ZEN5-specific threshold tests added")
+        message(STATUS "${ARCH}-specific threshold tests added")
     endif()
 
 endif()

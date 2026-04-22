@@ -39,7 +39,12 @@ static inline cpu_variant_idx libmem_cpu_resolver(void)
     // Zen4 and above cpu detection
     if (zen_info.zen_cpu_features.avx512 == ENABLED)
     {
-        if (zen_info.zen_cpu_features.movdiri == ENABLED)// Zen5
+        if (zen_info.zen_cpu_features.avx512_fp16 == ENABLED) // Zen6
+        {
+            cpu_var_idx = ARCH_ZEN6;
+            LOG_INFO("Detected CPU uArch: Zen6\n");
+        }
+        else if (zen_info.zen_cpu_features.movdiri == ENABLED) // Zen5
         {
             cpu_var_idx = ARCH_ZEN5;
             LOG_INFO("Detected CPU uArch: Zen5\n");

@@ -74,10 +74,10 @@ option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
 
 option(ALMEM_GCOV "Enable Code Coverage" OFF)
 
-set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5). Leave empty for auto-detection.")
+set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5, zen6). Leave empty for auto-detection.")
 # Define supported Zen version range
 set(MIN_ZEN_VER 1)
-set(MAX_ZEN_VER 5)
+set(MAX_ZEN_VER 6)
 
 
 option(ALMEM_STRICT_BOUNDS "Enable strict-bounds variant (masked loads only)" OFF)
