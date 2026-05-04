@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -22,9 +22,21 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+cmake_minimum_required(VERSION 3.10)
 
+project(aocl_libmem_profiler VERSION 1.0 LANGUAGES C CXX)
+
+# Copy documentation to build tree
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/profiler.md
-DESTINATION ${CMAKE_BINARY_DIR}/tools/analyser/)
+     DESTINATION ${CMAKE_BINARY_DIR}/tools/analyser/)
 
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/prof_libmem.py
- DESTINATION ${CMAKE_BINARY_DIR}/tools/analyser/)
+# =============================================================================
+# C++ profiler build — only configured when ALMEM_TOOLS is ON.
+# Enable with:  cmake -DALMEM_TOOLS=ON -B build
+# Build with:   cd build && make tools
+# =============================================================================
+option(ALMEM_TOOLS "Enable building analyser tools (profiler). Requires clang, xxd." OFF)
+
+if(ALMEM_TOOLS)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/profiler_build.cmake)
+endif()

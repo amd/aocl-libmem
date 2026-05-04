@@ -29,6 +29,14 @@ add_subdirectory(analyser)
 add_subdirectory(validator)
 add_subdirectory(graph_generator)
 
+# Top-level "tools" target: build all tool binaries with `make tools`
+if(ALMEM_TOOLS)
+    add_custom_target(tools
+        DEPENDS prof_libmem profiler_test
+        COMMENT "Building all AOCL-LibMem tools (profiler, test suite)"
+    )
+endif()
+
 # generating a file to parse the library path for tools
 file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'\n")
 file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_ARCHIVE_PATH='${CMAKE_INSTALL_PREFIX}/lib'\n")
@@ -45,4 +53,3 @@ endif()
 
 # Append the AVX512_FEATURE_ENABLED variable to the libmem_defs script
 file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "AVX512_FEATURE_ENABLED = ${AVX512_FEATURE_ENABLED}\n")
-
