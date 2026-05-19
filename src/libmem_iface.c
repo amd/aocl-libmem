@@ -98,9 +98,19 @@ __attribute__((visibility("default"))) amd_strlen_fn _strlen_variant  = __strlen
 LIBMEM_FN_MAP(strlen);
 WEAK_ALIAS(strlen, MK_FN_NAME(strlen));
 
+__attribute__((visibility("default"))) amd_strnlen_fn _strnlen_variant  = __strnlen_system;
+// strnlen mapping
+LIBMEM_FN_MAP(strnlen);
+WEAK_ALIAS(strnlen, MK_FN_NAME(strnlen));
+
 __attribute__((visibility("default"))) amd_strchr_fn _strchr_variant  = __strchr_system;
 // strchr mapping
 LIBMEM_FN_MAP(strchr);
 WEAK_ALIAS(strchr, MK_FN_NAME(strchr));
+
+__attribute__((visibility("default"))) amd_strspn_fn _strspn_variant = __strspn_system;
+// strspn mapping
+LIBMEM_FN_MAP(strspn);
+WEAK_ALIAS(strspn, MK_FN_NAME(strspn));
 
 #endif

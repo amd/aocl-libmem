@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -27,16 +27,57 @@
 #define _THRESHOLD_H_
 
 #include "zen_cpu_info.h"
+
+/*
+ * Threshold computation macros
+ *
+ * These macros define the formulas for computing size thresholds where the
+ * library switches between optimization strategies. Used by threshold.c
+ * (library runtime) and detect_cpu_info.c (build-time test generation) to
+ * keep thresholds in sync.
+ *
+ * Terminology:
+ *   NT moves  - non-temporal load+store (memcpy, memmove)
+ *   NT stores - non-temporal store-only  (memset)
+ */
+
+/*
+ * Pre-Zen5 non-temporal moves threshold = 3/4 of L3 cache.
+ * Above this size, memcpy/memmove switch to NT moves.
+ */
+#define COMPUTE_NT_MOV_THRESHOLD(l3_bytes) (((l3_bytes) >> 2) * 3)
+
+/*
+ * Zen5 non-temporal threshold = L3 cache.
+ * Above this size, both NT moves (memcpy/memmove) and
+ * NT stores (memset) are used.
+ */
+#define COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) (l3_bytes)
+
+/*
+ * Zen5 aligned vector move threshold = L1D/2 + 2KB.
+ * Below this size, memcpy/memmove use aligned vector loads+stores.
+ * Above, they switch to rep-movs (ERMS).
+ */
+#define COMPUTE_ALIGNED_VEC_MOV_TH(l1d_bytes) (((l1d_bytes) >> 1) + 2048)
+
+/*
+ * Zen5 aligned vector store threshold = L1D.
+ * Below this size, memset uses temporal aligned vector stores.
+ * Above, it switches to rep-stores (ERMS).
+ */
+#define COMPUTE_ALIGNED_VEC_STORE_TH(l1d_bytes) (l1d_bytes)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Instruction spcific thresholds.
+/* Instruction-specific thresholds */
 extern uint64_t __repmov_start_threshold;
 extern uint64_t __repmov_stop_threshold;
 extern uint64_t __repstore_start_threshold;
 extern uint64_t __repstore_stop_threshold;
-extern uint64_t  __nt_start_threshold;
+extern uint64_t __nt_start_threshold;
 extern uint64_t __nt_stop_threshold;
 
 #ifdef __cplusplus

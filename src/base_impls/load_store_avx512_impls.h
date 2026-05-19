@@ -165,6 +165,58 @@ static inline void * __load_store_ble_2zmm_vec_overlap(void *store_addr,
     return store_addr;
 }
 
+/*
+ * Head-tail copy for sizes 0-63B using nested if branching optimized
+ * for branch prediction. Handles all sub-ZMM sizes.
+ */
+static inline void *__load_store_ble_zmm_vec_head_tail(void *store_addr,
+            const void *load_addr, size_t size)
+{
+    if (size >= XMM_SZ)
+    {
+        if (size < YMM_SZ)
+        {
+            VEC_2X_LOAD_STORE_HEAD_TAIL(SSE2, UNALIGNED, UNALIGNED)
+        }
+        else
+        {
+            VEC_2X_LOAD_STORE_HEAD_TAIL(AVX2, UNALIGNED, UNALIGNED)
+        }
+        return store_addr;
+    }
+    if (size >= QWORD_SZ)
+    {
+        uint64_t q0 = *(const uint64_t *)(load_addr);
+        uint64_t q1 = *(const uint64_t *)(load_addr + size - QWORD_SZ);
+        ALM_MEM_BARRIER();
+        *(uint64_t *)(store_addr) = q0;
+        *(uint64_t *)(store_addr + size - QWORD_SZ) = q1;
+        return store_addr;
+    }
+    if (size >= DWORD_SZ)
+    {
+        uint32_t d0 = *(const uint32_t *)(load_addr);
+        uint32_t d1 = *(const uint32_t *)(load_addr + size - DWORD_SZ);
+        ALM_MEM_BARRIER();
+        *(uint32_t *)(store_addr) = d0;
+        *(uint32_t *)(store_addr + size - DWORD_SZ) = d1;
+        return store_addr;
+    }
+    if (size >= WORD_SZ)
+    {
+        uint16_t w0 = *(const uint16_t *)(load_addr);
+        uint16_t w1 = *(const uint16_t *)(load_addr + size - WORD_SZ);
+        ALM_MEM_BARRIER();
+        *(uint16_t *)(store_addr) = w0;
+        *(uint16_t *)(store_addr + size - WORD_SZ) = w1;
+    }
+    else if (size)
+    {
+        *(uint8_t *)(store_addr) = *(const uint8_t *)(load_addr);
+    }
+    return store_addr;
+}
+
 
 static inline void __load_store_zmm_vec(void *store_addr,
             const void *load_addr, size_t offset)

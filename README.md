@@ -18,10 +18,12 @@ This release of AOCL-LibMem library supports the following functions:
 + strcmp
 + strncmp
 + strlen
++ strnlen
 + strcat
-+ strstr
-+ strchr
 + strncat
++ strstr
++ strspn
++ strchr
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:
@@ -29,6 +31,8 @@ INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:
 After downloading the latest stable release from the git repository, https://github.com/amd/aocl-libmem, follow the steps from the BUILD_RUN.md, to configure and build it for  all released AMD Zen CPU architecutres.
 
 `Note:` _Binaries can be built based on the cpu ISA features: AVX2 and AVX512 with help of Cmake flag: ALMEM_ARCH. It is recommended not to load/run the AVX512 library on a non-AVX512 machine as it will lead to crash due to unsupported instructions._
+
+`Note:` _By default, the library uses page-boundary-safe unmasked vector loads for small sizes to maximize throughput (the same technique used by glibc). A **strict-bounds build variant** is available via the `ALMEM_STRICT_BOUNDS=Y` CMake option, which enforces masked loads that never load beyond the caller-specified buffer size. See [BUILD_RUN.md](BUILD_RUN.md) for details._
 
 `Note:` _IFUNC may only be compatible with the most recent compiler toolchains to manage runtime dependencies effectively._
 

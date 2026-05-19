@@ -30,6 +30,8 @@ install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/fbm.py
  DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gbm.py
  DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/dcperf.py
+ DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/GetParser.py
  DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/)
 
@@ -40,4 +42,8 @@ install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gbench/gbench.cpp
 # Below source files will be built along the fetched Tinymem bench Source
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/tinybench/tbm.patch
  DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external/tinybench)
+
+# Copy DCPerf patch file
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wdl_bench_memcpy_memset_only.patch
+ DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/external)
 

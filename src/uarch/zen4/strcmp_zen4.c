@@ -1,4 +1,4 @@
-/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -29,222 +29,213 @@
 #include <immintrin.h>
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
-#include "../../isa/avx2/optimized/strcmp_avx2.c"
+#include "../../base_impls/load_compare_impls.h"
 
+/* Zen4-optimized strcmp/strncmp using AVX-512. */
+#ifdef STRNCMP
+static inline int __attribute__((flatten)) _strncmp_zen4(const char *str1, const char *str2, size_t size)
+#else
 HIDDEN_SYMBOL int __attribute__((flatten)) __strcmp_zen4(const char *str1, const char *str2)
+#endif
 {
     LOG_INFO("\n");
+#ifdef STRNCMP
+    if (unlikely(size == 0))
+        return 0;
+#endif
+
     size_t offset1, offset2, offset;
-    uint64_t  cmp_idx, ret;
-    __m256i y0, y1, y2, y3, y4, y_cmp, y_null;
+    uint64_t cmp_idx, ret;
+    __m512i z1, z2, z_mask;
 
-    y0 = _mm256_setzero_si256();
+    size_t dist1 = PAGE_SZ - ((uintptr_t)str1 & (PAGE_SZ - 1));
+    size_t dist2 = PAGE_SZ - ((uintptr_t)str2 & (PAGE_SZ - 1));
+    size_t safe = (dist1 < dist2) ? dist1 : dist2;
 
-    // Handle cases where start of either of the string is close to the end of a memory page
-    if (unlikely(((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & ((uintptr_t)str1 | (uintptr_t)str2)))))
+    if (likely(safe >= ZMM_SZ))
     {
+        z1 = _mm512_loadu_si512(str1);
+        z2 = _mm512_loadu_si512(str2);
+        ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+        if (ret)
+        {
+            cmp_idx = _tzcnt_u64(ret);
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
+            return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
+        }
+#ifdef STRNCMP
+        if (size <= ZMM_SZ)
+            return 0;
+#endif
+
         offset1 = (uintptr_t)str1 & (ZMM_SZ - 1);
         offset2 = (uintptr_t)str2 & (ZMM_SZ - 1);
         offset = (offset1 >= offset2) ? offset1 : offset2;
-
-        if (offset < YMM_SZ)
-        {
-            y1 =  _mm256_loadu_si256((void *)str1);
-            y2 =  _mm256_loadu_si256((void *)str2);
-            y_cmp = _mm256_cmpeq_epi8(y1, y2);
-            y_null = _mm256_cmpgt_epi8(y1, y0);
-            ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
-            if (ret)
-            {
-                cmp_idx = _tzcnt_u32(ret);
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-            cmp_idx = _strcmp_ble_ymm(str1 + YMM_SZ, str2 + YMM_SZ, YMM_SZ - offset);
-            if (cmp_idx != YMM_SZ)
-            {
-                cmp_idx += YMM_SZ;
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-        }
-        else
-        {
-            cmp_idx = _strcmp_ble_ymm(str1, str2, (ZMM_SZ) - offset);
-            if (cmp_idx != YMM_SZ)
-            {
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-        }
     }
-    // If the strings are not close to the end of a memory page, check the first 64 bytes
     else
     {
-        y1 =  _mm256_loadu_si256((void *)str1);
-        y2 =  _mm256_loadu_si256((void *)str2);
-        y_cmp = _mm256_cmpeq_epi8(y1, y2);
-        y_null = _mm256_cmpgt_epi8(y1, y0);
-        ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
-        if (ret)
-        {
-            cmp_idx = _tzcnt_u32(ret);
-            return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-        }
+        z_mask = _mm512_set1_epi8((char)0xff);
+        __mmask64 mask = _bzhi_u64(UINT64_MAX, safe);
 
-        y3 =  _mm256_loadu_si256((void *)str1 + YMM_SZ);
-        y4 =  _mm256_loadu_si256((void *)str2 + YMM_SZ);
-        y_cmp = _mm256_cmpeq_epi8(y3, y4);
-        y_null = _mm256_cmpgt_epi8(y3, y0);
-        ret = _mm256_movemask_epi8(_mm256_and_si256(y_cmp, y_null)) + 1;
+        z1 = _mm512_mask_loadu_epi8(z_mask, mask, str1);
+        z2 = _mm512_mask_loadu_epi8(z_mask, mask, str2);
+        ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
         if (ret)
         {
-            cmp_idx = _tzcnt_u32(ret) + YMM_SZ;
+            cmp_idx = _tzcnt_u64(ret);
+#ifdef STRNCMP
+            if (cmp_idx >= size)
+                return 0;
+#endif
             return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
         }
+#ifdef STRNCMP
+        if (size <= safe)
+            return 0;
+#endif
+
         offset1 = (uintptr_t)str1 & (ZMM_SZ - 1);
         offset2 = (uintptr_t)str2 & (ZMM_SZ - 1);
         offset = (offset1 >= offset2) ? offset1 : offset2;
     }
-    // Adjust the offset to align with cache line for the next load operation
+
     offset = ZMM_SZ - offset;
 
-    __m512i z0, z1, z2, z3, z4, z_mask;
-    z0 = _mm512_setzero_epi32 ();
-
-    // Alignement of both the strings is same
-    if (offset1 == offset2)
+    /*
+     * Aligned case: 3x entry ramp then unified 4x reduction.
+     */
+    if (unlikely(offset1 == offset2))
     {
-        // Adjust the offset to align with cache line for the next load operation
-        while (1)
+#ifdef STRNCMP
+        if (offset + 3 * ZMM_SZ <= size)
+#endif
         {
-            // Load 64 bytes from each string and compare till we find diff/null
             z1 = _mm512_load_si512(str1 + offset);
             z2 = _mm512_load_si512(str2 + offset);
-            //Check for NULL
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-            if (!ret)
-            {
-                offset += ZMM_SZ;
-                z3 = _mm512_load_si512(str1 + offset);
-                z4 = _mm512_load_si512(str2 + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                if (!ret)
-                {
-                    offset += ZMM_SZ;
-                    z1 = _mm512_load_si512(str1 + offset);
-                    z2 = _mm512_load_si512(str2 + offset);
-                    //Check for NULL
-                    ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                    if (!ret)
-                    {
-                        offset += ZMM_SZ;
-                        z3 = _mm512_load_si512(str1 + offset);
-                        z4 = _mm512_load_si512(str2 + offset);
-                        //Check for NULL
-                        ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                    }
-                }
-            }
+            ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
             if (ret)
-                break;
+                goto return_val;
+            offset += ZMM_SZ;
+
+            z1 = _mm512_load_si512(str1 + offset);
+            z2 = _mm512_load_si512(str2 + offset);
+            ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+            if (ret)
+                goto return_val;
+            offset += ZMM_SZ;
+
+            z1 = _mm512_load_si512(str1 + offset);
+            z2 = _mm512_load_si512(str2 + offset);
+            ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+            if (ret)
+                goto return_val;
             offset += ZMM_SZ;
         }
-    }
-    // Handle the case where alignments of the strings are different
-    else
-    {
-        char *aligned_str, *unaligned_str;
-        if ((((uintptr_t)str1 + offset) & (ZMM_SZ - 1)) == 0)
-        {
-            aligned_str = (char *)str1;
-            unaligned_str = (char *)str2;
-        }
-        else
-        {
-            aligned_str = (char *)str2;
-            unaligned_str = (char *)str1;
-        }
 
-        uint16_t vecs_in_page  = (PAGE_SZ - ((PAGE_SZ - 1) & ((uintptr_t)unaligned_str + offset))) >> 6;
+#ifdef STRNCMP
+        while (offset < size)
+#else
         while (1)
+#endif
         {
-            while (vecs_in_page >= 4)
+            uint16_t v1 = PAGE_SAFE_VECS(str1 + offset);
+            uint16_t v2 = PAGE_SAFE_VECS(str2 + offset);
+            uint16_t vecs = (v1 < v2) ? v1 : v2;
+
             {
-                _mm_prefetch(str1 + offset + 4 * ZMM_SZ, _MM_HINT_NTA);
-                _mm_prefetch(str2 + offset + 4 * ZMM_SZ, _MM_HINT_NTA);
-                z1 = _mm512_load_si512(aligned_str + offset);
-                z2 = _mm512_loadu_si512(unaligned_str + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                if (!ret)
-                {
-                    offset += ZMM_SZ;
-                    z3 = _mm512_load_si512(aligned_str + offset);
-                    z4 = _mm512_loadu_si512(unaligned_str + offset);
-                    //Check for NULL
-                    ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                    if (!ret)
+                size_t n4 = vecs >> 2;
+                if (n4)
+                    do
                     {
-                        offset += ZMM_SZ;
-                        z1 = _mm512_load_si512(aligned_str + offset);
-                        z2 = _mm512_loadu_si512(unaligned_str + offset);
-                        //Check for NULL
-                        ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-                        if (!ret)
-                        {
-                            offset += ZMM_SZ;
-                            z3 = _mm512_load_si512(aligned_str + offset);
-                            z4 = _mm512_loadu_si512(unaligned_str + offset);
-                            //Check for NULL
-                            ret = _mm512_cmpeq_epu8_mask(z3, z0) | _mm512_cmpneq_epu8_mask(z3, z4);
-                            if (!ret)
-                            {
-                                offset += ZMM_SZ;
-                                vecs_in_page -= 4;
-                                continue;
-                            }
-                        }
-                    }
-                }
-                cmp_idx = _tzcnt_u64(ret) + offset;
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-            while (vecs_in_page--)
-            {
-                _mm_prefetch(str1 + offset + ZMM_SZ, _MM_HINT_NTA);
-                _mm_prefetch(str2 + offset + ZMM_SZ, _MM_HINT_NTA);
-                z1 = _mm512_load_si512(aligned_str + offset);
-                z2 = _mm512_loadu_si512(unaligned_str + offset);
-                //Check for NULL
-                ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
+                        VEC_4X_LOAD_COMPARE_REDUCE(AVX512, ALIGNED)
+                    } while (!ret && --n4);
                 if (ret)
-                {
-                    cmp_idx = _tzcnt_u64(ret) + offset;
-                    return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-                }
+                    goto return_val;
+                vecs &= 3;
+            }
+
+            while (vecs--)
+            {
+                z1 = _mm512_load_si512(str1 + offset);
+                z2 = _mm512_load_si512(str2 + offset);
+                ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+                if (ret)
+                    goto return_val;
                 offset += ZMM_SZ;
             }
-            // Handle the case where we are crossing a page boundary for the unaligned string
-            z_mask = _mm512_set1_epi8(0xff);
-            uint64_t mask = UINT64_MAX >> ((uintptr_t)(unaligned_str + offset)& (ZMM_SZ - 1));
-
-            z1 =  _mm512_mask_loadu_epi8(z_mask, mask, aligned_str + offset);
-            z2 =  _mm512_mask_loadu_epi8(z_mask, mask, unaligned_str + offset);
-
-            ret = _mm512_cmpeq_epu8_mask(z1, z0) | _mm512_cmpneq_epu8_mask(z1,z2);
-
-            if (ret)
-            {
-                cmp_idx = _tzcnt_u64(ret) + offset;
-                return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
-            }
-            vecs_in_page  += PAGE_SZ / ZMM_SZ;
-        } //end of top level while
+        }
+#ifdef STRNCMP
+        return 0;
+#endif
     }
+    /* Unaligned path */
+    else
+    {
+#ifdef STRNCMP
+        while (offset < size)
+#else
+        while (1)
+#endif
+        {
+            uint16_t s1 = PAGE_SAFE_VECS_BYTES(str1 + offset);
+            uint16_t s2 = PAGE_SAFE_VECS_BYTES(str2 + offset);
+            uint16_t safe_bytes = (s1 < s2) ? s1 : s2;
+            uint16_t vecs = safe_bytes >> 6;
+
+            if (unlikely(vecs == 0))
+            {
+                z_mask = _mm512_set1_epi8((char)0xff);
+                __mmask64 mask = _bzhi_u64(UINT64_MAX, safe_bytes);
+                z1 = _mm512_mask_loadu_epi8(z_mask, mask, str1 + offset);
+                z2 = _mm512_mask_loadu_epi8(z_mask, mask, str2 + offset);
+                ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+                if (ret)
+                    goto return_val;
+                offset += safe_bytes;
+                continue;
+            }
+
+            {
+                size_t n4 = vecs >> 2;
+                if (n4)
+                    do
+                    {
+                        VEC_4X_LOAD_COMPARE_REDUCE(AVX512, UNALIGNED)
+                    } while (!ret && --n4);
+                if (ret)
+                    goto return_val;
+                vecs &= 3;
+            }
+
+            while (vecs--)
+            {
+                z1 = _mm512_loadu_si512(str1 + offset);
+                z2 = _mm512_loadu_si512(str2 + offset);
+                ret = _mm512_testn_epi8_mask(z1, z1) | _mm512_cmpneq_epu8_mask(z1, z2);
+                if (ret)
+                    goto return_val;
+                offset += ZMM_SZ;
+            }
+        }
+#ifdef STRNCMP
+        return 0;
+#endif
+    }
+
+return_val:
     cmp_idx = _tzcnt_u64(ret) + offset;
+#ifdef STRNCMP
+    if (cmp_idx >= size)
+        return 0;
+#endif
     return (unsigned char)str1[cmp_idx] - (unsigned char)str2[cmp_idx];
 }
 
+#ifndef STRNCMP
 #ifndef ALMEM_DYN_DISPATCH
-int strcmp(const char *, const char *) __attribute__((weak,
-                        alias("__strcmp_zen4")));
+int strcmp(const char *, const char *) __attribute__((weak, alias("__strcmp_zen4")));
+#endif
 #endif

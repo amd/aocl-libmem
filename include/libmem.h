@@ -46,7 +46,9 @@ typedef enum{
     STRNCAT,
     STRSTR,
     STRLEN,
+    STRNLEN,
     STRCHR,
+    STRSPN,
     FUNC_COUNT,
     TUN_FUNC_COUNT = MEMCMP + 1
 }func_index;
@@ -180,7 +182,9 @@ HIDDEN_SYMBOL func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
     add_cpu_func_variants(strncat),
     add_cpu_func_variants(strstr),
     add_cpu_func_variants(strlen),
+    add_cpu_func_variants(strnlen),
     add_cpu_func_variants(strchr),
+    add_cpu_func_variants(strspn),
 };
 
 

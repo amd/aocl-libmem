@@ -1010,7 +1010,7 @@ static inline void strcpy_validator(size_t size, uint32_t str2_alnmnt,\
     {
         *(str1_alnd_addr + index) = 'a' + (char)(rand() % LOWER_CHARS);
     }
-    //Appending Null Charachter at the end of str1 string
+    // Appending Null character at the end of str1 string
     *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
     ret = strcpy((char *)str2_alnd_addr, (char *)str1_alnd_addr);
 
@@ -1141,9 +1141,8 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
     if (boundary_check(str2_alnd_addr, size))
         printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
-
-    //CASE 2:validation when index of NULL char is equal to strlen
-    //Appending Null Charachter at the end of str1 string
+    // CASE 2:validation when index of NULL char is equal to strlen
+    // Appending Null character at the end of str1 string
     *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
 
     //Passing the size including the NULL char(size+1)
@@ -1322,7 +1321,8 @@ static inline void strcmp_validator(size_t size, uint32_t str2_alnmnt,\
     {
         *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
     }
-    //Appending Null Charachter at the end of str1 and str2
+
+    //Appending Null character at the end of str1 and str2
     *(str1_alnd_addr + size - 1) = *(str2_alnd_addr + size - 1) = NULL_TERM_CHAR;
     ret = strcmp((char *)str2_alnd_addr, (char *)str1_alnd_addr);
 
@@ -1497,7 +1497,7 @@ static inline void strncmp_validator(size_t size, uint32_t str2_alnmnt,\
     {
         *(str1_alnd_addr + index) = *(str2_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
     }
-    //Appending Null Charachter at the end of str1 and str2
+    //Appending Null character at the end of str1 and str2
     *(str1_alnd_addr + size - 1) = *(str2_alnd_addr + size - 1) = NULL_TERM_CHAR;
     ret = strncmp((char *)str2_alnd_addr, (char *)str1_alnd_addr, size);
 
@@ -1744,8 +1744,8 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt __attribut
     {
         *(str_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
     }
-    //Appending Null Charachter at the end of str
-    *(str_alnd_addr + size ) = NULL_TERM_CHAR;
+    //Appending Null character at the end of str
+    *(str_alnd_addr + size) = NULL_TERM_CHAR;
 
     //Adding Additional NULL char after size
     *(str_alnd_addr + size + rand() % 8 ) = NULL_TERM_CHAR;
@@ -1774,6 +1774,127 @@ static inline void strlen_validator(size_t size, uint32_t str2_alnmnt __attribut
         ret = strlen((char *)str_alnd_addr);
         if (ret != size) {
             printf("ERROR:[PAGE-CROSS] failure for str1_aln:%u size: %lu\n", str1_alnmnt, size);
+        }
+
+        cleanup_page_cross_buffer(page_buff, page_cnt);
+    }
+    free(buff);
+}
+
+static inline void strnlen_validator(size_t size, uint32_t str2_alnmnt __attribute__((unused)),\
+                                                 uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str_alnd_addr = NULL;
+    size_t index;
+    size_t ret = 0;
+    size_t maxlen;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + 1, DEFAULT);
+
+    if (buff == NULL)
+    {
+        printf("[ERROR] Failed to allocate memory\n");
+        exit(-1);
+    }
+
+    str_alnd_addr = buff_tail + str1_alnmnt;
+
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
+    }
+
+    //Appending Null character at the end of str
+    *(str_alnd_addr + size) = NULL_TERM_CHAR;
+
+    // Test case 1: maxlen > strlen (should return strlen)
+    maxlen = size + 1 + (rand() % 100);
+    ret = strnlen((char *) str_alnd_addr, maxlen);
+
+    if (ret != size)
+    {
+        printf("ERROR:[VALIDATION] (maxlen > strlen) failure for str1_aln:%u size: %lu,"\
+                                    " maxlen: %lu, return_value = %lu\n",str1_alnmnt, size, maxlen, ret);
+    }
+    else
+    {
+        ALM_VERBOSE_LOG("[maxlen > strlen] Validation passed for strnlen: size=%lu, maxlen=%lu\n", size, maxlen);
+    }
+
+    // Test case 2: maxlen < strlen (should return maxlen)
+    if (size > 1)
+    {
+        maxlen = size / 2;
+        ret = strnlen((char *)str_alnd_addr, maxlen);
+
+        if (ret != maxlen)
+        {
+            printf("ERROR:[VALIDATION] (maxlen < strlen) failure for str1_aln:%u size: %lu,"\
+                                        " maxlen: %lu, return_value = %lu\n",str1_alnmnt, size, maxlen, ret);
+        }
+        else
+        {
+            ALM_VERBOSE_LOG("[maxlen < strlen] Validation passed for strnlen: size=%lu, maxlen=%lu\n", size, maxlen);
+        }
+    }
+
+    // Test case 3: maxlen == strlen (should return strlen)
+    maxlen = size;
+    ret = strnlen((char *)str_alnd_addr, maxlen);
+
+    if (ret != size)
+    {
+        printf("ERROR:[VALIDATION] (maxlen == strlen) failure for str1_aln:%u size: %lu,"\
+                                    " maxlen: %lu, return_value = %lu\n",str1_alnmnt, size, maxlen, ret);
+    }
+    else
+    {
+        ALM_VERBOSE_LOG("[maxlen == strlen] Validation passed for strnlen: size=%lu, maxlen=%lu\n", size, maxlen);
+    }
+
+    // Test case 4: maxlen == 0 (should return 0)
+    maxlen = 0;
+    ret = strnlen((char *)str_alnd_addr, maxlen);
+
+    if (ret != 0)
+    {
+        printf("ERROR:[VALIDATION] (maxlen == 0) failure for str1_aln:%u size: %lu,"\
+                                    " return_value = %lu (expected 0)\n",str1_alnmnt, size, ret);
+    }
+    else
+    {
+        ALM_VERBOSE_LOG("[maxlen == 0] Validation passed for strnlen: size=%lu\n", size);
+    }
+
+    // Robust page-cross check: Only if string does NOT cross last boundary vector
+    // This identifies good candidates for page-cross testing
+    void *page_buff;
+    uint32_t page_cnt;
+
+    if (setup_single_page_cross_buffer(&str_alnd_addr, str1_alnmnt, size, buff, 0, &page_buff, &page_cnt)) {
+        for (index = 0; index < size; index++) {
+            *(str_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
+        }
+        *(str_alnd_addr + size) = NULL_TERM_CHAR;
+
+        // Page-cross test with maxlen > strlen
+        maxlen = size + 1 + (rand() % 100);
+        ret = strnlen((char *) str_alnd_addr, maxlen);
+        if (ret != size) {
+            printf("ERROR:[PAGE-CROSS] (maxlen > strlen) failure for str1_aln:%u size: %lu, maxlen: %lu\n", 
+                   str1_alnmnt, size, maxlen);
+        }
+        // Page-cross test with maxlen < strlen
+        if (size > 1) 
+        {
+            maxlen = size / 2;
+            ret = strnlen((char *)str_alnd_addr, maxlen);
+            if (ret != maxlen) 
+            {
+                printf("ERROR:[PAGE-CROSS] (maxlen < strlen) failure for str1_aln:%u size: %lu, maxlen: %lu\n",
+                       str1_alnmnt, size, maxlen);
+            }
         }
 
         cleanup_page_cross_buffer(page_buff, page_cnt);
@@ -1894,7 +2015,7 @@ static inline void strcat_validator(size_t size, uint32_t str2_alnmnt,\
         *(str1_alnd_addr + index) = 'a' + (char)(rand() % LOWER_CHARS);
         *(str2_alnd_addr + index) = 'a' + (char)(rand() % LOWER_CHARS);
     }
-    //Appending Null Charachter at the end of str1 string
+    //Appending Null character at the end of str1 string
     *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
     *(str2_alnd_addr + (rand()%size)) = NULL_TERM_CHAR;
     //Source Corruption
@@ -2018,7 +2139,7 @@ static inline void strncat_validator(size_t size, uint32_t str2_alnmnt,\
         *(str1_alnd_addr + index) = random_char();
         *(str2_alnd_addr + index) = random_char();
     }
-    //Appending Null Charachter at the end of str1 string
+    //Appending Null character at the end of str1 string
     *(str1_alnd_addr + size - 1) = NULL_TERM_CHAR;
     *(str2_alnd_addr + (rand() % size)) = NULL_TERM_CHAR;
     //Source Corruption
@@ -2406,6 +2527,89 @@ static inline void strspn_validator(size_t size, uint32_t str2_alnmnt,\
         }
         free(page_buff);
     }
+
+    // case 5 : Accept near page boundary
+    //  Place accept so it straddles a page boundary tests masked load
+    //  handling in the accept loading path.
+    if (size <= PAGE_SZ && accept_len >= 2)
+    {
+        void *page_buff_accept = NULL;
+        uint32_t page_cnt_a = 2; // two pages
+        posix_memalign(&page_buff_accept, PAGE_SZ, page_cnt_a * PAGE_SZ);
+
+        if (page_buff_accept != NULL)
+        {
+            size_t offsets[] = {1, 2, 5, 9, 13, 15};
+            size_t num_offsets = sizeof(offsets) / sizeof(offsets[0]);
+
+            for (size_t oi = 0; oi < num_offsets; oi++)
+            {
+                size_t offset = offsets[oi];
+                if (offset > accept_len)
+                    continue;
+
+                uint8_t *accept_pg = (uint8_t *)page_buff_accept + PAGE_SZ - offset;
+                memcpy(accept_pg, accept, accept_len);
+                accept_pg[accept_len] = '\0';
+
+                string_setup((char *)s, size, (char *)accept_pg, accept_len);
+                res = strspn((char *)s, (char *)accept_pg);
+                expected = test_strspn((char *)s, (char *)accept_pg);
+                if (res != expected)
+                {
+                    printf("ERROR:[ACCEPT PAGE-CROSS offset=%lu]failure for S\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                           offset, str1_alnmnt, size, res, expected, accept_pg, accept_pg, s, s);
+                }
+
+                if (size > 1)
+                {
+                    size_t mid = size / 2;
+                    char orig = s[mid];
+                    s[mid] = (char)127;
+                    res = strspn((char *)s, (char *)accept_pg);
+                    expected = test_strspn((char *)s, (char *)accept_pg);
+                    if (res != expected)
+                    {
+                        printf("ERROR:[ACCEPT PAGE-CROSS mismatch offset=%lu idx=%lu]failure\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                               offset, mid, str1_alnmnt, size, res, expected, accept_pg, accept_pg, s, s);
+                    }
+                    s[mid] = orig;
+                }
+            }
+            free(page_buff_accept);
+        }
+    }
+
+    // case 6 : Both s AND accept near page boundaries
+    if (size <= PAGE_SZ && accept_len >= 2)
+    {
+        void *page_buff_both = NULL;
+        posix_memalign(&page_buff_both, PAGE_SZ, 4 * PAGE_SZ);
+
+        if (page_buff_both != NULL)
+        {
+            size_t a_off = (accept_len < 9) ? accept_len : 9;
+            uint8_t *accept_pg = (uint8_t *)page_buff_both + PAGE_SZ - a_off;
+            memcpy(accept_pg, accept, accept_len);
+            accept_pg[accept_len] = '\0';
+
+            uint8_t *s_pg = (uint8_t *)page_buff_both + 3 * PAGE_SZ - (size + NULL_BYTE);
+            string_setup((char *)s_pg, size, (char *)accept_pg, accept_len);
+
+            res = strspn((char *)s_pg, (char *)accept_pg);
+            expected = test_strspn((char *)s_pg, (char *)accept_pg);
+            if (res != expected)
+            {
+                printf("ERROR:[BOTH PAGE-CROSS]failure\
+            of str1_aln:%u size:%lu,\nreturn_value:%lu, expected:%lu,\nACCEPT(%p):%s\nS(%p):%s\n",
+                       str1_alnmnt, size, res, expected, accept_pg, accept_pg, s_pg, s_pg);
+            }
+            free(page_buff_both);
+        }
+    }
+
     free(buff);
 }
 
@@ -2446,8 +2650,8 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt __attribut
     {
         *(str_alnd_addr + index) = random_char();
     }
-    //Appending Null Charachter at the end of str
-    *(str_alnd_addr + size ) = NULL_TERM_CHAR;
+    //Appending Null character at the end of str
+    *(str_alnd_addr + size) = NULL_TERM_CHAR;
 
     //index of the char to be found
     if (size == 1)
@@ -2570,6 +2774,7 @@ libmem_func supp_funcs[]=
     {"strcmp",  strcmp_validator},
     {"strncmp", strncmp_validator},
     {"strlen",  strlen_validator},
+    {"strnlen", strnlen_validator},
     {"strcat",  strcat_validator},
     {"strncat", strncat_validator},
     {"strstr",  strstr_validator},

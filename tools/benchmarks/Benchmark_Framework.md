@@ -6,12 +6,17 @@
     - TinyMemBench:
 
         External benchmark tool which uses the existing tbm framework.
-    - GoogleBench: cached & uncached modes
+    - GoogleBench: hot & cold cached modes
 
         A microbenchmark support library for running memory benchmarks.
     - FleetBench:
 
         By making use of existing probability data set, function call to a specific size is being made.
+    - DCPerf:
+
+        Meta's datacenter benchmark suite supporting WDL (workload-driven latency) benchmarks for memcpy/memset and AI benchmarks for rebatch/tensor operations.
+        
+        **Note**: DCPerf benchmarks require sudo/root privileges to run.
 
 - Result will be generated in the format of csv and .png(in case of graph reports)
 
@@ -37,11 +42,26 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
       pip3 install pandas
       pip3 install numpy
 - FleetBench dependency package
-    - Bazel-version 6 needs to be installed manually
+    - Bazel (any version below 8.0.0) needs to be installed manually
+    - **Note**: FleetBench with Bazel 8.0.0 causes workspace deprecated build issues due to WORKSPACE file migration to Bzlmod
 
-    STEPS for installing Bazel:
+    STEPS for installing Bazel using Bazelisk (Works across all Linux distributions):
 
-    On Ubuntu :
+        $ sudo apt install unzip curl  # For Ubuntu/Debian (use appropriate package manager for other distros)
+        $ curl -LO "https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64"
+        $ chmod +x bazelisk-linux-amd64
+        $ sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
+        $ export USE_BAZEL_VERSION=7.1.2
+        $ bazel --version
+
+    **⚠️ CAUTION**: Setting the Bazel version using bazelisk may reset to the latest version in new terminal sessions. You might need to run `export USE_BAZEL_VERSION=7.1.2` again or add it to your `~/.bashrc` file for persistence:
+
+        $ echo 'export USE_BAZEL_VERSION=7.1.2' >> ~/.bashrc
+        $ source ~/.bashrc
+
+    **Alternative installation methods for specific distributions:**
+
+    On Ubuntu/Debian:
 
         $ sudo apt install curl gnupg
         $ curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
@@ -49,7 +69,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
         $ echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
         $ sudo apt update && sudo apt install bazel
 
-    On CentOS and REHL :
+    On CentOS and RHEL:
 
   1.    Install dependency packages:
 
@@ -67,10 +87,11 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 ## Running Bench framework
 
     $ ./bench.py <benchmark_name> <common_options> <benchmark_specific_options>
-      <benchmark_name>  = {gbm,tbm,fbm}
+      <benchmark_name>  = {gbm,tbm,fbm,dcperf}
                           gbm          Googlebench
                           tbm          TinyMembench
                           fbm          Fleetbench
+                          dcperf       DCPerf (WDL and AI benchmarks)
 
       <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,g,b,d] -bestperf
 
@@ -82,8 +103,8 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                         -t "iter_value"  : increments the start size by "iter_value".
                                            (0 stands for size<<1; other +ve integers stands for incremental iterations.)
                         LibMem_function  : mem and str functions
-                                          (memcpy,memmove,memset,memcmp,memchr,mempcpy
-                                          strcpy,strncpy,strcmp,strncmp,strlen,strcat,strncat,strspn,strstr,strchr)
+                                          (memcpy,memmove,memset,memcmp,memchr,mempcpy,
+                                          strcpy,strncpy,strcmp,strncmp,strlen,strnlen,strcat,strncat,strspn,strstr,strchr)
                         -perf            : Performance report type
                                           l - Performance analysis for LibMem
                                           g - Performance analysis for Glibc
@@ -94,7 +115,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
       <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -o <overlap> -preload <y,n> -i<repetitions> -w<warm_up time>
 
-                            -m <c, u>    : cached  & uncached behaviour
+                            -m <h, c>    : hot  & cold cache behaviour
                             -a <a, u, d> : aligned (src and dst alignment are equal)
                                            un-alinged (src and str alignment are NOT equal)
                                            default alignment is random.
@@ -113,16 +134,25 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
 
       <TBM_specific_option> = None
 
+      <DCPerf_specific_option> = [func] [sub_func]
+                          func         : Benchmark type (optional, default='wdl')
+                                        wdl - Workload-driven latency benchmarks
+                                        ai  - AI benchmarks
+                          sub_func     : Specific function/type to benchmark (optional)
+                                        For 'wdl': memcpy, memset (defaults to both if not specified)
+                                        For 'ai': rebatch, tensor
+
     Examples:
     Benchmark Help option
     $ ./bench.py -h
+    $ ./bench.py dcperf -h
 
     Running Google Benchmark
-    $ ./bench.py gbm memcpy -r 8B 16B -m u -t "1" -x 16
-    Runs the Google Benchmark for Un-Cached Mode Memcpy for sizes[8,9,..16] on core -16
+    $ ./bench.py gbm memcpy -r 8B 16B -m c -t "1" -x 16
+    Runs the Google Benchmark for Cold cache Memcpy for sizes[8,9,..16] on core -16
 
     $ ./bench.py gbm memcpy -r 8B 32KB -s m -x 16
-    Runs GBM for Cached memcpy with More-cache spill
+    Runs GBM for Hot cache memcpy with More-cache spill
 
     Running TinyMembench
     $ ./bench.py tbm strcpy -r 8B 4KB -x 47
@@ -131,3 +161,13 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     Running Fleetbench
     $ ./bench.py fbm memset -x 47 -i 100
     Runs fleetbench for memset benchmarking on core - 47 for 100 iterations
+
+    Running DCPerf (Requires sudo privileges)
+    $ sudo ./bench.py dcperf wdl -x 47
+    Runs DCPerf WDL benchmarks for both memcpy and memset on core - 47
+
+    $ sudo ./bench.py dcperf wdl memcpy -x 47
+    Runs DCPerf WDL benchmarks for memcpy only on core - 47
+
+    $ sudo ./bench.py dcperf ai rebatch -x 47
+    Runs DCPerf AI rebatch benchmark on core - 47

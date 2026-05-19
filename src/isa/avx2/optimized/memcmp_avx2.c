@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,19 +23,19 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stddef.h>
-#include "logger.h"
-#include <immintrin.h>
-#include <stdint.h>
-#include "zen_cpu_info.h"
 #include "almem_defs.h"
+#include "logger.h"
+#include "zen_cpu_info.h"
+#include <immintrin.h>
+#include <stddef.h>
+#include <stdint.h>
 
 static inline int memcmp_lt_ymm(const void *mem1, const void *mem2, uint8_t size)
 {
     __m128i x0, x1, x2, x3;
     int ret, ret1;
     uint64_t res;
-    uint32_t index = 0;
+    uint32_t index;
 
     if (likely(size >= QWORD_SZ))
     {
@@ -48,76 +48,79 @@ static inline int memcmp_lt_ymm(const void *mem1, const void *mem2, uint8_t size
             x0 = _mm_cmpeq_epi8(x0, x1);
             x2 = _mm_cmpeq_epi8(x2, x3);
             ret = _mm_movemask_epi8(_mm_and_si128(x0, x2));
-            if (ret != (uint16_t)-1)
+            if (ret != (uint16_t) -1)
             {
                 ret1 = _mm_movemask_epi8(x0);
-                if (ret1 != (uint16_t)-1)
+                if (ret1 != (uint16_t) -1)
                     index = _tzcnt_u32(ret1 + 1);
                 else
                     index = _tzcnt_u32(ret + 1) + size - XMM_SZ;
-                return (*(uint8_t*)(mem1 + index) - *(uint8_t*)(mem2 + index));
+                return (*(uint8_t *) (mem1 + index) - *(uint8_t *) (mem2 + index));
             }
             return 0;
         }
-        res = (*(uint64_t*)mem1)^(*(uint64_t*)mem2);
-        if (res == 0)
+        res = (*(uint64_t *) mem1) ^ (*(uint64_t *) mem2);
+        if (res != 0)
         {
-            index = size - QWORD_SZ;
-            res = (*(uint64_t*)(mem1 + index))^(*(uint64_t*)(mem2 + index));
-            if (res == 0)
-                 return 0;
+            index = _tzcnt_u64(res) >> 3;
+            return *(uint8_t *) (mem1 + index) - *(uint8_t *) (mem2 + index);
         }
-        ret = _tzcnt_u64(res);
-        index += ret >> 3;
-        return *(uint8_t*)(mem1 + index) -  *(uint8_t*)(mem2 + index);
+        index = size - QWORD_SZ;
+        res = (*(uint64_t *) (mem1 + index)) ^ (*(uint64_t *) (mem2 + index));
+        if (res != 0)
+        {
+            ret = _tzcnt_u64(res) >> 3;
+            return *(uint8_t *) (mem1 + index + ret) - *(uint8_t *) (mem2 + index + ret);
+        }
+        return 0;
     }
-    if (size > 1)
+
+    if (size >= DWORD_SZ)
     {
-        if (size <= 2 * WORD_SZ)
+        ret = (*(uint32_t *) mem1) ^ (*(uint32_t *) mem2);
+        if (ret)
         {
-            ret = (*(uint16_t*)mem1)^(*(uint16_t*)mem2);
-            if (ret == 0)
-            {
-                index = size - WORD_SZ;
-                ret = (*(uint16_t*)(mem1 + index))^(*(uint16_t*)(mem2 + index));
-                if (ret == 0)
-                    return 0;
-            }
-            index += _tzcnt_u32(ret) >> 3;
-            return *(uint8_t*)(mem1 + index) -  *(uint8_t*)(mem2 + index);
+            index = _tzcnt_u32(ret) >> 3;
+            return *(uint8_t *) (mem1 + index) - *(uint8_t *) (mem2 + index);
         }
-        if (size < 2 * DWORD_SZ)
+        ret = (*(uint32_t *) (mem1 + size - DWORD_SZ)) ^ (*(uint32_t *) (mem2 + size - DWORD_SZ));
+        if (ret)
         {
-            ret = (*(uint32_t*)mem1)^(*(uint32_t*)mem2);
-            if (ret == 0)
-            {
-                index = size - DWORD_SZ;
-                ret = (*(uint32_t*)(mem1 + index))^(*(uint32_t*)(mem2 + index));
-                if (ret == 0)
-                    return 0;
-            }
-            index += _tzcnt_u32(ret) >> 3;
-            return *(uint8_t*)(mem1 + index) -  *(uint8_t*)(mem2 + index);
+            index = _tzcnt_u32(ret) >> 3;
+            return *(uint8_t *) (mem1 + size - DWORD_SZ + index) - *(uint8_t *) (mem2 + size - DWORD_SZ + index);
         }
+        return 0;
     }
+
+    if (size >= WORD_SZ)
+    {
+        ret = (*(uint16_t *) mem1) ^ (*(uint16_t *) mem2);
+        if (ret)
+        {
+            index = _tzcnt_u32(ret) >> 3;
+            return *(uint8_t *) (mem1 + index) - *(uint8_t *) (mem2 + index);
+        }
+        if (size == 3)
+            return *(uint8_t *) (mem1 + 2) - *(uint8_t *) (mem2 + 2);
+        return 0;
+    }
+
     if (size == 1)
-    {
-        return *((uint8_t *)mem1) - *((uint8_t *)mem2);
-    }
+        return *((uint8_t *) mem1) - *((uint8_t *) mem2);
     return 0;
 }
 
-static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const void *mem2, size_t size)
+static inline int __attribute__((flatten)) _memcmp_avx2(const void *mem1, const void *mem2, size_t size)
 {
     __m256i y0, y1, y2, y3, y4, y5, y6, y7;
     size_t offset = 0;
     int ret, ret1;
 
+    if (likely(size < YMM_SZ))
+        return memcmp_lt_ymm(mem1, mem2, (uint8_t) size);
+
     if (likely(size <= 2 * YMM_SZ))
     {
-        if (size < YMM_SZ)
-            return memcmp_lt_ymm(mem1, mem2, (uint8_t)size);
-
         y0 = _mm256_loadu_si256(mem1);
         y2 = _mm256_loadu_si256(mem1 + size - YMM_SZ);
         y1 = _mm256_loadu_si256(mem2);
@@ -125,15 +128,15 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
         y0 = _mm256_cmpeq_epi8(y0, y1);
         y2 = _mm256_cmpeq_epi8(y2, y3);
         ret = _mm256_movemask_epi8(_mm256_and_si256(y0, y2));
-        if (ret != (int32_t)-1)
+        if (ret != (int32_t) -1)
         {
-            ret1 =  _mm256_movemask_epi8(y0);
-            if (ret1 != (int32_t)-1)
+            ret1 = _mm256_movemask_epi8(y0);
+            if (ret1 != (int32_t) -1)
                 offset = _tzcnt_u32(ret1 + 1);
             else
                 offset = _tzcnt_u32(ret + 1) + size - YMM_SZ;
 
-            return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+            return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
         }
         return 0;
     }
@@ -145,14 +148,14 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
     y0 = _mm256_cmpeq_epi8(y0, y4);
     y1 = _mm256_cmpeq_epi8(y1, y5);
     ret = _mm256_movemask_epi8(_mm256_and_si256(y0, y1));
-    if (ret != (int32_t)-1)
+    if (ret != (int32_t) -1)
     {
-        ret1 =  _mm256_movemask_epi8(y0);
-        if (ret1 != (int32_t)-1)
+        ret1 = _mm256_movemask_epi8(y0);
+        if (ret1 != (int32_t) -1)
             offset = _tzcnt_u32(ret1 + 1);
         else
             offset = _tzcnt_u32(ret + 1) + YMM_SZ;
-        return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+        return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
     }
 
     if (size <= 4 * YMM_SZ)
@@ -164,17 +167,16 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
         y2 = _mm256_cmpeq_epi8(y2, y6);
         y3 = _mm256_cmpeq_epi8(y3, y7);
         ret = _mm256_movemask_epi8(_mm256_and_si256(y2, y3));
-        if (ret != (int32_t)-1)
+        if (ret != (int32_t) -1)
         {
-            ret1 =  _mm256_movemask_epi8(y2);
-            if (ret1 != (int32_t)-1)
+            ret1 = _mm256_movemask_epi8(y2);
+            if (ret1 != (int32_t) -1)
             {
-                offset =  _tzcnt_u32(ret1 + 1) + size - 2 * YMM_SZ;
-            }
-            else
-                offset =  _tzcnt_u32(ret + 1) + size - YMM_SZ;
+                offset = _tzcnt_u32(ret1 + 1) + size - 2 * YMM_SZ;
+            } else
+                offset = _tzcnt_u32(ret + 1) + size - YMM_SZ;
 
-            return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+            return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
         }
         return 0;
     }
@@ -186,23 +188,22 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
     y2 = _mm256_cmpeq_epi8(y2, y6);
     y3 = _mm256_cmpeq_epi8(y3, y7);
     ret = _mm256_movemask_epi8(_mm256_and_si256(y2, y3));
-    if (ret != (int32_t)-1)
+    if (ret != (int32_t) -1)
     {
-        ret1 =  _mm256_movemask_epi8(y2);
-        if (ret1 != (int32_t)-1)
+        ret1 = _mm256_movemask_epi8(y2);
+        if (ret1 != (int32_t) -1)
         {
             offset = _tzcnt_u32(ret1 + 1) + 2 * YMM_SZ;
-        }
-        else
+        } else
             offset = _tzcnt_u32(ret + 1) + 3 * YMM_SZ;
 
-        return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+        return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
     }
 
     if (size > 8 * YMM_SZ)
     {
         offset = 4 * YMM_SZ;
-        while((size & (-4 * YMM_SZ)) > offset)
+        while ((size & (-4 * YMM_SZ)) > offset)
         {
             y0 = _mm256_loadu_si256(mem2 + offset + 0 * YMM_SZ);
             y1 = _mm256_loadu_si256(mem2 + offset + 1 * YMM_SZ);
@@ -211,14 +212,14 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
             y0 = _mm256_cmpeq_epi8(y0, y4);
             y1 = _mm256_cmpeq_epi8(y1, y5);
             ret = _mm256_movemask_epi8(_mm256_and_si256(y0, y1));
-            if (ret != (int32_t)-1)
+            if (ret != (int32_t) -1)
             {
-                ret1 =  _mm256_movemask_epi8(y0);
-                if (ret1 != (int32_t)-1)
+                ret1 = _mm256_movemask_epi8(y0);
+                if (ret1 != (int32_t) -1)
                     offset += _tzcnt_u32(ret1 + 1);
                 else
                     offset += _tzcnt_u32(ret + 1) + YMM_SZ;
-                return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+                return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
             }
             y2 = _mm256_loadu_si256(mem2 + offset + 2 * YMM_SZ);
             y3 = _mm256_loadu_si256(mem2 + offset + 3 * YMM_SZ);
@@ -227,24 +228,23 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
             y2 = _mm256_cmpeq_epi8(y2, y6);
             y3 = _mm256_cmpeq_epi8(y3, y7);
             ret = _mm256_movemask_epi8(_mm256_and_si256(y2, y3));
-            if (ret != (int32_t)-1)
+            if (ret != (int32_t) -1)
             {
-                ret1 =  _mm256_movemask_epi8(y2);
-                if (ret1 != (int32_t)-1)
+                ret1 = _mm256_movemask_epi8(y2);
+                if (ret1 != (int32_t) -1)
                 {
                     offset += _tzcnt_u32(ret1 + 1) + 2 * YMM_SZ;
-                }
-                else
+                } else
                     offset += _tzcnt_u32(ret + 1) + 3 * YMM_SZ;
 
-                return ((*(uint8_t*)(mem1 + offset)) - (*(uint8_t*)(mem2 + offset)));
+                return ((*(uint8_t *) (mem1 + offset)) - (*(uint8_t *) (mem2 + offset)));
             }
             offset += 4 * YMM_SZ;
         }
         if (offset == size)
             return 0;
     }
-    //Compare the tail 4 VECs sized memory
+    // Compare the tail 4 VECs sized memory
     y0 = _mm256_loadu_si256(mem2 + size - 4 * YMM_SZ);
     y1 = _mm256_loadu_si256(mem2 + size - 3 * YMM_SZ);
     y4 = _mm256_loadu_si256(mem1 + size - 4 * YMM_SZ);
@@ -253,15 +253,15 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
     ret = _mm256_movemask_epi8(y0) + 1;
     if (ret != 0)
     {
-       ret = _tzcnt_u32(ret) + size - 4 * YMM_SZ;
-       return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
+        ret = _tzcnt_u32(ret) + size - 4 * YMM_SZ;
+        return ((*(uint8_t *) (mem1 + ret)) - (*(uint8_t *) (mem2 + ret)));
     }
     y1 = _mm256_cmpeq_epi8(y1, y5);
     ret = _mm256_movemask_epi8(y1) + 1;
     if (ret != 0)
     {
-       ret = _tzcnt_u32(ret) + size - 3 * YMM_SZ;
-       return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
+        ret = _tzcnt_u32(ret) + size - 3 * YMM_SZ;
+        return ((*(uint8_t *) (mem1 + ret)) - (*(uint8_t *) (mem2 + ret)));
     }
     y2 = _mm256_loadu_si256(mem2 + size - 2 * YMM_SZ);
     y3 = _mm256_loadu_si256(mem2 + size - 1 * YMM_SZ);
@@ -271,15 +271,15 @@ static inline int  __attribute__((flatten)) _memcmp_avx2(const void *mem1, const
     ret = _mm256_movemask_epi8(y2) + 1;
     if (ret != 0)
     {
-       ret = _tzcnt_u32(ret) + size - 2 * YMM_SZ;
-       return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
+        ret = _tzcnt_u32(ret) + size - 2 * YMM_SZ;
+        return ((*(uint8_t *) (mem1 + ret)) - (*(uint8_t *) (mem2 + ret)));
     }
     y3 = _mm256_cmpeq_epi8(y3, y7);
     ret = _mm256_movemask_epi8(y3) + 1;
     if (ret != 0)
     {
-       ret = _tzcnt_u32(ret) + size - 1 * YMM_SZ;
-       return ((*(uint8_t*)(mem1 + ret)) - (*(uint8_t*)(mem2 + ret)));
+        ret = _tzcnt_u32(ret) + size - 1 * YMM_SZ;
+        return ((*(uint8_t *) (mem1 + ret)) - (*(uint8_t *) (mem2 + ret)));
     }
     return 0;
 }

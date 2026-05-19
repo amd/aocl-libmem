@@ -23,42 +23,60 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <immintrin.h>
+#include "almem_defs.h"
 #include "logger.h"
 #include "zen_cpu_info.h"
-#include "almem_defs.h"
+#include <immintrin.h>
 
 /* This function is an optimized version of memchr using AVX-512 instructions.
 It scans  the initial `size` bytes of the `mem` area for the first instance of `val`. */
-static inline void * __attribute__((flatten)) _memchr_avx512(const void *mem, int val, size_t size)
+static inline void *__attribute__((flatten)) _memchr_avx512(const void *mem, int val, size_t size)
 {
+    if (unlikely(size == 0))
+        return NULL;
+
     __m512i z0, z1, z2, z3, z4;
     uint64_t match, match1, match2, match3;
     size_t index;
 
     // Broadcast the value to find to all elements of z0
-    z0 = _mm512_set1_epi8((char)val);
+    z0 = _mm512_set1_epi8((char) val);
 
     // Use the 'rax' register to hold the return pointer
     register void *ret asm("rax");
-    ret = (void *)mem;
+    ret = (void *) mem;
 
-    // Handle the case where size is less than 64B
-    // Perform a masked load and comparison
+    // Handle the case where size is less than or equal to 64B
     if (likely(size <= ZMM_SZ))
     {
-        __mmask64 mask = _bzhi_u64((uint64_t)-1, (uint8_t)size);
-        z2 =  _mm512_maskz_loadu_epi8(mask, mem);
-        match = _mm512_cmpeq_epu8_mask(z0, z2);
-        match &= mask;
+#ifndef ALMEM_STRICT_BOUNDS
+        // Check if we may cross page boundary with one vector load
+        uintptr_t addr = (uintptr_t) mem;
+        uintptr_t page_offset = addr & (PAGE_SZ - 1);
 
-        // If no match is found, return NULL
-        if (!match)
-            return NULL;
+        if (likely(page_offset <= (PAGE_SZ - ZMM_SZ)))
+        {
+            z1 = _mm512_loadu_si512(mem);
+            match = _mm512_cmpeq_epu8_mask(z0, z1);
+            index = _tzcnt_u64(match);
+            if (index >= size)
+                return NULL;
+            return ret + index;
+        } else
+#endif
+        {
+            // masked load in case of page-crossing
+            __mmask64 mask = _bzhi_u64((uint64_t) -1, (uint8_t) size);
+            z2 = _mm512_maskz_loadu_epi8(mask, mem);
+            match = _mm512_cmpeq_epu8_mask(z0, z2);
+            match &= mask;
 
-        // If a match is found, calculate the index and return the pointer to the matching byte
-        index = _tzcnt_u64(match);
-        return ret + index;
+            if (!match)
+                return NULL;
+
+            index = _tzcnt_u64(match);
+            return ret + index;
+        }
     }
 
     // Handle the case where size lies between 65B-128B
@@ -69,7 +87,7 @@ static inline void * __attribute__((flatten)) _memchr_avx512(const void *mem, in
         z1 = _mm512_loadu_si512(mem);
         match = _mm512_cmpeq_epu8_mask(z0, z1);
 
-        //If no match is found, adjust the index and load the last 64B of the memory block
+        // If no match is found, adjust the index and load the last 64B of the memory block
         if (!match)
         {
             index = size - ZMM_SZ;
@@ -162,7 +180,7 @@ static inline void * __attribute__((flatten)) _memchr_avx512(const void *mem, in
     if (size > 8 * ZMM_SZ)
     {
         size -= 4 * ZMM_SZ;
-        size_t offset = 4 * ZMM_SZ - ((uintptr_t)mem & (ZMM_SZ - 1));
+        size_t offset = 4 * ZMM_SZ - ((uintptr_t) mem & (ZMM_SZ - 1));
 
         // Loop through the memory block in chunks of four ZMM registers
         while (size >= offset)

@@ -29,7 +29,6 @@
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
 #include "../../../base_impls/memset_erms_impls.h"
-
 #ifdef STRNCPY_AVX512
 /* This is an optimized function to fill a memory region with null bytes ('\0') */
 static inline void *_fill_null_avx512(void *mem, size_t size)
@@ -138,10 +137,20 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
             return ret;
         }
     }
-
     // Load the first 64 bytes from `src` and check for null terminator
+#ifdef STRNCPY_AVX512
+    // For strncpy with small size, use masked load to avoid reading beyond valid memory
+    if (size < ZMM_SZ) {
+        mask = _bzhi_u64(UINT64_MAX, size);
+        z1 = _mm512_maskz_loadu_epi8(mask, src);
+    }
+    else {
+        z1 = _mm512_loadu_si512(src);
+    }
+#else
     z1 = _mm512_loadu_si512(src);
-    match =_mm512_cmpeq_epu8_mask(z0, z1);
+#endif
+    match = _mm512_cmpeq_epu8_mask(z0, z1);
     if (match)
     {
         index =  _tzcnt_u64(match);

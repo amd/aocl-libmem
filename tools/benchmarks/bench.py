@@ -215,11 +215,16 @@ class BaseBench:
                 gains.append("N/A")
         return gains
 
-    def write_comparison_csv(self, filename, headers, data_rows):
-        """Write comparison results to CSV file"""
-        with open(filename, "w", newline="") as output_file:
+    def write_comparison_csv(self, filename, headers, data_rows, append=False):
+        """Write comparison results to CSV file, optionally appending."""
+        import os
+        file_exists = os.path.isfile(filename)
+        mode = "a" if append else "w"
+        with open(filename, mode, newline="") as output_file:
             writer = csv.writer(output_file)
-            writer.writerow(headers)
+            # Only write header if not appending or file is empty
+            if not append or (not file_exists or os.stat(filename).st_size == 0):
+                writer.writerow(headers)
             for row in data_rows:
                 writer.writerow(row)
 
@@ -297,9 +302,16 @@ class Bench:
             from fbm import FBM
             FBM_execute = FBM(ARGS=self.ARGS, class_obj=self)
             FBM_execute() #Status:Success/Failure
+        elif(self.MYPARSER['benchmark']=='dcperf'):
+            import sys
+            import os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'external'))
+            from dcperf import DCPerf
+            dcperf_execute = DCPerf(MYPARSER=self.MYPARSER, ARGS=self.ARGS, class_obj=self)
+            dcperf_execute()
 
 libmem_memory = ['memcpy', 'memmove', 'memset', 'memcmp', 'mempcpy']
-libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
+libmem_string = ['strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strnlen', 'strcat', 'strncat', 'strspn', 'strstr', 'memchr', 'strchr']
 libmem_funcs = libmem_memory + libmem_string
 
 def run_command(cmd):
@@ -423,61 +435,67 @@ def main():
     available_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
-    parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM',
-                                     epilog="See './bench.py [gbm, tbm, fbm] -h' for more information on a specific benchmark")
+    parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM, DCPerf',
+                                     epilog="See './bench.py [gbm, tbm, fbm, dcperf] -h' for more information on a specific benchmark")
 
     # Create subparsers for different benchmarking tools
     subparsers = parser.add_subparsers(dest='benchmark', required=True)
 
-    # Common arguments for all benchmarks
-    common_parser = argparse.ArgumentParser(add_help=False)
+    # Common optional arguments for all benchmarks (without positional arguments)
+    common_options_parser = argparse.ArgumentParser(add_help=False)
 
+    common_options_parser.add_argument("-r", "--range", nargs=2,
+                            help="Range of data lengths to be benchmarked. Format: NUMBER[UNIT]\n"
+                                 "where UNIT is optional and can be B, KB, MB, or GB (case insensitive).\n"
+                                 "Examples: '8B', '16KB', '9MB', '1GB'\n"
+                                 "Memory functions [8B - 32MB]\n"
+                                 "String functions [8B - 4KB]\n"
+                                 "Memory functions can be benchmarked upto 1GB",
+                            type=parse_size_with_unit)
+    common_options_parser.add_argument("-perf",
+                            help="Performance runs for LibMem.\n"
+                                 "Default is performance benchmarking comparison.\n"
+                                 "  l - Performance analysis for LibMem\n"
+                                 "  g - Performance analysis for Glibc only\n"
+                                 "  c - Comparison report between old and new LibMem runs\n"
+                                 "  d - Default report Glibc vs LibMem",
+                            type=str, choices=['l', 'g', 'c', 'd'], default='d')
+
+    common_options_parser.add_argument("-t", "--iterator",
+                            help="Iteration pattern for a given range of data sizes.\n"
+                                 "Default is shift left by 1 of starting size - '<<1'.",
+                            type=int, default=0)
+
+    common_options_parser.add_argument("-x", "--core_id",
+                            help=f"CPU core_id on which benchmark has to be performed.\n"
+                                 f"Default choice of core-id is 8.\n"
+                                 f"Valid range is [0..{int(available_cores) - 1}]",
+                            type=int, default=8)
+
+    common_options_parser.add_argument("-sys", "--system_info",
+                            help="Logs system_info details like cpu freq, cache info, bios info, etc.",
+                            action="store_true")
+
+    common_options_parser.add_argument("-bestperf", "--best_performance",
+                            help="Runs benchmark 3 times and selects the best throughput\n"
+                                 "for each size from those iterations",
+                            action="store_true")
+
+    # Common parser with func argument for GBM, TBM, FBM
+    common_parser = argparse.ArgumentParser(add_help=False, parents=[common_options_parser])
     common_parser.add_argument("func", help="LibMem supported functions",
                             type=str, choices = libmem_funcs,default="memcpy")
-
-    common_parser.add_argument("-r", "--range", nargs = 2, help="range of data\
-                                lengths to be benchmarked. Format: NUMBER[UNIT]\
-                                where UNIT is optional and can be B, KB, MB, or GB (case insensitive).\
-                                Examples: '8B', '16KB', '9MB', '1GB'\
-                                Memory functions [8B - 32MB]\
-                                String functions [8B - 4KB]\
-                                Memory functions can be benchmarked upto 1GB",
-                            type=parse_size_with_unit)
-    common_parser.add_argument("-perf", help = "performance runs for LibMem.\
-                            Default is performance benchmarking comparison. \
-                            l - Performance analysis for LibMem.\
-                            g - Performance analysis for Glibc only.\
-                            c - Comparison report between old and new LibMem runs.\
-                            d - Defalut report Glibc vs LibMem.",
-                            type = str, choices = ['l', 'g', 'c','d'], default = 'd')
-
-    common_parser.add_argument("-t", "--iterator", help = "iteration pattern for a \
-                            given range of data sizes. Default is shift left\
-                            by 1 of starting size - '<<1'.",
-                            type = int, default = 0)
-
-    common_parser.add_argument("-x", "--core_id",
-                               help=f"CPU core_id on which benchmark has to be performed.\
-                            Default choice of core-id is 8. Valid range is \
-                            [0..{int(available_cores) - 1}]",
-                            type=int,default=8)
-
-    common_parser.add_argument("-sys", "--system_info", help = "logs system_info details like cpu freq,\
-                                cache info, bios info, etc.", action="store_true")
-
-    common_parser.add_argument("-bestperf", "--best_performance", help = "runs benchmark 3 times and selects \
-                                the best throughput for each size from those iterations", action="store_true")
 
     # Subparser for GBM with additional options
     gbm_parser = subparsers.add_parser('gbm', parents=[common_parser], help='GoogleBench Benchmarking Tool')
     group = gbm_parser.add_mutually_exclusive_group()
-    gbm_parser.add_argument("-m", "--mode", help = "type of benchmarking mode:\
-                            c - cached, u - un-cached",\
-                            type = str, choices = ['c', 'u'], \
-                            default = 'c')
+    gbm_parser.add_argument("-m", "--mode", help = "type of cached benchmarking :\
+                            h - hot, c - cold",\
+                            type = str, choices = ['h', 'c'], \
+                            default = 'h')
 
     #Align and Page are mutually_exclusive options
-    group.add_argument("-a", "--align", help = "alignemnt of source\
+    group.add_argument("-a", "--align", help = "alignment of source\
                                 and destination addresses: a - aligned\
                                 u - unaligned, and d - default alignment\
                                 is random.",\
@@ -530,26 +548,49 @@ def main():
                             performance measurement. Default value is \
                             set to 100 iterations.",
                         type = int, default = 100)
+
+    # Subparser for DCPerf - uses common_options_parser but has custom positional arguments
+    dcperf_parser = subparsers.add_parser('dcperf', parents=[common_options_parser],
+                                          help='DCPerf Benchmarking Tool (Note: Requires sudo access)',
+                                          formatter_class=argparse.RawTextHelpFormatter)
+    
+    # Add func as optional for dcperf - choose between wdl or ai
+    dcperf_parser.add_argument("func", help="DCPerf benchmark type: 'wdl' (default) or 'ai'\n"
+                                            "Note: DCPerf benchmarks require sudo privileges to run",
+                            type=str, nargs='?', choices=['wdl', 'ai'], default='wdl')    # Add optional positional argument for wdl functions (memcpy/memset) or ai functions (rebatch/tensor)
+    dcperf_parser.add_argument("sub_func",
+                            help="Specific function/Type to benchmark (optional):\n"
+                                 "  For 'wdl': memcpy, memset (defaults to both if not specified)\n"
+                                 "  For 'ai': rebatch, tensor",
+                            type=str, nargs='?', choices=['memcpy', 'memset', 'rebatch', 'tensor'],
+                            default=None, metavar='FUNCTION/TYPE')
+
     args = parser.parse_args()
 
     # Ensure memory_operation is set only if mode exists
     if hasattr(args, 'mode'):
         args.memory_operation = args.mode
-        if args.memory_operation not in ['c', 'u']:
-            args.memory_operation = 'c'
     else:
-        args.memory_operation = 'c'
+        args.memory_operation = 'h'
 
     if args.benchmark == 'gbm':
-        args.bench_name = 'GooglBench_Cached'
-        if args.memory_operation == 'u':
-            args.bench_name = 'GooglBench_UnCached'
+        args.bench_name = 'GooglBench_HotCached'
+        if args.memory_operation == 'c':
+            args.bench_name = 'GooglBench_ColdCached'
     elif args.benchmark == 'tbm':
         args.bench_name = 'TinyMemBench'
     elif args.benchmark == 'fbm':
         args.bench_name = 'FleeteBench'
+    elif args.benchmark == 'dcperf':
+        args.bench_name = 'DCPerf'
 
-    args.result_dir = 'out/' + args.bench_name + '/' + args.func + '/' \
+    # For dcperf, use wdl_func if specified, otherwise use func (wdl/ai)
+    if args.benchmark == 'dcperf' and hasattr(args, 'wdl_func') and args.wdl_func:
+        result_func = args.wdl_func
+    else:
+        result_func = args.func
+    
+    args.result_dir = 'out/' + args.bench_name + '/' + result_func + '/' \
         + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
 
     # Create result directory

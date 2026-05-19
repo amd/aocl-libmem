@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,77 +23,65 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "zen_cpu_info.h"
+#include "threshold.h"
 #include "logger.h"
+#include "zen_cpu_info.h"
 
-HIDDEN_SYMBOL uint64_t __repmov_start_threshold __attribute__((aligned(64))) =  0xffffffff;
-HIDDEN_SYMBOL uint64_t __repmov_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
-HIDDEN_SYMBOL uint64_t __repstore_start_threshold __attribute__((aligned(64))) =  0xffffffff;
-HIDDEN_SYMBOL uint64_t __repstore_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
-HIDDEN_SYMBOL uint64_t  __nt_start_threshold __attribute__((aligned(64))) =  0xffffffff;
-HIDDEN_SYMBOL uint64_t __nt_stop_threshold __attribute__((aligned(64))) =  0xffffffff;
+HIDDEN_SYMBOL uint64_t __repmov_start_threshold __attribute__((aligned(64))) = 0xffffffff;
+HIDDEN_SYMBOL uint64_t __repmov_stop_threshold __attribute__((aligned(64))) = 0xffffffff;
+HIDDEN_SYMBOL uint64_t __repstore_start_threshold __attribute__((aligned(64))) = 0xffffffff;
+HIDDEN_SYMBOL uint64_t __repstore_stop_threshold __attribute__((aligned(64))) = 0xffffffff;
+HIDDEN_SYMBOL uint64_t __nt_start_threshold __attribute__((aligned(64))) = 0xffffffff;
+HIDDEN_SYMBOL uint64_t __nt_stop_threshold __attribute__((aligned(64))) = 0xffffffff;
 
 static inline void compute_sys_thresholds(cpu_info *zen_info)
 {
     get_cache_info(zen_info);
     if (zen_info->zen_cpu_features.erms == ENABLED)
     {
-        zen_info->zen_thresholds.repmov_start_threshold = 2*1024;
-        zen_info->zen_thresholds.repmov_stop_threshold = \
-                    zen_info->zen_cache_info.l2_per_core;
-        zen_info->zen_thresholds.repstore_start_threshold = \
-                    zen_info->zen_cache_info.l2_per_core;
-        zen_info->zen_thresholds.repstore_stop_threshold = \
-                    zen_info->zen_cache_info.l3_per_ccx;
-    }
-    else //set repmov threshold to zero if ERMS feature is disabled
+        zen_info->zen_thresholds.repmov_start_threshold = 2 * 1024;
+        zen_info->zen_thresholds.repmov_stop_threshold = zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.repstore_start_threshold = zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.repstore_stop_threshold = zen_info->zen_cache_info.l3_per_ccx;
+    } else
     {
         zen_info->zen_thresholds.repmov_start_threshold = 0;
         zen_info->zen_thresholds.repmov_stop_threshold = 0;
         zen_info->zen_thresholds.repstore_start_threshold = 0;
         zen_info->zen_thresholds.repstore_stop_threshold = 0;
     }
-    zen_info->zen_thresholds.nt_start_threshold = \
-            3*(zen_info->zen_cache_info.l3_per_ccx)>> 2;
+    // Zen5
+    if (zen_info->zen_cpu_features.movdiri == ENABLED)
+        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_THRESHOLD_ZEN5(zen_info->zen_cache_info.l3_per_ccx);
+    // ZEN4 and earlier (NT stores start from 3/4 of L3 cache)
+    else
+        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_MOV_THRESHOLD(zen_info->zen_cache_info.l3_per_ccx);
     zen_info->zen_thresholds.nt_stop_threshold = -1;
 }
-
 
 static inline void configure_thresholds()
 {
     if (active_threshold_cfg == SYS_CFG)
     {
-        __repmov_start_threshold = \
-            zen_info.zen_thresholds.repmov_start_threshold;
-        __repmov_stop_threshold = \
-            zen_info.zen_thresholds.repmov_stop_threshold;
-        __repstore_start_threshold = \
-            zen_info.zen_thresholds.repstore_start_threshold;
-        __repstore_stop_threshold = \
-            zen_info.zen_thresholds.repstore_stop_threshold;
-        __nt_start_threshold = \
-            zen_info.zen_thresholds.nt_start_threshold;
-        __nt_stop_threshold = \
-            zen_info.zen_thresholds.nt_stop_threshold;
+        __repmov_start_threshold = zen_info.zen_thresholds.repmov_start_threshold;
+        __repmov_stop_threshold = zen_info.zen_thresholds.repmov_stop_threshold;
+        __repstore_start_threshold = zen_info.zen_thresholds.repstore_start_threshold;
+        __repstore_stop_threshold = zen_info.zen_thresholds.repstore_stop_threshold;
+        __nt_start_threshold = zen_info.zen_thresholds.nt_start_threshold;
+        __nt_stop_threshold = zen_info.zen_thresholds.nt_stop_threshold;
     }
 
 #ifdef ALMEM_TUNABLES
 
     else if (active_threshold_cfg == USR_CFG)
     {
-        __repmov_start_threshold = \
-            user_config.user_threshold.repmov_start_threshold;
-        __repmov_stop_threshold = \
-            user_config.user_threshold.repmov_stop_threshold;
-        __nt_start_threshold = \
-            user_config.user_threshold.nt_start_threshold;
-        __nt_stop_threshold = \
-            user_config.user_threshold.nt_stop_threshold;
+        __repmov_start_threshold = user_config.user_threshold.repmov_start_threshold;
+        __repmov_stop_threshold = user_config.user_threshold.repmov_stop_threshold;
+        __nt_start_threshold = user_config.user_threshold.nt_start_threshold;
+        __nt_stop_threshold = user_config.user_threshold.nt_stop_threshold;
     }
 #endif
-    LOG_DEBUG("%s: repmov[%lu, %lu], repstore[%lu, %lu], non_temporal[%lu, %lu]\n", \
-            active_threshold_cfg == SYS_CFG? "System ":"User ", \
-            __repmov_start_threshold, __repmov_stop_threshold, \
-            __repstore_start_threshold, __repstore_stop_threshold, \
-            __nt_start_threshold, __nt_stop_threshold);
+    LOG_DEBUG("%s: repmov[%lu, %lu], repstore[%lu, %lu], non_temporal[%lu, %lu]\n",
+              active_threshold_cfg == SYS_CFG ? "System " : "User ", __repmov_start_threshold, __repmov_stop_threshold,
+              __repstore_start_threshold, __repstore_stop_threshold, __nt_start_threshold, __nt_stop_threshold);
 }

@@ -1,4 +1,4 @@
-# Copyright (C) 2022-25 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2022-26 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -30,31 +30,16 @@ check_c_compiler_flag("-march=znver4"    CONFIG_COMPILER_HAS_ZEN4)
 check_c_compiler_flag("-march=znver5"    CONFIG_COMPILER_HAS_ZEN5)
 
 
-set(DETECT_ARCH 1)
 set(ARCH_UNDF 255)
-set(MIN_ZEN_VER 1)
-set(MAX_ZEN_VER 5)
-
-set(DETECT_FEATURE 2)
-set(AVX2 0)
-set(ERMS 1)
-set(FSRM 2)
-set(AVX512 3)
-set(MOVIDR 4)
-
-set(DETECT_CPU_VENDOR  4)
 set(AMD_CPU 1)
-
 set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
 set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
-
 set(CPU_FEATURES AVX512 AVX2 ERMS)
 
-# Detect CPU features
 foreach(FEATURE ${CPU_FEATURES})
-
+    string(TOLOWER ${FEATURE} FEATURE_LOWER)
     try_run(HAS_${FEATURE} COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_FEATURE} ${${FEATURE}})
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "feature_${FEATURE_LOWER}")
 
     if (HAS_${FEATURE})
         message(STATUS "HAS_${FEATURE}: True")
@@ -63,7 +48,22 @@ foreach(FEATURE ${CPU_FEATURES})
     endif()
 endforeach()
 
-if (ALMEM_ISA)
+# Warn about compiling AVX512 code on AVX2-only machines
+if (NOT HAS_AVX512)
+    set(AVX512_WARNING_MSG "but this machine does NOT support AVX512. Running this binary on an AVX2-only machine will result in an ILLEGAL INSTRUCTION error.")
+    # Check if ALMEM_ISA is set to avx512
+    if (ALMEM_ISA AND "${ALMEM_ISA}" STREQUAL "avx512")
+        message(WARNING "ALMEM_ISA is set to 'avx512', ${AVX512_WARNING_MSG}")
+    endif()
+    # Check if ALMEM_ARCH is set to zen4 or zen5 (AVX512 architectures)
+    if (ARCH_VER AND ARCH_VER GREATER_EQUAL 4)
+        message(WARNING "ALMEM_ARCH is set to 'zen${ARCH_VER}' which uses AVX512 instructions, ${AVX512_WARNING_MSG}")
+    endif()
+endif()
+
+if (ALMEM_ARCH)
+        message(STATUS "## Compiling for specific Zen architecture: Zen${ARCH_VER}...")
+elseif (ALMEM_ISA)
         if (${ALMEM_ISA} MATCHES "avx512")
             message(STATUS "## Compiling for AVX512 CPUs...")
         elseif (${ALMEM_ISA} MATCHES "avx2")
@@ -86,12 +86,12 @@ elseif (ALMEM_DYN_DISPATCH)
 else ()
     #Detect the CPU Vendor
     try_run(CPU_VENDOR COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_CPU_VENDOR})
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "vendor")
 
     if (${CPU_VENDOR} MATCHES ${AMD_CPU})
         #Detect the CPU architecture
         try_run(ARCH_VER COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS ${DETECT_ARCH})
+            COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "arch")
 
 
         if (${ARCH_VER} LESS ${ARCH_UNDF})
@@ -140,7 +140,7 @@ set(SOURCE_FILES libmem.c)
 set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 
 # String Functions
-set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strchr)
+set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strnlen strchr strspn)
 
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
@@ -149,7 +149,11 @@ if (ALMEM_LOGGING)
     list(APPEND SOURCE_FILES logger.c)
 endif ()
 
-if (ALMEM_ISA)
+if (ALMEM_ARCH)
+    if (ALMEM_ARCH_LOWER MATCHES "zen")
+        add_subdirectory(uarch)
+    endif ()
+elseif (ALMEM_ISA)
     if (ALMEM_ISA MATCHES "avx")
         add_subdirectory(isa)
     endif ()

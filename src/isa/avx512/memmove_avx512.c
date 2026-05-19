@@ -29,8 +29,8 @@
 #include "logger.h"
 #include "./optimized/memcpy_impl_avx512.c"
 
-HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_avx512(void * __restrict dst,
-                  const void * __restrict src, size_t size)
+HIDDEN_SYMBOL void * __attribute__((flatten)) __memmove_avx512(void *dst,
+                  const void *src, size_t size)
 {
     LOG_INFO("\n");
     return _memcpy_avx512(dst, src, size);

@@ -91,9 +91,9 @@ void allocateAlignedBuffers(size_t alignment, size_t allocSize, size_t buffMulti
     }
 }
 
-enum MemoryMode {
-    CACHED,
-    UNCACHED
+enum class CacheMode {
+    Hot,
+    Cold
 };
 
 void Bench_Result(benchmark::State& state)
@@ -155,6 +155,11 @@ struct Str_n_Data {
 struct Strlen_Data {
     const char *functionName;
     void *(*functionPtr)(const char *src);
+};
+
+struct Strnlen_Data {
+    const char *functionName;
+    size_t (*functionPtr)(const char *src, size_t n);
 };
 
 class MemoryFixture {
@@ -269,11 +274,11 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void memRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void memRunBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
 
         SetUp(size, alignment, spill, page, false, BUFFER);
-        if(mode == CACHED)
+        if(cache_mode == CacheMode::Hot)
         {
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func(dst_alnd, src_alnd, size));
@@ -300,10 +305,10 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void Misc_memRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void Misc_memRunBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         SetUp(size, alignment, spill, page, false, BUFFER);
-        if(mode == CACHED)
+        if(cache_mode == CacheMode::Hot)
         {
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func(src_alnd, 'x', size));
@@ -351,14 +356,14 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void strRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void strRunBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         if (name == "strcat")
             SetUp(size, alignment, spill, page, true, CONCAT_BUFFER);
         else
             SetUp(size, alignment, spill, page, true, BUFFER);
 
-        if(mode == CACHED)
+        if(cache_mode == CacheMode::Hot)
         {
             if (name == "strcat")
             {
@@ -435,10 +440,10 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void strlenRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void strlenRunBenchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         SetUp(size, alignment, spill, page, true, BUFFER);
-        if(mode == CACHED)
+        if(cache_mode == CacheMode::Hot)
         {
             for (auto _ : state) {
             benchmark::DoNotOptimize(func((char*)src_alnd));
@@ -462,9 +467,36 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void substrRunBenchmark(benchmark::State& state, MemoryMode mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void strnlenRunBenchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
-        if (mode == CACHED)
+        SetUp(size, alignment, spill, page, true, BUFFER);
+        if(cache_mode == CacheMode::Hot)
+        {
+            for (auto _ : state) {
+            benchmark::DoNotOptimize(func((char*)src_alnd, size));
+            }
+        }
+        else
+        {
+            for (auto _ : state) {
+                state.PauseTiming();
+                uint32_t cacheline_iters = size >> CACHELINE_MULTIPLE;
+                do
+                {
+                    CLFLUSHOPT(src_alnd, cacheline_iters);
+                }while (cacheline_iters--);
+                state.ResumeTiming();
+                benchmark::DoNotOptimize(func((char*)src_alnd, size));
+            }
+        }
+        TearDown(alignment);
+    Bench_Result(state);
+    }
+
+    template <typename MemFunction, typename... Args>
+    void substrRunBenchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+        int size = state.range(0);
+        if (cache_mode == CacheMode::Hot)
         {
             SetUp(size, alignment, spill, page, true, BUFFER);
             std::string haystack_best, haystack_nomatch, haystack_avg;
@@ -549,14 +581,14 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void str_n_RunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void str_n_RunBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         if (name == "strncat")
             SetUp(size, alignment, spill, page, true, CONCAT_BUFFER);
         else
             SetUp(size, alignment, spill, page, true, BUFFER);
 
-        if  (mode == CACHED)
+        if  (cache_mode == CacheMode::Hot)
         {
             if (name == "strncat")
             {
@@ -596,10 +628,10 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void strchrRunBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    void strchrRunBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
         int size = state.range(0);
         SetUp(size, alignment, spill, page, true, BUFFER);
-        if  (mode == CACHED)
+        if  (cache_mode == CacheMode::Hot)
         {
             for (auto _ : state) {
                 benchmark::DoNotOptimize(func((char*)src_alnd,'X'));
@@ -624,13 +656,13 @@ public:
     }
 
     template <typename MemFunction, typename... Args>
-    void memOverlapBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
+    void memOverlapBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
         int size = state.range(0);
         SetUp(size, alignment, spill, page, false, OVERLAP_BUFFER);
 
         char* dst_ptr = (char*)dst_alnd + rand()% size + 1;
         char* src_ptr = (char*)dst_ptr + rand()% size + 1;
-        if(mode == CACHED)
+        if(cache_mode == CacheMode::Hot)
         {
             if (overlap_type == 'f')
             {
@@ -687,50 +719,56 @@ protected:
 };
 
 template <typename MemFunction, typename... Args>
-void runMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runMemoryBenchmark(benchmark::State& state,  CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.memRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.memRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 template <typename MemFunction, typename... Args>
-void runMiscMemoryBenchmark(benchmark::State& state,  MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runMiscMemoryBenchmark(benchmark::State& state,  CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.Misc_memRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
-}
-
-template <typename MemFunction, typename... Args>
-void runStringBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
-    MemoryFixture fixture;
-    fixture.strRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.Misc_memRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 
 template <typename MemFunction, typename... Args>
-void runString_n_Benchmark(benchmark::State& state, MemoryMode mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runStringBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.str_n_RunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.strRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 
 template <typename MemFunction, typename... Args>
-void runstrlenBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runString_n_Benchmark(benchmark::State& state, CacheMode cache_mode,char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.strlenRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.str_n_RunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 
 template <typename MemFunction, typename... Args>
-void runsubstrBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runstrlenBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.substrRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.strlenRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 
 template <typename MemFunction, typename... Args>
-void runMiscStringBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+void runstrnlenBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.strchrRunBenchmark(state, mode, alignment, spill, page, func, name, args...);
+    fixture.strnlenRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
 }
 
 template <typename MemFunction, typename... Args>
-void runMemoryOverlapBenchmark(benchmark::State& state, MemoryMode mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
+void runsubstrBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
     MemoryFixture fixture;
-    fixture.memOverlapBenchmark(state, mode, alignment, spill, page, func, name, overlap_type, args...);
+    fixture.substrRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
+}
+
+template <typename MemFunction, typename... Args>
+void runMiscStringBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, Args... args) {
+    MemoryFixture fixture;
+    fixture.strchrRunBenchmark(state, cache_mode, alignment, spill, page, func, name, args...);
+}
+
+template <typename MemFunction, typename... Args>
+void runMemoryOverlapBenchmark(benchmark::State& state, CacheMode cache_mode, char alignment, char spill, char page, MemFunction func, const char* name, char overlap_type, Args... args) {
+    MemoryFixture fixture;
+    fixture.memOverlapBenchmark(state, cache_mode, alignment, spill, page, func, name, overlap_type, args...);
 }
 
 MemData functionList[] = {
@@ -770,6 +808,10 @@ Strlen_Data Strlen_functionList[] = {
     {"strlen",  (void *(*)(const char*)) strlen},
 };
 
+Strnlen_Data Strnlen_functionList[] = {
+    {"strnlen", (size_t (*)(const char*, size_t)) strnlen},
+};
+
 enum class Parameters
 {
     function_name = 1,  // argv[1]
@@ -786,14 +828,14 @@ enum class Parameters
 int main(int argc, char** argv) {
     ::benchmark::Initialize(&argc, argv);
     srand(time(NULL));
-    char mode='c', alignment = 'd', spill = 'l', page = 'n', overlap = 'd';
+    char Cache_Mode='h', alignment = 'd', spill = 'l', page = 'n', overlap = 'd';
     unsigned int size_start, size_end, iter = 0;
     std::string func;
 
     func = argv[static_cast<int>(Parameters::function_name)];
 
     if(argv[static_cast<int>(Parameters::function_mode)]!=NULL)
-        mode = *argv[static_cast<int>(Parameters::function_mode)];
+        Cache_Mode = *argv[static_cast<int>(Parameters::function_mode)];
 
     if (argv[static_cast<int>(Parameters::start)] != NULL)
         size_start = std::atoi(argv[static_cast<int>(Parameters::start)]);
@@ -815,12 +857,12 @@ int main(int argc, char** argv) {
     if(argv[static_cast<int>(Parameters::overlap)]!=NULL)
         overlap= *argv[static_cast<int>(Parameters::overlap)];
 
-    std::cout<<"FUNCTION: "<<func<<" MODE: "<<mode<<std::endl;
+    std::cout<<"FUNCTION: "<<func<<" MODE: "<<Cache_Mode<<std::endl;
     std::cout<<"SIZE: "<<size_start<<" "<<size_end<<std::endl;
 
-    //Determine the memory mode
-    MemoryMode operation = (mode == 'u') ? UNCACHED : CACHED;
-    std::string _Mode = (operation == UNCACHED) ? "_UNCACHED" : "_CACHED";
+    //Determine the cache mode
+    CacheMode operation = (Cache_Mode == 'c') ? CacheMode::Cold : CacheMode::Hot;
+    std::string _Mode = (operation == CacheMode::Cold) ? "_COLD" : "_HOT";
 
     auto memoryBenchmark = [&](benchmark::State& state) {
         for (const auto &MemData : functionList) {
@@ -870,6 +912,14 @@ int main(int argc, char** argv) {
         }
     };
 
+    auto strnlenBenchmark = [&](benchmark::State& state) {
+        for (const auto &strData : Strnlen_functionList) {
+            if (func == strData.functionName) {
+                runstrnlenBenchmark(state, operation, alignment, spill, page, strData.functionPtr, strData.functionName);
+            }
+        }
+    };
+
     auto substrBenchmark = [&](benchmark::State& state) {
         for (const auto &strData : subfunctionList) {
             if (func == strData.functionName) {
@@ -903,7 +953,9 @@ int main(int argc, char** argv) {
             registerBenchmark(memoryBenchmark);
         }
     } else if (func.compare(0, 3, "str") == 0) {
-        if (func.compare(0, 4, "strn") == 0) {
+        if (func == "strnlen") {
+            registerBenchmark(strnlenBenchmark);
+        } else if (func.compare(0, 4, "strn") == 0) {
             registerBenchmark(string_n_Benchmark);
         } else if (func.compare(0, 4, "strl") == 0) {
             registerBenchmark(strlenBenchmark);

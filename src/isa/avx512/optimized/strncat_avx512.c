@@ -26,32 +26,35 @@
 #include <stddef.h>
 #include "logger.h"
 #include <stdint.h>
+#include <immintrin.h>
+#include "almem_defs.h"
 #include "strlen_avx512.c"
+
+// Include strnlen implementation (same file as strlen with macro)
+#define STRNLEN_AVX512
+#include "strlen_avx512.c"
+#undef STRNLEN_AVX512
+
 #include "memcpy_impl_avx512.c"
 #define NULL_TERM_CHAR '\0'
 
-/* This function is an optimized version of strncat using AVX-512 instructions.
-It concatenates the n bytes of string `src` to the end of the string `dst`.*/
+/* AVX-512 optimized strncat using existing optimized strlen, strnlen, and memcpy. */
 static inline char * __attribute__((flatten)) _strncat_avx512(char *dst, const char *src, size_t n)
 {
-    size_t offset = _strlen_avx512(dst);
-    size_t len = _strlen_avx512(src);
+    if (n == 0)
+        return dst;
 
-    /*Check if the src string length is less than or equal to
-    the maximum number of characters to append (n) */
-    if (len <= n)
-    {
-        //If the source string is shorter than or equal to n,
-        //copy the entire source string plus the null terminator
-        _memcpy_avx512_erms(dst + offset , src, len + 1);
-    }
-    else
-    {
-        // If the source string is longer than n,
-        // copy only the first n characters from the source string
-        _memcpy_avx512_erms(dst + offset , src, n);
-        *(dst + offset + n) = NULL_TERM_CHAR;
-    }
-
+    // Find end of dst using optimized strlen
+    size_t dst_len = _strlen_avx512(dst);
+    // Find how many bytes to copy from src (at most n) using optimized strnlen
+    size_t copy_len = _strnlen_avx512(src, n);
+    
+    // Use optimized memcpy to copy
+    if (copy_len > 0)
+        _memcpy_avx512_erms(dst + dst_len, src, copy_len);
+    
+    // Add null terminator
+    *(dst + dst_len + copy_len) = NULL_TERM_CHAR;
+    
     return dst;
 }

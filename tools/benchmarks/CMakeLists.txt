@@ -31,3 +31,7 @@ DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/)
 
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/bench.py
   DESTINATION ${CMAKE_BINARY_DIR}/test)
+
+# Copy GetParser.py from external to benchmarks root for imports
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/external/GetParser.py
+  DESTINATION ${CMAKE_BINARY_DIR}/tools/benchmarks/)

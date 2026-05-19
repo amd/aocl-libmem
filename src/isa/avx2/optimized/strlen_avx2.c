@@ -29,8 +29,17 @@
 #include "almem_defs.h"
 #include <zen_cpu_info.h>
 
+/* This function is an optimized version of strlen/strnlen using AVX2 instructions. */
+#ifdef STRNLEN_AVX2
+static inline size_t __attribute__((flatten)) _strnlen_avx2(const char *str, size_t maxlen)
+#else
 static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)
+#endif
 {
+#ifdef STRNLEN_AVX2
+    if (maxlen == 0)
+        return 0;
+#endif
     size_t offset;
     __m256i y0, y1, y2, y3, y4, y5, y6;
     int32_t  ret, ret1, ret2;
@@ -43,31 +52,101 @@ static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)
         y1 = _mm256_loadu_si256((void *)str - offset);
         ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
         ret = ret >> offset;
+#ifdef STRNLEN_AVX2
+        if (ret)
+        {
+            size_t pos = _tzcnt_u32(ret);
+            return (pos < maxlen) ? pos : maxlen;
+        }
+        size_t safe_bytes = YMM_SZ - offset;
+        if (safe_bytes >= maxlen)
+            return maxlen;
+        if (maxlen <= YMM_SZ)
+        {
+            size_t rem = maxlen - safe_bytes;
+            y1 = _mm256_loadu_si256((void *) (str + safe_bytes));
+            ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+            uint32_t mask = (rem >= 32) ? UINT32_MAX : ((1U << rem) - 1);
+            ret = ret & mask;
+            if (ret)
+                return _tzcnt_u32(ret) + safe_bytes;
+            return maxlen;
+        }
+#else
         if (ret)
             return _tzcnt_u32(ret);
+#endif
     }
     else
     {
+#ifdef STRNLEN_AVX2
+        if (maxlen < YMM_SZ)
+        {
+            y1 = _mm256_loadu_si256((void *)str);
+            ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+            uint32_t mask = (maxlen >= 32) ? UINT32_MAX : ((1U << maxlen) - 1);
+            ret = ret & mask;
+            if (ret)
+                return _tzcnt_u32(ret);
+            return maxlen;
+        }
+#endif
         y1 = _mm256_loadu_si256((void *)str);
         ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
         if (ret)
             return _tzcnt_u32(ret);
     }
 
+#ifdef STRNLEN_AVX2
+    if (YMM_SZ >= maxlen)
+        return maxlen;
+#endif
+
     // cache-line alignment
     if (!((uintptr_t)str & CACHE_LINE_OFFSET))
     {
         offset = ((uintptr_t)str & -(CACHE_LINE_OFFSET)) + YMM_SZ;
+#ifdef STRNLEN_AVX2
+        if (offset - (uintptr_t)str + YMM_SZ > maxlen)
+        {
+            if (offset - (uintptr_t)str >= maxlen)
+                return maxlen;
+            // Partial load
+            size_t rem = maxlen - (offset - (uintptr_t)str);
+            y1 = _mm256_loadu_si256((void *)offset);
+            ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+            uint32_t mask = (rem >= 32) ? UINT32_MAX : ((1U << rem) - 1);
+            ret = ret & mask;
+            if (ret)
+                return _tzcnt_u32(ret) + offset - (uintptr_t)str;
+            return maxlen;
+        }
+#endif
         y1 = _mm256_load_si256((void *)offset);
         ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
         if (ret)
+#ifdef STRNLEN_AVX2
+        {
+            size_t pos = _tzcnt_u32(ret) + offset - (uintptr_t)str;
+            return (pos < maxlen) ? pos : maxlen;
+        }
+#else
             return _tzcnt_u32(ret) + offset - (uintptr_t)str;
+#endif
     }
 
     // 4-vec alignment
     if (!((uintptr_t)str & AVX2_VEC_4_OFFSET))
     {
         offset = ((uintptr_t)str & -(AVX2_VEC_4_OFFSET)) + (2 * YMM_SZ);
+#ifdef STRNLEN_AVX2
+        if (offset - (uintptr_t)str + 2 * YMM_SZ > maxlen)
+        {
+            // Convert to byte offset and jump to main loop
+            offset = offset - (uintptr_t)str;
+            goto main_loop_with_offset;
+        }
+#endif
         y1 = _mm256_load_si256((void*)offset);
         y2 = _mm256_load_si256((void*)offset + YMM_SZ);
         y3 = _mm256_cmpeq_epi8(y1, y0);
@@ -77,12 +156,32 @@ static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)
         {
             ret1 = _mm256_movemask_epi8(y3);
             if (ret1)
+#ifdef STRNLEN_AVX2
+            {
+                size_t pos = _tzcnt_u32(ret1) + offset - (uintptr_t)str;
+                return (pos < maxlen) ? pos : maxlen;
+            }
+            size_t pos = _tzcnt_u32(ret) + offset + YMM_SZ - (uintptr_t)str;
+            return (pos < maxlen) ? pos : maxlen;
+#else
                 return _tzcnt_u32(ret1) + offset - (uintptr_t)str;
             return _tzcnt_u32(ret) + offset + YMM_SZ - (uintptr_t)str;
+#endif
         }
     }
 
     offset = (uintptr_t)str & -(AVX2_VEC_4_SZ);
+#ifdef STRNLEN_AVX2
+    offset = offset - (uintptr_t)str + AVX2_VEC_4_SZ;  // Convert to byte offset from str
+    
+main_loop_with_offset:
+    while (offset + AVX2_VEC_4_SZ <= maxlen)
+    {
+        y1 = _mm256_load_si256((void*)(str + offset));
+        y2 = _mm256_load_si256((void*)(str + offset + YMM_SZ));
+        y3 = _mm256_load_si256((void*)(str + offset + 2 * YMM_SZ));
+        y4 = _mm256_load_si256((void*)(str + offset + 3 * YMM_SZ));
+#else
     do
     {
         offset += AVX2_VEC_4_SZ;
@@ -90,27 +189,94 @@ static inline size_t __attribute__((flatten)) _strlen_avx2(const char *str)
         y2 = _mm256_load_si256((void*)offset + YMM_SZ);
         y3 = _mm256_load_si256((void*)offset + 2 * YMM_SZ);
         y4 = _mm256_load_si256((void*)offset + 3 * YMM_SZ);
+#endif
 
         y5 = _mm256_min_epu8(y1, y2);
         y6 = _mm256_min_epu8(y3, y4);
 
         ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_min_epu8(y5, y6), y0));
+        
+#ifdef STRNLEN_AVX2
+        if (ret)
+            break;
+        
+        offset += AVX2_VEC_4_SZ;
+    }
+    
+    // Check if we found null in the 4-vector block
+    if (ret)
+    {
+#else
     } while(!ret);
+#endif
 
-    if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
-    {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
+        if ((ret1 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y5, y0))))
         {
-            return (_tzcnt_u32(ret2) + offset - (uintptr_t)str);
+            if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0))))
+            {
+#ifdef STRNLEN_AVX2
+                size_t pos = _tzcnt_u32(ret2) + offset;
+                return (pos < maxlen) ? pos : maxlen;
+#else
+                return (_tzcnt_u32(ret2) + offset - (uintptr_t)str);
+#endif
+            }
+#ifdef STRNLEN_AVX2
+            size_t pos = _tzcnt_u32(ret1) + YMM_SZ + offset;
+            return (pos < maxlen) ? pos : maxlen;
+#else
+            return (_tzcnt_u32(ret1) + YMM_SZ + offset  - (uintptr_t)str);
+#endif
         }
-        return (_tzcnt_u32(ret1) + YMM_SZ + offset  - (uintptr_t)str);
-    }
-    else
-    {
-        if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
+        else
         {
-            return (_tzcnt_u32(ret2) + 2 * YMM_SZ + offset - (uintptr_t)str);
+            if ((ret2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y3, y0))))
+            {
+#ifdef STRNLEN_AVX2
+                size_t pos = _tzcnt_u32(ret2) + 2 * YMM_SZ + offset;
+                return (pos < maxlen) ? pos : maxlen;
+#else
+                return (_tzcnt_u32(ret2) + 2 * YMM_SZ + offset - (uintptr_t)str);
+#endif
+            }
+#ifdef STRNLEN_AVX2
+            size_t pos = _tzcnt_u32(ret) + 3 * YMM_SZ + offset;
+            return (pos < maxlen) ? pos : maxlen;
+#else
+            return (_tzcnt_u32(ret) + 3 * YMM_SZ + offset - (uintptr_t)str);
+#endif
         }
-        return (_tzcnt_u32(ret) + 3 * YMM_SZ + offset - (uintptr_t)str);
+#ifdef STRNLEN_AVX2
     }
+
+    // Handle remaining vectors
+    while (offset + YMM_SZ <= maxlen)
+    {
+        y1 = _mm256_loadu_si256((void*)(str + offset));
+        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+        if (ret)
+        {
+            size_t pos = _tzcnt_u32(ret) + offset;
+            return (pos < maxlen) ? pos : maxlen;
+        }
+        offset += YMM_SZ;
+    }
+
+    // Handle final partial vector
+    if (offset < maxlen)
+    {
+        size_t rem = maxlen - offset;
+        y1 = _mm256_loadu_si256((void*)(str + offset));
+        ret = _mm256_movemask_epi8(_mm256_cmpeq_epi8(y1, y0));
+        uint32_t mask = (rem >= 32) ? UINT32_MAX : ((1U << rem) - 1);
+        ret = ret & mask;
+        if (ret)
+        {
+            size_t pos = _tzcnt_u32(ret) + offset;
+            return (pos < maxlen) ? pos : maxlen;
+        }
+    }
+
+    return maxlen;
+#endif
 }
