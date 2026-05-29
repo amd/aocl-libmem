@@ -43,6 +43,10 @@ LIB_DIR="$BUILD_DIR/lib"
 # Find repository root for CMakeLists.txt (one level up from build)
 REPO_ROOT="$(cd "$BUILD_DIR/.." && pwd)"
 
+KNOWN_STABLE_VER="2.43"
+GLIBC_VERSION="glibc-${KNOWN_STABLE_VER}"
+echo "Using glibc release: $GLIBC_VERSION"
+
 # Find the shared library (version-agnostic - finds versioned or symlink)
 SHARED_LIB=$(find "$LIB_DIR" -name "libaocl-libmem.so*" -type f | head -1)
 
@@ -87,8 +91,11 @@ else
     )
 fi
 
+GLIBC_EXACT_VERSION=$(curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=${GLIBC_VERSION};f=version.h" | grep -oP 'VERSION "\K[^"]+')
+echo "Exact glibc version: ${GLIBC_EXACT_VERSION:-unknown}"
+
 echo ""
-echo "Downloading fresh glibc test files..."
+echo "Downloading glibc ${GLIBC_EXACT_VERSION:-$GLIBC_VERSION} test files..."
 echo "========================================="
 
 # Download test files from glibc repository
@@ -98,7 +105,7 @@ for func in "${FUNCTIONS[@]}"; do
         echo "test-${func}.c already exists, skipping download"
     else
         echo "Downloading test-${func}.c..."
-        curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-${func}.c" \
+        curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=${GLIBC_VERSION};f=string/test-${func}.c" \
              -o "$test_file"
         
         if [ -f "$test_file" ]; then
@@ -116,7 +123,7 @@ if [ -f "$test_string_file" ]; then
     echo "test-string.h already exists, skipping download"
 else
     echo "Downloading test-string.h..."
-    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-string.h" \
+    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=${GLIBC_VERSION};f=string/test-string.h" \
          -o "$test_string_file"
 
     if [ -f "$test_string_file" ]; then
@@ -134,7 +141,7 @@ if [ -f "$test_memcpy_support_file" ]; then
     echo "test-memcpy-support.h already exists, skipping download"
 else
     echo "Downloading test-memcpy-support.h..."
-    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-memcpy-support.h" \
+    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=${GLIBC_VERSION};f=string/test-memcpy-support.h" \
          -o "$test_memcpy_support_file"
 
     if [ -f "$test_memcpy_support_file" ]; then
@@ -350,7 +357,8 @@ echo ""
 echo "Test execution completed!"
 echo "============================"
 echo "Summary:"
-echo "   - Downloaded ${#FUNCTIONS[@]} glibc test files from internet"
+echo "   - glibc version: ${GLIBC_EXACT_VERSION:-unknown} (${GLIBC_VERSION})"
+echo "   - Downloaded ${#FUNCTIONS[@]} glibc test files"
 echo "   - Applied minimal patches to test-string.h"
 echo "   - Cleaned all test files by removing problematic includes"
 echo "   - Compiled ${#COMPILED_TESTS[@]} tests successfully"
