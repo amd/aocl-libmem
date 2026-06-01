@@ -42,4 +42,7 @@
     #define LIBMEM_SUBSEPARATOR()       do {} while(0)
 #endif
 
+// Always-on summary line (printed even with LIBMEM_VERBOSE off).
+#define LIBMEM_SUMMARY(fmt, ...)        std::printf("[SUMMARY] " fmt "\n", ##__VA_ARGS__)
+
 #endif // LIBMEM_COMMON_LOGGING_HPP

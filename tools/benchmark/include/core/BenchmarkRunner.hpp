@@ -39,6 +39,7 @@
 #include "invoke/InvokeAdapter.hpp"
 #include "buffer/BufferFactory.hpp"
 #include "fill/DataFill.hpp"
+#include "fill/RandomPool.hpp"
 #include "core/BenchmarkConfig.hpp"
 #include "core/CacheControl.hpp"
 #include "config/Logging.hpp"
@@ -132,8 +133,10 @@ private:
             // safely only while MAX_BENCHMARK_SIZE <= 2 GiB. To raise the
             // cap, widen offsets to size_t and use a 64-bit RNG.
             uint8_t* base = static_cast<uint8_t*>(buf.src_block.ptr);
-            uint32_t dst_off = static_cast<uint32_t>(std::rand() % size + 1);
-            uint32_t src_off = dst_off + static_cast<uint32_t>(std::rand() % size + 1);
+            common::RandomPool& rp = common::globalRandomPool();
+            uint32_t dst_off = rp.uniform_u32(static_cast<uint32_t>(size)) + 1;
+            uint32_t src_off = dst_off +
+                rp.uniform_u32(static_cast<uint32_t>(size)) + 1;
             buf.dst = base + dst_off;
             buf.src = base + src_off;
             buf.size = size;
@@ -150,12 +153,13 @@ private:
             return;
 
         if (config.align_option == AlignOption::Unaligned) {
-            uint32_t src_rnd = static_cast<uint32_t>(
-                (std::rand() % common::CL_SPILL_OFFSET) + 1);
+            common::RandomPool& rp = common::globalRandomPool();
+            uint32_t src_rnd = rp.uniform_u32(
+                static_cast<uint32_t>(common::CL_SPILL_OFFSET)) + 1;
             uint32_t dst_rnd;
             do {
-                dst_rnd = static_cast<uint32_t>(
-                    (std::rand() % common::CL_SPILL_OFFSET) + 1);
+                dst_rnd = rp.uniform_u32(
+                    static_cast<uint32_t>(common::CL_SPILL_OFFSET)) + 1;
             } while (dst_rnd == src_rnd);
 
             if (config.spill == 'm') {

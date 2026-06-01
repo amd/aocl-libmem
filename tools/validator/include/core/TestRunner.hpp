@@ -153,7 +153,14 @@ class IValidator {
 public:
     virtual ~IValidator() = default;
     virtual const char* getName() const = 0;
+
+    // Run every registered test at one (align1, align2) pair. No skipping.
     virtual void validate(size_t size, uint32_t align1, uint32_t align2) = 0;
+
+    // Full VEC_SZ x VEC_SZ sweep. Alignment-insensitive tests run only
+    // on the (0,0) pass; emits a LIBMEM_SUMMARY line at the end.
+    virtual void validateSweep(size_t size) = 0;
+
     virtual const TestStats& getStats() const = 0;
     virtual std::vector<std::string> getTestNames() const = 0;
     virtual const std::vector<TestEntry>& getTestEntries() const = 0;
@@ -211,8 +218,49 @@ public:
         LIBMEM_DEBUG("  Mode: Regular tests");
         LIBMEM_DEBUG("  Registered tests: %zu", registry_.size());
 
-        // Run regular tests
-        runRegularTests(size, dst_align, src_align);
+        // Not a sweep: counters discarded.
+        size_t unused_run = 0, unused_skipped = 0, unused_passes = 0;
+        runRegularTests(size, dst_align, src_align, /*inside_sweep=*/false,
+                        unused_run, unused_skipped, unused_passes);
+    }
+
+    void validateSweep(size_t size) final override {
+        LIBMEM_DEBUG("Function: %s", Traits::name());
+        LIBMEM_DEBUG("  Size: %zu bytes", size);
+        LIBMEM_DEBUG("  Mode: Alignment sweep (%zu x %zu = %zu passes)",
+                  static_cast<size_t>(VEC_SZ), static_cast<size_t>(VEC_SZ),
+                  static_cast<size_t>(VEC_SZ) * static_cast<size_t>(VEC_SZ));
+
+        // Per-sweep counters: local, passed by ref to runRegularTests.
+        size_t sweep_total_run = 0;
+        size_t sweep_total_skipped = 0;
+        size_t sweep_non_canonical_passes = 0;
+
+        if (size == 0) {
+            // Zero-size paths can be alignment-sensitive; sweep all pairs.
+            for (uint32_t src = 0; src < VEC_SZ; ++src) {
+                for (uint32_t dst = 0; dst < VEC_SZ; ++dst) {
+                    LIBMEM_DEBUG("Sweep pass (zero-size): src=%u, dst=%u", src, dst);
+                    runZeroSizeTests(dst, src);
+                }
+            }
+            return;
+        }
+
+        for (uint32_t src = 0; src < VEC_SZ; ++src) {
+            for (uint32_t dst = 0; dst < VEC_SZ; ++dst) {
+                LIBMEM_DEBUG("Sweep pass: src=%u, dst=%u", src, dst);
+                runRegularTests(size, dst, src, /*inside_sweep=*/true,
+                                sweep_total_run, sweep_total_skipped,
+                                sweep_non_canonical_passes);
+            }
+        }
+
+        LIBMEM_SUMMARY("%s size=%zu sweep: ran %zu tests, skipped %zu "
+                       "alignment-insensitive on %zu non-canonical passes",
+                       Traits::name(), size,
+                       sweep_total_run, sweep_total_skipped,
+                       sweep_non_canonical_passes);
     }
 
     const TestStats& getStats() const override {
@@ -241,12 +289,19 @@ private:
     TestRegistry registry_;
     TestStats stats_;
 
-    /**
-     * Run all regular tests
-     */
-    void runRegularTests(size_t size, uint32_t dst_align, uint32_t src_align) {
+    // inside_sweep=true gates the alignment-insensitive skip. Sweep
+    // counters are owned by validateSweep() and passed in by reference.
+    void runRegularTests(size_t size, uint32_t dst_align, uint32_t src_align,
+                         bool inside_sweep,
+                         size_t& sweep_total_run,
+                         size_t& sweep_total_skipped,
+                         size_t& sweep_non_canonical_passes) {
         TestContext ctx(size, dst_align, src_align);
         ctx.alloc_params = this->alloc_params;
+
+        const bool canonical_pass = (src_align == 0 && dst_align == 0);
+        const bool non_canonical_in_sweep = inside_sweep && !canonical_pass;
+        if (non_canonical_in_sweep) sweep_non_canonical_passes++;
 
         size_t test_num = 0;
         size_t total_regular = 0;
@@ -265,12 +320,20 @@ private:
             ITestCase* test = entry.instance.get();
             test_num++;
 
+            if (non_canonical_in_sweep && !test->usesAlignmentContext()) {
+                LIBMEM_DEBUG("Skip [%zu/%zu]: %s::%s (alignment-insensitive)",
+                         test_num, total_regular, Traits::name(), test->name());
+                sweep_total_skipped++;
+                continue;
+            }
+
             LIBMEM_DEBUG("Test [%zu/%zu]: %s::%s", test_num, total_regular,
                      Traits::name(), test->name());
             LIBMEM_DEBUG("  Parameters: size=%zu, dst_align=%u, src_align=%u",
                      size, dst_align, src_align);
 
             TestResult result = test->execute(ctx);
+            if (inside_sweep) sweep_total_run++;
 
             if (result.passed) {
                 stats_.passed++;

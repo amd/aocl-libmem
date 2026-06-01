@@ -52,6 +52,9 @@ public:
         return Dir == OverlapDirection::Forward ? "ForwardOverlap" : "BackwardOverlap";
     }
 
+    // Offsets derived from ctx.size only; ctx.*_align unused.
+    bool usesAlignmentContext() const override { return false; }
+
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
 

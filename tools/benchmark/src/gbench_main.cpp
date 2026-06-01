@@ -36,6 +36,7 @@
 #include "core/BenchmarkConfig.hpp"
 #include "core/BenchmarkDispatch.hpp"
 #include "config/Logging.hpp"
+#include "fill/RandomPool.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -44,7 +45,10 @@ using namespace libmem::benchmark;
 
 int main(int argc, char** argv) {
     ::benchmark::Initialize(&argc, argv);
-    srand(static_cast<unsigned int>(time(nullptr)));
+    // Seed legacy rand() and globalRandomPool() from the same clock value.
+    unsigned int seed = static_cast<unsigned int>(time(nullptr));
+    srand(seed);
+    libmem::common::globalRandomPool().seed(static_cast<uint64_t>(seed));
 
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0]

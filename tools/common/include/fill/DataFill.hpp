@@ -32,6 +32,7 @@
  */
 
 #include "config/Constants.hpp"
+#include "fill/RandomPool.hpp"
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -47,10 +48,10 @@ enum class MatchPosition {
     NO_MATCH
 };
 
+// Bulk fillers route through globalRandomPool() (xoshiro256**, 8 B/step).
+
 inline void fillLowercaseLetters(uint8_t* buf, size_t size) {
-    for (size_t i = 0; i < size; ++i) {
-        buf[i] = 'a' + (rand() % LOWER_CHARS);
-    }
+    globalRandomPool().fill_lowercase(buf, size);
 }
 
 inline void fillWithByte(uint8_t* buf, size_t size, uint8_t value) {
@@ -61,24 +62,21 @@ inline void fillWithByte(uint8_t* buf, size_t size, uint8_t value) {
  * @param avoid_null If true, replace 0 with non-zero value (default: true)
  */
 inline void fillFullByteRange(uint8_t* buf, size_t size, bool avoid_null = true) {
-    for (size_t i = 0; i < size; ++i) {
-        uint8_t val = rand() & 255;
-        if (avoid_null && val == 0) {
-            val = 1 + (rand() & 127);
-        }
-        buf[i] = val;
+    if (avoid_null) {
+        globalRandomPool().fill_full_range_non_zero(buf, size);
+    } else {
+        globalRandomPool().fill_bytes(buf, size);
     }
 }
 
 inline void fillNonNull(uint8_t* buf, size_t size) {
-    for (size_t i = 0; i < size; ++i) {
-        buf[i] = static_cast<uint8_t>((std::rand() % 255) + 1);
-    }
+    globalRandomPool().fill_non_null(buf, size);
 }
 
 inline void shuffleChars(char* buf, int len) {
+    RandomPool& rp = globalRandomPool();
     for (int i = len - 1; i > 0; --i) {
-        int j = rand() % (i + 1);
+        uint32_t j = rp.uniform_u32(static_cast<uint32_t>(i + 1));
         char t = buf[i];
         buf[i] = buf[j];
         buf[j] = t;
@@ -162,8 +160,9 @@ inline void fillStrstrPos(uint8_t* haystack, uint8_t* needle, size_t size,
         break;
     }
     case MatchPosition::NO_MATCH: {
+        RandomPool& rp = globalRandomPool();
         for (size_t i = 0; i < size - 1; ++i)
-            haystack[i] = static_cast<uint8_t>('A' + (std::rand() % LOWER_CHARS));
+            haystack[i] = static_cast<uint8_t>('A' + rp.uniform_u32(LOWER_CHARS));
         haystack[size - 1] = '\0';
         break;
     }

@@ -57,6 +57,9 @@ class PageBoundaryTestCase : public TestCase<Tag> {
 public:
     const char* name() const override { return "PageBoundary"; }
 
+    // Uses internal START_OFFSETS, not ctx.*_align.
+    bool usesAlignmentContext() const override { return false; }
+
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
         const size_t size = ctx.size;
@@ -79,6 +82,9 @@ public:
                         return result;
                     }
                 }
+
+                // Subclasses that ignore off2 collapse this loop to 1 iter.
+                if (!usesOff2()) break;
             }
         }
 
@@ -89,6 +95,9 @@ protected:
     virtual size_t minTestSize() const { return 8; }
     virtual bool requiresDifferentOffsets() const { return false; }
     virtual bool usePositions() const { return true; }
+
+    // Override to false when the subclass ignores off2.
+    virtual bool usesOff2() const { return true; }
 
     virtual TestResult runPageBoundaryTest(size_t size, size_t pos,
                                            uint32_t off1, uint32_t off2) = 0;
@@ -117,8 +126,12 @@ protected:
         return positions;
     }
 
+    // Reseed both std::rand() and globalRandomPool() so each iteration
+    // produces its own deterministic pattern.
     void seedRandom(size_t size, size_t pos, uint32_t off1, uint32_t off2) const {
-        std::srand(static_cast<unsigned>(size ^ pos ^ off1 ^ off2));
+        unsigned s = static_cast<unsigned>(size ^ pos ^ off1 ^ off2);
+        std::srand(s);
+        globalRandomPool().seed(static_cast<uint64_t>(s));
     }
 
     BufferPair setupPageCross(size_t size, uint32_t offset) {
@@ -152,6 +165,9 @@ template<typename Tag>
 class PageOverrunTestCase : public TestCase<Tag> {
 public:
     const char* name() const override { return "PageOverrun"; }
+
+    // Trap-page setup drives alignment; ctx.*_align unused.
+    bool usesAlignmentContext() const override { return false; }
 
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;

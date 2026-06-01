@@ -114,6 +114,10 @@ public:
     virtual const char* name() const = 0;
     virtual TestResult execute(const TestContext& ctx) = 0;
 
+    // Override to false if the test ignores ctx.src_align / ctx.dst_align;
+    // such tests are skipped on non-canonical passes of validateSweep().
+    virtual bool usesAlignmentContext() const { return true; }
+
 protected:
     TestContext ctx_;
 
@@ -318,6 +322,7 @@ public:
     virtual ~ITestCase() = default;
     virtual const char* name() const = 0;
     virtual TestResult execute(const TestContext& ctx) = 0;
+    virtual bool usesAlignmentContext() const = 0;
 };
 
 template<typename TestType>
@@ -333,6 +338,10 @@ public:
 
     TestResult execute(const TestContext& ctx) override {
         return test_.execute(ctx);
+    }
+
+    bool usesAlignmentContext() const override {
+        return test_.usesAlignmentContext();
     }
 };
 

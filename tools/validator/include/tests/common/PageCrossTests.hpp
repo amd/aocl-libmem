@@ -79,9 +79,6 @@ protected:
         auto dst_buf = allocateSingle(size, p2);
         if (!dst_buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, 0, off1, off2);
-        fillFullByteRange(src_buf.srcAllocBase(), src_buf.srcAllocSize());
-
         uint8_t* src = src_buf.src;
         uint8_t* dst = dst_buf.src;
 
@@ -89,6 +86,9 @@ protected:
             !this->fitsInAlloc(dst_buf, dst, size)) {
             return TestResult::success();
         }
+
+        // Fill only the [src..src+size] read window.
+        fillDeterministicNonZeroPagePattern(src, size, off1, off2);
 
         if (TestCase<Tag>::Traits::is_string_func) {
             for (size_t i = 0; i < size - 1; ++i) {
@@ -106,6 +106,22 @@ protected:
         }
 
         return TestResult::success();
+    }
+
+private:
+    // Deterministic [1..255] fill keyed on (off1,off2). Private to this
+    // class because it's only correctness-safe for data-independent funcs
+    // (memcpy/memmove/mempcpy/strcpy/strncpy); compare/search/length tests
+    // need value-sensitive coverage.
+    static void fillDeterministicNonZeroPagePattern(uint8_t* p, size_t n,
+                                                    uint32_t off1, uint32_t off2) {
+        // 31u and 1315423911u are arbitrary coprime odd mixers used
+        // only to give each (off1, off2) a distinct phase; values are
+        // not load-bearing.
+        const uint32_t phase = (off1 * 31u) ^ (off2 * 1315423911u);
+        for (size_t i = 0; i < n; ++i) {
+            p[i] = static_cast<uint8_t>(1u + ((static_cast<uint32_t>(i) + phase) % 255u));
+        }
     }
 };
 
@@ -138,10 +154,6 @@ protected:
         auto buf2 = allocateSingle(size, p2);
         if (!buf2.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, mismatch_pos, off1, off2);
-        fillFullByteRange(buf1.srcAllocBase(), buf1.srcAllocSize());
-        copyData(buf2.srcAllocBase(), buf1.srcAllocBase(), buf1.srcAllocSize());
-
         uint8_t* str1 = buf1.src;
         uint8_t* str2 = buf2.src;
 
@@ -150,6 +162,9 @@ protected:
             return TestResult::success();
         }
 
+        // Fill/copy only the [str*..str*+size] read window.
+        this->seedRandom(size, mismatch_pos, off1, off2);
+        fillFullByteRange(str1, size);
         copyData(str2, str1, size);
 
         uint8_t val1 = str1[mismatch_pos];
@@ -191,6 +206,8 @@ template<typename Tag>
 class PageBoundaryFillTest : public PageBoundaryTestCase<Tag> {
 protected:
     bool usePositions() const override { return false; }
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
 
     TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t /*off2*/) override {
@@ -230,6 +247,9 @@ protected:
 template<typename Tag>
 class PageBoundaryMemchrTest : public PageBoundaryTestCase<Tag> {
 protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
     TestResult runPageBoundaryTest(size_t size, size_t search_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         AllocParams p = this->ctx_.alloc_params;
@@ -238,10 +258,14 @@ protected:
         auto buf = allocateSingle(size, p);
         if (!buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, search_pos, off1, 0);
-        fillFullByteRange(buf.srcAllocBase(), buf.srcAllocSize());
-
         uint8_t* str = buf.src;
+        if (!this->fitsInAlloc(buf, str, size)) {
+            return TestResult::success();
+        }
+
+        // memchr reads at most str[0..size-1]; fill only that window.
+        this->seedRandom(size, search_pos, off1, 0);
+        fillFullByteRange(str, size);
 
         const uint8_t search_char = 0xFF;
         for (size_t i = 0; i < size; ++i) {
@@ -273,6 +297,9 @@ protected:
 template<typename Tag>
 class PageBoundaryStrlenTest : public PageBoundaryTestCase<Tag> {
 protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
     TestResult runPageBoundaryTest(size_t size, size_t null_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         AllocParams p = this->ctx_.alloc_params;
@@ -281,14 +308,15 @@ protected:
         auto buf = allocateSingle(size + 1, p);
         if (!buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, null_pos, off1, 0);
-        fillNonNull(buf.srcAllocBase(), buf.srcAllocSize());
-
         uint8_t* str = buf.src;
 
         if (!this->fitsInAlloc(buf, str, null_pos + 1)) {
             return TestResult::success();
         }
+
+        // strlen reads at most str[0..null_pos]; fill only that window.
+        this->seedRandom(size, null_pos, off1, 0);
+        fillNonNull(str, null_pos + 1);
 
         str[null_pos] = '\0';
 
@@ -315,6 +343,9 @@ protected:
 template<typename Tag>
 class PageBoundaryStrnlenTest : public PageBoundaryTestCase<Tag> {
 protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
     TestResult runPageBoundaryTest(size_t size, size_t null_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         AllocParams p = this->ctx_.alloc_params;
@@ -323,14 +354,15 @@ protected:
         auto buf = allocateSingle(size + 1, p);
         if (!buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, null_pos, off1, 0);
-        fillNonNull(buf.srcAllocBase(), buf.srcAllocSize());
-
         uint8_t* str = buf.src;
 
         if (!this->fitsInAlloc(buf, str, null_pos + 1)) {
             return TestResult::success();
         }
+
+        // strnlen reads at most str[0..null_pos]; fill that window.
+        this->seedRandom(size, null_pos, off1, 0);
+        fillNonNull(str, null_pos + 1);
 
         str[null_pos] = '\0';
 
@@ -388,9 +420,6 @@ protected:
         auto dst_buf = allocateSingle(size + 2, p2);
         if (!dst_buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, 0, off1, off2);
-        fillFullByteRange(src_buf.srcAllocBase(), src_buf.srcAllocSize());
-
         uint8_t* src = src_buf.src;
         uint8_t* dst = dst_buf.src;
 
@@ -398,6 +427,10 @@ protected:
             !this->fitsInAlloc(dst_buf, dst, size + 2)) {
             return TestResult::success();
         }
+
+        // strcat / strncat read only src[0..src_len-1]; fill that window only.
+        this->seedRandom(size, 0, off1, off2);
+        fillFullByteRange(src, src_len);
 
         for (size_t i = 0; i < src_len; ++i) {
             if (src[i] == 0) src[i] = 1;
@@ -439,6 +472,9 @@ protected:
 template<typename Tag>
 class PageBoundaryStrchrTest : public PageBoundaryTestCase<Tag> {
 protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
     TestResult runPageBoundaryTest(size_t size, size_t search_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
         AllocParams p = this->ctx_.alloc_params;
@@ -447,14 +483,15 @@ protected:
         auto buf = allocateSingle(size + 1, p);
         if (!buf.valid()) return this->error("allocation failed");
 
-        this->seedRandom(size, search_pos, off1, 0);
-        fillFullByteRange(buf.srcAllocBase(), buf.srcAllocSize());
-
         uint8_t* str = buf.src;
 
         if (!this->fitsInAlloc(buf, str, size + 1)) {
             return TestResult::success();
         }
+
+        // strchr reads at most str[0..size]; fill that window only.
+        this->seedRandom(size, search_pos, off1, 0);
+        fillFullByteRange(str, size + 1);
 
         const char search_char = '!';
         for (size_t i = 0; i < size; ++i) {
@@ -491,6 +528,8 @@ template<typename Tag>
 class PageBoundaryStrstrTest : public PageBoundaryTestCase<Tag> {
 protected:
     size_t minTestSize() const override { return 16; }
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
 
     TestResult runPageBoundaryTest(size_t size, size_t needle_pos,
                             uint32_t off1, uint32_t /*off2*/) override {
@@ -550,6 +589,9 @@ protected:
 template<typename Tag>
 class PageBoundaryStrspnTest : public PageBoundaryTestCase<Tag> {
 protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
     TestResult runPageBoundaryTest(size_t size, size_t span_len,
                             uint32_t off1, uint32_t /*off2*/) override {
         AllocParams p = this->ctx_.alloc_params;
@@ -610,6 +652,8 @@ public:
 
 protected:
     bool usePositions() const override { return false; }
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
 
     TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t /*off2*/) override {
@@ -706,6 +750,8 @@ public:
 protected:
     bool usePositions() const override { return false; }
     size_t minTestSize() const override { return 8; }
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
 
     TestResult runPageBoundaryTest(size_t size, size_t /*pos*/,
                             uint32_t off1, uint32_t /*off2*/) override {

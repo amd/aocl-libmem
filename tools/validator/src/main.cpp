@@ -30,6 +30,7 @@
 
 #include "validators/AllValidators.hpp"
 #include "config/Constants.hpp"
+#include "fill/RandomPool.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -93,8 +94,11 @@ void listTests(const char* function_name) {
 }
 
 int main(int argc, char* argv[]) {
-    // Initialize random seed
-    srand(static_cast<unsigned int>(time(nullptr)));
+    // Seed legacy rand() and globalRandomPool() from the same clock value.
+    unsigned int seed = static_cast<unsigned int>(time(nullptr));
+    srand(seed);
+    libmem::common::globalRandomPool().seed(static_cast<uint64_t>(seed));
+
     
     // Handle special commands
     if (argc >= 2) {
@@ -159,18 +163,12 @@ int main(int argc, char* argv[]) {
 
     LIBMEM_DEBUG("Validator created for: %s", validator->getName());
 
-    // Run validation
     if (all_alignments) {
-        // Test all alignment combinations
+        // Sweep: alignment-insensitive tests run only on canonical (0,0).
         LIBMEM_INFO("Starting alignment sweep test...");
-        for (uint32_t src = 0; src < VEC_SZ; ++src) {
-            for (uint32_t dst = 0; dst < VEC_SZ; ++dst) {
-                LIBMEM_DEBUG("Testing alignment combination: src=%u, dst=%u", src, dst);
-                validator->validate(size, src, dst);
-            }
-        }
+        validator->validateSweep(size);
     } else {
-        // Single alignment test
+        // Single pass: every test runs.
         validator->validate(size, src_align, dst_align);
     }
 

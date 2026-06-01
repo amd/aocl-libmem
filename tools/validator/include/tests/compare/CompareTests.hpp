@@ -139,58 +139,93 @@ public:
             nullTerminate(buf.dst, ctx.size - 1);
         }
 
-        for (size_t i = 0; i < ctx.size; ++i) {
-            if (TestCase<Tag>::Traits::is_string_func && i == ctx.size - 1) {
-                continue;
+        // Exhaustive up to PAGE_SZ; stride-sample ~256 positions beyond to cap O(N^2).
+        size_t stride = (ctx.size <= PAGE_SZ) ? 1 : (ctx.size / 256 + 1);
+
+        auto probe = [&](size_t i) -> TestResult {
+            if (TestCase<Tag>::Traits::is_string_func && i >= ctx.size - 1) {
+                return TestResult::success();
             }
+            return checkPos(buf, ctx.size, i);
+        };
 
-            uint8_t original = buf.dst[i];
+        for (size_t i = 0; i < ctx.size; i += stride) {
+            TestResult r = probe(i);
+            if (!r.passed) return r;
+        }
 
-            buf.dst[i] = (buf.src[i] > 0) ? buf.src[i] - 1 : buf.src[i] + 1;
-
-            int ret = invokeCompare(buf.dst, buf.src, ctx.size);
-            int expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
-
-            if (TestCase<Tag>::Traits::is_string_func) {
-                if ((ret < 0) != (expected < 0)) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "sign mismatch at index, expected %s0, got %d",
-                                        expected < 0 ? "<" : ">", ret);
-                }
-            } else {
-                if (ret != expected) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "byte-by-byte mismatch, expected=%d, got=%d",
-                                        expected, ret);
-                }
+        // Uniform stride may skip vector-size / threshold boundaries;
+        // also probe every VEC_SZ-aligned index missed by the stride.
+        if (stride > 1) {
+            for (size_t i = VEC_SZ; i < ctx.size; i += VEC_SZ) {
+                if ((i % stride) == 0) continue;
+                TestResult r = probe(i);
+                if (!r.passed) return r;
             }
+        }
 
-            buf.dst[i] = buf.src[i] + 10;
-
-            ret = invokeCompare(buf.dst, buf.src, ctx.size);
-            expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
-
-            if (TestCase<Tag>::Traits::is_string_func) {
-                if ((ret > 0) != (expected > 0)) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "sign mismatch (greater), expected %s0, got %d",
-                                        expected > 0 ? ">" : "<", ret);
-                }
-            } else {
-                if (ret != expected) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "byte-by-byte greater mismatch, expected=%d, got=%d",
-                                        expected, ret);
-                }
-            }
-
-            buf.dst[i] = original;
+        // Stride > 1 may skip the tail; probe the last meaningful index.
+        // (For string funcs that's last-1, since buf[last] is '\0'.)
+        size_t last = ctx.size - 1;
+        if (stride > 1 && (last % stride) != 0 &&
+            !(TestCase<Tag>::Traits::is_string_func && last + 1 == ctx.size)) {
+            size_t tail = TestCase<Tag>::Traits::is_string_func ? last - 1 : last;
+            TestResult r = checkPos(buf, ctx.size, tail);
+            if (!r.passed) return r;
         }
 
         return TestResult::success();
     }
 
 private:
+    // Inject a less-than and a greater-than mismatch at index i, verify
+    // the comparator's sign/value, and restore the byte. Shared by the
+    // main loop and the tail probe.
+    TestResult checkPos(BufferPair& buf, size_t size, size_t i) {
+        uint8_t original = buf.dst[i];
+
+        buf.dst[i] = (buf.src[i] > 0) ? buf.src[i] - 1 : buf.src[i] + 1;
+
+        int ret = invokeCompare(buf.dst, buf.src, size);
+        int expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
+
+        if (TestCase<Tag>::Traits::is_string_func) {
+            if ((ret < 0) != (expected < 0)) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "sign mismatch at index, expected %s0, got %d",
+                                    expected < 0 ? "<" : ">", ret);
+            }
+        } else {
+            if (ret != expected) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "byte-by-byte mismatch, expected=%d, got=%d",
+                                    expected, ret);
+            }
+        }
+
+        buf.dst[i] = buf.src[i] + 10;
+
+        ret = invokeCompare(buf.dst, buf.src, size);
+        expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
+
+        if (TestCase<Tag>::Traits::is_string_func) {
+            if ((ret > 0) != (expected > 0)) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "sign mismatch (greater), expected %s0, got %d",
+                                    expected > 0 ? ">" : "<", ret);
+            }
+        } else {
+            if (ret != expected) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "byte-by-byte greater mismatch, expected=%d, got=%d",
+                                    expected, ret);
+            }
+        }
+
+        buf.dst[i] = original;
+        return TestResult::success();
+    }
+
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param &&
                            !traits::FunctionTraits<T>::is_string_func, int>::type
