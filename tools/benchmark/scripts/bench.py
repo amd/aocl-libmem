@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -601,15 +601,44 @@ def main():
     tbm_parser = subparsers.add_parser('tbm', parents=[common_parser], help='TinyMembench Benchmarking Tool')
 
     # Subparser for FBM
-    fbm_parser = subparsers.add_parser('fbm', parents=[common_parser], help='Fleetbench Benchmarking Tool')
+    fbm_parser = subparsers.add_parser('fbm', parents=[common_options_parser], help='Fleetbench Benchmarking Tool')
+    fbm_parser.add_argument("func", help="FleetBench supported functions",
+                            type=str, choices=['memcpy', 'memmove', 'memset', 'memcmp'],
+                            default="memcpy")
 
     fbm_parser.add_argument("-mem_alloc", help="specify the memory allocator for FleetBench",
                                type=str, choices=['tcmalloc', 'glibc'], default='glibc')
 
-    fbm_parser.add_argument("-i", "--repetitions", help = "Number of repitations for\
-                            performance measurement. Default value is \
-                            set to 100 iterations.",
-                        type = int, default = 100)
+    fbm_parser.add_argument("-n", "--repetitions", help="Number of repetitions for "
+                            "performance measurement. Default value is "
+                            "set to 10 iterations.",
+                        type=int, default=10)
+
+    fbm_parser.add_argument("--enable-aslr", dest="enable_aslr",
+                        action="store_true",
+                        help="Enable ASLR during benchmark runs. "
+                             "By default ASLR is disabled via "
+                             "'setarch $(uname -m) -R' for consistency.")
+
+    # FBM mode selection (mutually exclusive)
+    fbm_mode_group = fbm_parser.add_mutually_exclusive_group()
+    fbm_mode_group.add_argument("-c", "--cached", dest="fbm_mode",
+                        action="store_const", const="c",
+                        help="Cached mode (v0.2): L1 cache only, 9 Google workloads")
+    fbm_mode_group.add_argument("-m", "--multi_cache", dest="fbm_mode",
+                        action="store_const", const="m",
+                        help="Multi-cache mode (v0.3.3): L1/L2/LLC/Cold, 10 workloads")
+    fbm_mode_group.add_argument("-a", "--alignment", dest="fbm_mode",
+                        action="store_const", const="a",
+                        help="Alignment mode (v2.1): L1/L2/LLC/Cold/Mixed, alignment-aware")
+    fbm_parser.set_defaults(fbm_mode='a')
+
+    fbm_parser.add_argument("-w", "--workload", help="Run individual workload "
+                            "(0-8 for specific distribution, "
+                            "'fleet' for fleet aggregate in -m/-a modes). "
+                            "Default: run all workloads.",
+                        type=str, default=None,
+                        choices=['0','1','2','3','4','5','6','7','8','fleet'])
 
     # Subparser for DCPerf - uses common_options_parser but has custom positional arguments
     dcperf_parser = subparsers.add_parser('dcperf', parents=[common_options_parser],
@@ -642,7 +671,8 @@ def main():
     elif args.benchmark == 'tbm':
         args.bench_name = 'TinyMemBench'
     elif args.benchmark == 'fbm':
-        args.bench_name = 'FleeteBench'
+        fbm_names = {'c': 'FleetBench_Cached', 'm': 'FleetBench_MultiCache', 'a': 'FleetBench_Alignment'}
+        args.bench_name = fbm_names.get(args.fbm_mode, 'FleetBench')
     elif args.benchmark == 'dcperf':
         args.bench_name = 'DCPerf'
 

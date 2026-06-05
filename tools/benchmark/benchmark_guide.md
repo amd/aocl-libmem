@@ -11,7 +11,14 @@
         A microbenchmark support library for running memory benchmarks.
     - FleetBench:
 
-        By making use of existing probability data set, function call to a specific size is being made.
+        Google's production-representative memory benchmark. Supports three modes with different versions:
+        | Mode | Version | Cache Levels | Workloads | Description |
+        |------|---------|--------------|-----------|-------------|
+        | `-c` (Cached) | v0.2 | L1 only | 9 Google workloads (A,B,D,L,M,Q,S,U,W) | Single random offset, same for src/dst |
+        | `-m` (Multi-cache) | v0.3.3 | L1, L2, LLC, Cold | 10 distributions (0-8 + Fleet) | Independent random offsets for src/dst |
+        | `-a` (Alignment) | latest | L1, L2, LLC, Cold, Mixed | 10 distributions (0-8 + Fleet) | Alignment-aware benchmarking |
+
+        Supported functions: `memcpy`, `memmove`, `memset`, `memcmp`
     - DCPerf:
 
         Meta's datacenter benchmark suite supporting WDL (workload-driven latency) benchmarks for memcpy/memset and AI benchmarks for rebatch/tensor operations.
@@ -128,9 +135,20 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                         -w<warm_up time> : Minimum Warmup time in seconds.
                         NOTE: -a and -p are mutually exclusive options
 
-      <FBM_specific_option> = -mem_alloc <tcmalloc, glibc> -i<repetitions>
+      <FBM_specific_option> = -mem_alloc <tcmalloc, glibc> -n<repetitions> -c|-m|-a -w<workload> --enable-aslr
+
                               -mem_alloc : Specify the memory allocator(default = glibc)
-                          -i<repetitions>: Number of repetitions for consistent performance runs(default = 100)
+                          -n<repetitions>: Number of repetitions for consistent performance runs(default = 10)
+                          -c             : Cached mode (v0.2) - L1 cache only, 9 Google workloads
+                          -m             : Multi-cache mode (v0.3.3) - L1/L2/LLC/Cold, 10 workloads
+                          -a             : Alignment mode (latest) - L1/L2/LLC/Cold/Mixed, alignment-aware
+                          -w <workload>  : Run individual workload (0-8 for specific distribution,
+                                          'fleet' for fleet aggregate in -m/-a modes).
+                                          Default: run all workloads.
+                          --enable-aslr  : Enable ASLR during the benchmark run.
+                                          By default ASLR is disabled via
+                                          'setarch $(uname -m) -R' for run-to-run consistency.
+                          NOTE: Reported throughput is the MEDIAN of all repetitions.
 
       <TBM_specific_option> = None
 
@@ -159,8 +177,27 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     Runs tinymembench for strcpy function fro sizes [8, 16, 32,..4096B] on core - 47
 
     Running Fleetbench
-    $ ./bench.py fbm memset -x 47 -i 100
-    Runs fleetbench for memset benchmarking on core - 47 for 100 iterations
+    $ ./bench.py fbm memset -x 47 -n 100
+    Runs fleetbench (default: alignment/latest mode) for memset on core-47 for 100 repetitions
+    (ASLR is disabled by default via 'setarch $(uname -m) -R'; median throughput is reported)
+
+    $ ./bench.py fbm -c memcpy -x 47 -n 50
+    Runs fleetbench v0.2 (cached, L1 only) for memcpy on core-47, all 9 Google workloads
+
+    $ ./bench.py fbm -m memcpy -x 47 -n 10
+    Runs fleetbench v0.3.3 (multi-cache) for memcpy on core-47, all workloads across L1/L2/LLC/Cold
+
+    $ ./bench.py fbm -a memcpy -x 47 -n 3 -w 3
+    Runs fleetbench latest (alignment mode) for memcpy workload-3 only on core-47, 3 repetitions
+
+    $ ./bench.py fbm -m memset -x 47 -w fleet -perf l
+    Runs fleetbench v0.3.3 for memset, fleet-aggregate workload only, LibMem performance
+
+    $ ./bench.py fbm -a memmove -x 47 -n 5
+    Runs fleetbench latest (alignment) for memmove, all workloads, 5 repetitions
+
+    $ ./bench.py fbm -a memcpy -x 47 --enable-aslr
+    Runs fleetbench latest with ASLR enabled (skips 'setarch -R' wrapper)
 
     Running DCPerf (Requires sudo privileges)
     $ sudo ./bench.py dcperf wdl -x 47
