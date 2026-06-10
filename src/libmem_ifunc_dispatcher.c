@@ -27,14 +27,16 @@
 #include "libmem_impls.h"
 
 
-#if defined(__GNUC__) && (__GNUC__ > 14 && __GNUC_MINOR__ >= 1)
+/* __builtin_cpu_is("znver6") is only recognized starting with GCC 16.
+ * On older compilers fall back to the manual CPUID-based resolver below,
+ * which detects Zen6 via the AVX512_FP16 feature bit. */
+#if defined(__GNUC__) && (__GNUC__ >= 16)
 
 #define AMD_ZEN_CPU_RESOLVER(func) \
     __builtin_cpu_init(); \
     do { \
-        /* TODO: uncomment when GCC 16 support is enabled */ \
-        /* if (__builtin_cpu_is("znver6")) */ \
-        /*     return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); */ \
+        if (__builtin_cpu_is("znver6")) \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); \
         if (__builtin_cpu_is("znver5")) \
             return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5); \
         if (__builtin_cpu_is("znver4")) \
