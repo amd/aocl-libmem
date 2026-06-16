@@ -303,8 +303,8 @@ private:
         const bool non_canonical_in_sweep = inside_sweep && !canonical_pass;
         if (non_canonical_in_sweep) sweep_non_canonical_passes++;
 
-        size_t test_num = 0;
-        size_t total_regular = 0;
+        [[maybe_unused]] size_t test_num = 0;
+        [[maybe_unused]] size_t total_regular = 0;
 
         // Count regular tests
         for (const auto& entry : registry_.entries()) {
@@ -358,7 +358,7 @@ private:
         TestContext ctx(0, dst_align, src_align);
         ctx.alloc_params = this->alloc_params;
 
-        size_t test_num = 0;
+        [[maybe_unused]] size_t test_num = 0;
         size_t total_zero = 0;
 
         // Count zero-size tests

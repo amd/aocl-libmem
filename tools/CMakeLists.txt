@@ -56,6 +56,14 @@ add_subdirectory(analyser)
 add_subdirectory(validator)
 add_subdirectory(graph_generator)
 
+# Top-level "tools" target
+if(ALMEM_TOOLS)
+    add_custom_target(tools
+        DEPENDS prof_libmem profiler_test
+        COMMENT "Building all AOCL-LibMem tools (profiler, test suite)"
+    )
+endif()
+
 # Generate libmem_defs.py with library paths and feature flags
 file(WRITE ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_BIN_PATH='${CMAKE_INSTALL_PREFIX}/lib/lib${PROJECT_NAME}.so'\n")
 file(APPEND ${CMAKE_BINARY_DIR}/test/libmem_defs.py "LIBMEM_ARCHIVE_PATH='${CMAKE_INSTALL_PREFIX}/lib'\n")

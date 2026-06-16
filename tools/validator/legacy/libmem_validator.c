@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -1211,9 +1211,10 @@ static inline void strncpy_validator(size_t size, uint32_t str2_alnmnt,\
         printf("[str1: %p(alignment = %u), str2:%p(alignment = %u)]\n",str1_alnd_addr, str1_alnmnt, str2_alnd_addr, str2_alnmnt);
 
     // Robust page-cross check: Only for good candidates (does NOT cross last boundary vector)
-        void *page_buff;
-        uint32_t page_cnt;
-        if (setup_single_page_cross_buffer(&str1_alnd_addr, str1_alnmnt, size, buff, 0, &page_buff, &page_cnt)) {
+    void *page_buff;
+    uint32_t page_cnt;
+    if (setup_single_page_cross_buffer(&str1_alnd_addr, str1_alnmnt, size, buff, 0, &page_buff, &page_cnt))
+    {
         for (index = 0; index < size; index++) {
             *(str1_alnd_addr + index) = ((char) 'a' + rand() % LOWER_CHARS);
         }
