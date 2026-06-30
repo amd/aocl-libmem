@@ -2818,7 +2818,26 @@ int main(int argc, char **argv)
         }
     }
 
-    size = strtoul(argv[2], &ptr, 10);
+    // Size accepts "N" or a range "START:END[:STEP]" looped below.
+    uint64_t range_start, range_end, range_step = 1;
+    char *colon = strchr(argv[2], ':');
+    if (colon == NULL)
+    {
+        range_start = strtoul(argv[2], &ptr, 10);
+        range_end = range_start;
+    }
+    else
+    {
+        range_start = strtoul(argv[2], &ptr, 10);
+        range_end = strtoul(colon + 1, &ptr, 10);
+        char *colon2 = strchr(colon + 1, ':');
+        if (colon2 != NULL)
+            range_step = strtoul(colon2 + 1, &ptr, 10);
+    }
+    if (range_step == 0)
+        range_step = 1;
+    if (range_end < range_start)
+        range_end = range_start;
 
     if (argv[3] != NULL)
         src_alignment = atoi(argv[3]) % VEC_SZ;
@@ -2833,26 +2852,44 @@ int main(int argc, char **argv)
     printf("[DEBUG] libmem_validator started\n");
     printf("[DEBUG] VEC_SZ = %d bytes\n", VEC_SZ);
     printf("[DEBUG] Function: %s\n", lm_func_validator->func_name);
-    printf("[DEBUG] Size: %lu\n", size);
+    printf("[DEBUG] Size range: %lu..%lu (step %lu)\n", range_start, range_end, range_step);
     printf("[DEBUG] Alignment check mode: %s\n", al_check ? "All alignments" : "Single test");
 #endif
 
-    if (al_check == 0)
+    // Copy-pasteable rerun command; range_start is only an example size.
+    // Substitute the size reported in the failing validation ERROR line.
+    if (range_start != range_end)
     {
-        lm_func_validator->func(size, dst_alignment, src_alignment);
+        const char *ld_preload = getenv("LD_PRELOAD");
+        if (ld_preload == NULL)
+            ld_preload = "";
+        printf("[INFO] To debug a single size, rerun e.g.: "
+               "LD_PRELOAD=%s %s %s %lu %u %u%s\n",
+               ld_preload, argv[0], lm_func_validator->func_name, range_start,
+               src_alignment, dst_alignment, al_check ? " 1" : "");
     }
 
-    else
+    for (size = range_start; size <= range_end; size += range_step)
     {
-        for(unsigned int aln_src  = 0; aln_src < VEC_SZ; aln_src++)
+        if (al_check == 0)
         {
-            for(unsigned int aln_dst = 0; aln_dst < VEC_SZ; aln_dst++)
+            lm_func_validator->func(size, dst_alignment, src_alignment);
+        }
+
+        else
+        {
+            for(unsigned int aln_src  = 0; aln_src < VEC_SZ; aln_src++)
             {
+                for(unsigned int aln_dst = 0; aln_dst < VEC_SZ; aln_dst++)
+                {
 #ifdef LIBMEM_VALIDATOR_DEBUG
-                printf("[DEBUG] Testing alignment - src: %d, dst: %d\n", aln_src, aln_dst);
+                    printf("[DEBUG] Testing alignment - src: %d, dst: %d\n", aln_src, aln_dst);
 #endif
-                lm_func_validator->func(size, aln_dst, aln_src);
+                    lm_func_validator->func(size, aln_dst, aln_src);
+                }
             }
         }
     }
+
+    return 0;
 }

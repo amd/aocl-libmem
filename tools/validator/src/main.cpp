@@ -73,6 +73,39 @@ void listFunctions() {
     }
 }
 
+// Parse "N" or "START:END[:STEP]". Returns false on malformed input.
+bool parseSizeRange(const char* arg, size_t& start, size_t& end, size_t& step) {
+    if (arg == nullptr || arg[0] == '\0') return false;
+
+    char* cursor = nullptr;
+    start = std::strtoul(arg, &cursor, 10);
+    if (cursor == arg) return false;
+
+    if (*cursor == '\0') {
+        // Single size.
+        end = start;
+        step = 1;
+        return true;
+    }
+    if (*cursor != ':') return false;
+
+    const char* end_str = cursor + 1;
+    end = std::strtoul(end_str, &cursor, 10);
+    if (cursor == end_str) return false;
+
+    step = 1;
+    if (*cursor == ':') {
+        const char* step_str = cursor + 1;
+        step = std::strtoul(step_str, &cursor, 10);
+        if (cursor == step_str) return false;
+    } else if (*cursor != '\0') {
+        return false;
+    }
+
+    if (step == 0) step = 1;
+    return true;
+}
+
 void listTests(const char* function_name) {
     auto validator = ValidatorRegistry::instance().create(function_name);
     if (!validator) {
@@ -134,16 +167,28 @@ int main(int argc, char* argv[]) {
     LIBMEM_DEBUG("CACHE_LINE_SZ = %zu bytes", static_cast<size_t>(CACHE_LINE_SZ));
     LIBMEM_SEPARATOR();
 
-    // Parse arguments
+    // Size accepts "N" or a range "START:END[:STEP]" looped below.
     const char* function_name = argv[1];
-    size_t size = std::strtoul(argv[2], nullptr, 10);
+    size_t range_start = 0, range_end = 0, range_step = 1;
+    if (!parseSizeRange(argv[2], range_start, range_end, range_step)) {
+        std::printf("ERROR: Invalid size '%s' (expected N or START:END[:STEP])\n", argv[2]);
+        printUsage(argv[0]);
+        return 1;
+    }
     uint32_t src_align = (argc > 3) ? static_cast<uint32_t>(std::atoi(argv[3])) : 0;
     uint32_t dst_align = (argc > 4) ? static_cast<uint32_t>(std::atoi(argv[4])) : 0;
     int all_alignments = (argc > 5) ? std::atoi(argv[5]) : 0;
 
+    const char* ld_preload = std::getenv("LD_PRELOAD");
+    if (ld_preload == nullptr) ld_preload = "";
+
     // Log parsed parameters
     LIBMEM_INFO("Validating function: %s", function_name);
-    LIBMEM_INFO("Size: %zu bytes", size);
+    if (range_start == range_end) {
+        LIBMEM_INFO("Size: %zu bytes", range_start);
+    } else {
+        LIBMEM_INFO("Size range: %zu..%zu (step %zu)", range_start, range_end, range_step);
+    }
     if (all_alignments) {
         LIBMEM_INFO("Alignment mode: All combinations (0-%zu x 0-%zu = %zu tests)",
                 static_cast<size_t>(VEC_SZ - 1), static_cast<size_t>(VEC_SZ - 1),
@@ -163,18 +208,37 @@ int main(int argc, char* argv[]) {
 
     LIBMEM_DEBUG("Validator created for: %s", validator->getName());
 
-    if (all_alignments) {
-        // Sweep: alignment-insensitive tests run only on canonical (0,0).
-        LIBMEM_INFO("Starting alignment sweep test...");
-        validator->validateSweep(size);
-    } else {
-        // Single pass: every test runs.
-        validator->validate(size, src_align, dst_align);
+    // Reuse one validator instance so stats accumulate across the range.
+    // On a per-size failure, print a command that reproduces just that size.
+    for (size_t size = range_start; size <= range_end; size += range_step) {
+        size_t failed_before = validator->getStats().failed;
+
+        if (all_alignments) {
+            LIBMEM_INFO("Starting alignment sweep test for size %zu...", size);
+            validator->validateSweep(size);
+        } else {
+            validator->validate(size, src_align, dst_align);
+        }
+
+        if (validator->getStats().failed > failed_before) {
+            std::printf(">>> REPRODUCE (this size only): LD_PRELOAD=%s %s %s %zu %u %u%s\n",
+                    ld_preload, argv[0], function_name, size, src_align, dst_align,
+                    all_alignments ? " 1" : "");
+        }
     }
 
     // Report results
     LIBMEM_SEPARATOR();
     const TestStats& stats = validator->getStats();
+
+    // An inverted/empty range (e.g. 4096:0) runs zero iterations; fail
+    // instead of reporting a false pass for having validated nothing.
+    if (stats.total() == 0) {
+        std::printf("ERROR: No sizes validated for '%s' (range %zu:%zu step %zu "
+                "produced no iterations)\n",
+                function_name, range_start, range_end, range_step);
+        return 1;
+    }
 
     LIBMEM_INFO("Validation complete for: %s", function_name);
     LIBMEM_INFO("Results: %zu passed, %zu failed, %zu skipped (total: %zu)",

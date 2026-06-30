@@ -107,17 +107,6 @@ target_link_libraries(libmem_validator_gtest m)
 # Helper functions for test generation
 # ---------------------------------------------------------------------------
 
-# Generate range of sizes (increment by 1)
-function(generate_size_range OUTPUT_VAR START END)
-    set(values "")
-    set(current ${START})
-    while(${current} LESS_EQUAL ${END})
-        list(APPEND values ${current})
-        math(EXPR current "${current} + 1")
-    endwhile()
-    set(${OUTPUT_VAR} ${values} PARENT_SCOPE)
-endfunction()
-
 # Generate powers of 2 sizes
 function(generate_power_of_2_sizes OUTPUT_VAR START END)
     set(values "")
@@ -229,6 +218,70 @@ macro(add_dual_validator_tests TEST_TYPE FUNC_LIST SIZE_LIST)
     add_validator_tests("unified_" "${VALIDATOR_UNIFIED_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TEST_TYPE}" ${_extra_args})
 endmacro()
 
+# ---------------------------------------------------------------------------
+# Range-based registration (one ctest per size range, not per byte)
+# ---------------------------------------------------------------------------
+# The binaries loop sizes internally when given "START:END", so the manifest
+# stays tiny (fast ctest startup) with identical coverage.
+# LIBMEM_VALIDATOR_RANGE_SHARDS splits each range into N contiguous windows
+# for more `ctest -j` parallelism and narrower `--rerun-failed`; N=1 is the
+# smallest manifest.
+set(LIBMEM_VALIDATOR_RANGE_SHARDS "1" CACHE STRING
+    "Number of ctest shards per (function,type,validator) size range")
+
+# Register range tests for one validator across a list of functions.
+function(add_validator_range_tests PREFIX VALIDATOR_EXEC FUNC_LIST RANGE_START RANGE_END SUFFIX)
+    set(extra_args ${ARGN})
+    string(REGEX REPLACE "_$" "" test_label "${PREFIX}")
+
+    set(shards ${LIBMEM_VALIDATOR_RANGE_SHARDS})
+    if(shards LESS 1)
+        set(shards 1)
+    endif()
+
+    math(EXPR span "${RANGE_END} - ${RANGE_START} + 1")
+    math(EXPR chunk "(${span} + ${shards} - 1) / ${shards}")
+    if(chunk LESS 1)
+        set(chunk 1)
+    endif()
+
+    foreach(pattern IN LISTS FUNC_LIST)
+        string(REGEX REPLACE "[^A-Za-z0-9]" "_" sanitized_pattern "${pattern}")
+        set(shard_start ${RANGE_START})
+        while(shard_start LESS_EQUAL ${RANGE_END})
+            math(EXPR shard_end "${shard_start} + ${chunk} - 1")
+            if(shard_end GREATER ${RANGE_END})
+                set(shard_end ${RANGE_END})
+            endif()
+
+            set(test_name "${PREFIX}${sanitized_pattern}_${SUFFIX}_${shard_start}_${shard_end}B")
+            add_test(
+                NAME "${test_name}"
+                COMMAND env LD_PRELOAD=${LIBMEM_PATH}
+                ${VALIDATOR_EXEC} ${pattern} ${shard_start}:${shard_end} ${extra_args}
+            )
+            # TIMEOUT bounds a hung/crashed range test so one bad size cannot
+            # block the whole suite (matches the shift tests' MAX_TIMEOUT).
+            set_tests_properties("${test_name}"
+                PROPERTIES
+                TIMEOUT ${MAX_TIMEOUT}
+                FAIL_REGULAR_EXPRESSION "ERROR"
+                LABELS "${test_label}"
+            )
+
+            math(EXPR shard_start "${shard_end} + 1")
+        endwhile()
+    endforeach()
+endfunction()
+
+# Register range tests for both legacy and unified validators.
+macro(add_dual_validator_range_tests TEST_TYPE FUNC_LIST RANGE_START RANGE_END)
+    set(_extra_args ${ARGN})
+
+    add_validator_range_tests("legacy_" "${VALIDATOR_EXEC}" "${FUNC_LIST}" ${RANGE_START} ${RANGE_END} "${TEST_TYPE}" ${_extra_args})
+    add_validator_range_tests("unified_" "${VALIDATOR_UNIFIED_EXEC}" "${FUNC_LIST}" ${RANGE_START} ${RANGE_END} "${TEST_TYPE}" ${_extra_args})
+endmacro()
+
 # Add shift tests for both validators
 macro(add_dual_shift_tests FUNC_LIST SIZE_LIST TIMEOUT)
     add_shift_tests("legacy_" "${VALIDATOR_EXEC}" "${FUNC_LIST}" "${SIZE_LIST}" "${TIMEOUT}")
@@ -291,14 +344,14 @@ set(store_func "memset")
 
 enable_testing()
 
-generate_size_range(ITER_SIZES 0 ${PAGE_SIZE})
 generate_power_of_2_sizes(SHIFT_SIZES 1 ${MAX_SIZE})
 
 message(STATUS "Adding validator tests for: ${supp_func}")
 
-add_dual_validator_tests("iter" "${supp_func}" "${ITER_SIZES}")
+# Exhaustive 0..PAGE_SIZE byte sweeps as ranges (looped inside the binary).
+add_dual_validator_range_tests("iter" "${supp_func}" 0 ${PAGE_SIZE})
 add_dual_shift_tests("${supp_func}" "${SHIFT_SIZES}" "${MAX_TIMEOUT}")
-add_dual_validator_tests("align" "${supp_func}" "${ITER_SIZES}" 0 0 1)
+add_dual_validator_range_tests("align" "${supp_func}" 0 ${PAGE_SIZE} 0 0 1)
 
 message(STATUS "Basic validator tests added: iterator, shift, and alignment tests")
 
