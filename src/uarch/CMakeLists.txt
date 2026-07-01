@@ -60,5 +60,36 @@ foreach(uarch ${uarch_list})
         list(APPEND _MODULE_CC_FLAGS -mbmi -mbmi2 -mlzcnt)
     endif ()
     set_target_properties(lib_zen${uarch} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
+
+    # Per-function code-layout tuning (function/label/jump/loop alignment and
+    # disabled LTO/block-reordering) validated only on Zen5. Guard it to Zen5 so
+    # other architectures keep the compiler/global defaults.
+    if (${uarch} EQUAL 5)
+        if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+            set(_LARGE_FUNC_ALIGN "-falign-functions=4096;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")
+            set(_SMALL_FUNC_ALIGN "-falign-functions=64;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")
+        else ()
+            set(_LARGE_FUNC_ALIGN "-falign-functions=4096")
+            set(_SMALL_FUNC_ALIGN "-falign-functions=64")
+        endif ()
+
+        set(_LARGE_FUNCS memcpy memset)
+        set(_LARGE_FUNCS_NOLTO memmove)
+        set(_SMALL_FUNCS memcmp memchr mempcpy strcpy strlen strnlen strncpy strcmp strncmp strchr strcat strncat strspn strstr)
+
+        foreach(_func ${_LARGE_FUNCS})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN}")
+        endforeach()
+        foreach(_func ${_LARGE_FUNCS_NOLTO})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN};-fno-lto")
+        endforeach()
+        foreach(_func ${_SMALL_FUNCS})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_SMALL_FUNC_ALIGN}")
+        endforeach()
+    endif ()
+
     target_sources(uarch_objlib INTERFACE $<TARGET_OBJECTS:lib_zen${uarch}>)
 endforeach()

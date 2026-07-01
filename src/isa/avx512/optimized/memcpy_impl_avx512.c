@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -34,373 +34,198 @@
 
 extern cpu_info zen_info;
 
-#ifdef MEMMOVE_AVX512
-static inline void *_memcpy_avx512(void *dst, const void *src, size_t size)
-#else
-static inline void *_memcpy_avx512(void *__restrict dst, const void *__restrict src, size_t size)
-#endif
-{
-    register void *ret asm("rax");
-    ret = dst;
-#ifdef MEMMOVE_AVX512
-    if (likely(size <= 2 * ZMM_SZ)) // 128B
-    {
-        if (likely(size < ZMM_SZ)) // 64B
-        {
-            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
-        }
-        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
-        return ret;
-    }
-#else
-    if (likely(size <= 2 * ZMM_SZ)) // 128B
-    {
-        if (likely(size < ZMM_SZ))
-        {
-            return __load_store_ble_zmm_vec(dst, src, (uint8_t) size);
-        }
-        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
-        return ret;
-    }
-#endif
-#ifdef MEMMOVE_AVX512
-    if (likely(size <= 8 * ZMM_SZ)) // 512B
-    {
-        if (likely(size <= 4 * ZMM_SZ)) // 256B
-        {
-            __load_store_le_4zmm_vec(dst, src, (uint16_t) size);
-            return ret;
-        }
-        __load_store_le_8zmm_vec(dst, src, (uint16_t) size);
-        return ret;
-    }
-#else
-    if (size <= 8 * ZMM_SZ) // 512B
-    {
-        __load_store_le_4zmm_vec(dst, src, (uint16_t) size);
-        if (size <= 4 * ZMM_SZ) // 256B
-        {
-            return ret;
-        }
-        __load_store_le_4zmm_vec(dst + 2 * ZMM_SZ, src + 2 * ZMM_SZ, (uint16_t) size - 4 * ZMM_SZ);
-        return ret;
-    }
-#endif
+/*
+ * AVX-512 memcpy/memmove with tiered head/tail, aligned loop, ERMS, and NT:
+ *   <=64B (memcpy):     masked AVX-512 load/store
+ *   <=64B (memmove):    scalar/SSE/AVX head-tail (store-forwarding safe)
+ *   65..128B:           2-vec head/tail
+ *   129..256B:          4-vec head/tail
+ *   257..512B:          8-vec head/tail
+ *   513..1024B (move):  16-vec head/tail
+ *   >512/1024B:         overlap check (memmove only), then:
+ *     >= nt_start:      NT streaming stores   (all variants)
+ *     >= repmov_start:  ERMS (rep movsb)      (ERMS variants only)
+ *     else:             dst-aligned 4-vec loop
+ *
+ * memcpy:  __restrict (no overlap handling)
+ * memmove: overlap-aware forward/backward via MEMMOVE_AVX512_ERMS guard
+ */
 
-#ifdef MEMMOVE_AVX512
-    // Handle overlapping memory blocks
-    if (unlikely(!(((dst + size) < src) || ((src + size) < dst))))
-    {
-        __m512i z4, z5, z6, z7, z8;
-        if (src < dst) // Backward Copy
-        {
-            z4 = _mm512_loadu_si512(src + 3 * ZMM_SZ);
-            z5 = _mm512_loadu_si512(src + 2 * ZMM_SZ);
-            z6 = _mm512_loadu_si512(src + 1 * ZMM_SZ);
-            z7 = _mm512_loadu_si512(src + 0 * ZMM_SZ);
-            if ((((size_t) dst & (ZMM_SZ - 1)) == 0) && (((size_t) src & (ZMM_SZ - 1)) == 0))
-            {
-                // load the last VEC to handle size not multiple of the vec.
-                z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
-                __aligned_load_and_store_4zmm_vec_loop_bkwd(dst, src, size & ~(ZMM_SZ - 1), 3 * ZMM_SZ);
-                // store the last VEC to handle size not multiple of the vec.
-                _mm512_storeu_si512(dst + size - ZMM_SZ, z8);
-            } else
-                __unaligned_load_and_store_4zmm_vec_loop_bkwd(dst, src, size, 4 * ZMM_SZ);
-            _mm512_storeu_si512(dst + 3 * ZMM_SZ, z4);
-            _mm512_storeu_si512(dst + 2 * ZMM_SZ, z5);
-            _mm512_storeu_si512(dst + 1 * ZMM_SZ, z6);
-            _mm512_storeu_si512(dst + 0 * ZMM_SZ, z7);
-        } else // Forward Copy
-        {
-            z4 = _mm512_loadu_si512(src + size - 4 * ZMM_SZ);
-            z5 = _mm512_loadu_si512(src + size - 3 * ZMM_SZ);
-            z6 = _mm512_loadu_si512(src + size - 2 * ZMM_SZ);
-            z7 = _mm512_loadu_si512(src + size - 1 * ZMM_SZ);
-            if ((((size_t) dst & (ZMM_SZ - 1)) == 0) && (((size_t) src & (ZMM_SZ - 1)) == 0))
-                __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
-            else
-                __unaligned_load_and_store_4zmm_vec_loop(dst, src, size - 4 * ZMM_SZ, 0);
-
-            _mm512_storeu_si512(dst + size - 4 * ZMM_SZ, z4);
-            _mm512_storeu_si512(dst + size - 3 * ZMM_SZ, z5);
-            _mm512_storeu_si512(dst + size - 2 * ZMM_SZ, z6);
-            _mm512_storeu_si512(dst + size - 1 * ZMM_SZ, z7);
-        }
-        return ret;
-    }
-#endif
-
-    __load_store_le_8zmm_vec(dst, src, 8 * ZMM_SZ);
-    size_t offset = 8 * ZMM_SZ;
-
-    if (size > 16 * ZMM_SZ)
-    {
-        uint8_t dst_align = ((size_t) dst & (ZMM_SZ - 1));
-        offset -= dst_align;
-
-        // Aligned Load and Store addresses
-        if ((((size_t) src & (ZMM_SZ - 1)) == dst_align))
-        {
-            // 4-ZMM registers
-            if (size < zen_info.zen_cache_info.l2_per_core) // L2 Cache Size
-            {
-                offset = __aligned_load_and_store_4zmm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-            // 4-YMM registers with prefetch
-            else if (size < __nt_start_threshold)
-            {
-                offset = __aligned_load_and_store_4zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-            // Non-temporal 8-ZMM registers with prefetch
-            else
-            {
-                offset = __aligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-        }
-        // Unaligned Load/Store addresses: force-align store address to ZMM size
-        else
-        {
-            if (size < __nt_start_threshold)
-            {
-                offset = __unaligned_load_aligned_store_4zmm_vec_loop(dst, src, size - 8 * ZMM_SZ, offset);
-            } else
-            {
-                offset = __unaligned_load_nt_store_4zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-            }
-        }
-    }
-    uint16_t rem_data = size - offset;
-    uint8_t rem_vecs = ((rem_data & 0x3C0) >> 6) + !!(rem_data & (0x3F));
-    if (rem_vecs > 4)
-        __load_store_le_8zmm_vec(dst + size - 8 * ZMM_SZ, src + size - 8 * ZMM_SZ, 8 * ZMM_SZ);
-    else if (rem_vecs > 2)
-        __load_store_le_4zmm_vec(dst + size - 4 * ZMM_SZ, src + size - 4 * ZMM_SZ, 4 * ZMM_SZ);
-    else if (rem_vecs == 2)
-        __load_store_le_2zmm_vec(dst + size - 2 * ZMM_SZ, src + size - 2 * ZMM_SZ, 2 * ZMM_SZ);
-    else
-        __load_store_zmm_vec(dst + size - ZMM_SZ, src + size - ZMM_SZ, 0);
-
-    return ret;
-}
-
-#ifdef MEMMOVE_AVX512_ERMS
+#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
 static inline void *_memcpy_avx512_erms(void *dst, const void *src, size_t size)
 #else
 static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__restrict src, size_t size)
 #endif
 {
-    size_t offset;
-    register void *ret asm("rax");
-    ret = dst;
-    if (likely(size <= 2 * ZMM_SZ)) // 128B
+    register void *ret __asm__("rax") = dst;
+
+#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
+    if (likely(size <= XMM_SZ))
     {
-        if (likely(size < ZMM_SZ)) // 64B
-        {
-#ifdef MEMMOVE_AVX512_ERMS
-            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
+        __load_store_ble_scalar_head_tail(dst, src, size);
+        return ret;
+    }
+    if (likely(size <= YMM_SZ))
+    {
+        __load_store_ble_sse_head_tail(dst, src, size);
+        return ret;
+    }
+    if (likely(size <= ZMM_SZ))
+    {
+        __load_store_ble_avx_head_tail(dst, src, size);
+        return ret;
+    }
 #else
-            return __load_store_ble_zmm_vec(dst, src, (uint8_t) size);
+    if (likely(size <= 1 * ZMM_SZ))
+    {
+        __load_store_ble_zmm_vec(dst, src, size);
+        return ret;
+    }
 #endif
-        }
-        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
+    if (likely(size <= 2 * ZMM_SZ))
+    {
+        __load_store_le_2zmm_vec(dst, src, size);
         return ret;
     }
-    // head-tail load-stores
-    else if (likely(size <= 8 * ZMM_SZ)) // 512B
+    if (size <= 4 * ZMM_SZ)
     {
-        if (likely(size <= 4 * ZMM_SZ)) // 256B
-        {
-            __load_store_le_4zmm_vec(dst, src, (uint16_t) size);
-            return ret;
-        }
-        __load_store_le_8zmm_vec(dst, src, (uint16_t) size);
+        __load_store_le_4zmm_vec(dst, src, size);
+        return ret;
+    }
+    if (size <= 8 * ZMM_SZ)
+    {
+        __load_store_le_8zmm_vec(dst, src, size);
         return ret;
     }
 
-#ifdef MEMMOVE_AVX512_ERMS
-    // Handle overlapping memory blocks
-    if (unlikely(!(((dst + size) < src) || ((src + size) < dst))))
+#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
+    if (size <= 16 * ZMM_SZ)
     {
-        __m512i z8;
-        if (src < dst) // Backward Copy
+        __load_store_le_16zmm_vec(dst, src, size);
+        return ret;
+    }
+
+    if (unlikely(REGIONS_OVERLAP(dst, src, size)))
+    {
+        if ((const char *) src < (char *) dst)
         {
-            size_t off = ((size_t) dst + size) & (ZMM_SZ - 1);
-            size_t size_temp = size;
+            OVERLAP_SAVE_HEAD_4VEC(AVX512, src);
+            OVERLAP_SAVE_TAIL_1VEC(AVX512, src, size);
 
-            // load the last VEC to handle alignment not multiple of the vec.
-            z8 = _mm512_loadu_si512(src + size - ZMM_SZ);
+            size_t tail_misalign = ((size_t) dst + size) & (ZMM_SZ - 1);
+            if (tail_misalign == 0)
+                tail_misalign = ZMM_SZ;
+            size_t bk = size - tail_misalign;
 
-            if (((size_t) dst & (ZMM_SZ - 1)) == ((size_t) src & (ZMM_SZ - 1)))
+            if (unlikely(size >= __nt_start_threshold))
             {
-                size = __aligned_load_and_store_4zmm_vec_loop_bkwd_pftch(dst, src, size - off, 4 * ZMM_SZ);
-            } else
-            {
-                size = __unaligned_load_aligned_store_4zmm_vec_loop_bkwd_pftch(dst, src, size - off, 4 * ZMM_SZ);
-            }
-
-            // data vector blocks to be copied
-            uint8_t rem_vecs = ((size) >> 6) + !!(size & (ZMM_SZ - 1));
-
-            // load-store blocks based on left out vectors
-            switch (rem_vecs)
-            {
-            case 4:
-            case 3:
-                // handle the tail with 4xVEC load-stores
-                __load_store_le_4zmm_vec(dst, src, size);
-                break;
-            case 2:
-                // handle the tail with 2xVEC load-stores
-                __load_store_le_2zmm_vec(dst, src, size);
-                break;
-            case 1:
-                // handle the tail with 1xVEC load-stores
-                __load_store_ble_zmm_vec(dst, src, size);
-            }
-            // store the last VEC
-            _mm512_storeu_si512(dst + size_temp - ZMM_SZ, z8);
-        } else // Forward Copy
-        {
-            void *dst_temp = dst;
-            size_t offset = ZMM_SZ - ((size_t) dst & (ZMM_SZ - 1));
-
-            // load the first VEC
-            z8 = _mm512_loadu_si512(src);
-
-            // Temporal aligned stores
-            if (size <= 26 * 1024)
-            {
-                if (((size_t) dst & (ZMM_SZ - 1)) == ((size_t) src & (ZMM_SZ - 1)))
-                    offset = __aligned_load_and_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
-                else
-                    offset = __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
-                // remaining data to be copied
-                uint16_t rem_data = size - offset;
-
-                // data vector blocks to be copied
-                uint8_t rem_vecs = (rem_data >> 6) + !!(rem_data & (ZMM_SZ - 1));
-                // load-store blocks based on left out vectors
-                switch (rem_vecs)
+                while (bk > 4 * ZMM_SZ)
                 {
-                case 4:
-                case 3:
-                    // handle the tail with at most 4xVEC load-stores
-                    __load_store_le_4zmm_vec(dst + offset, src + offset, rem_data);
-                    break;
-                case 2:
-                    // handle the tail with at most 2xVEC load-stores
-                    __load_store_le_2zmm_vec(dst + offset, src + offset, rem_data);
-                    break;
-                case 1:
-                    // handle the tail with at most 1xVEC load-stores
-                    __load_store_ble_zmm_vec(dst + offset, src + offset, rem_data);
+                    bk -= 4 * ZMM_SZ;
+                    __unaligned_load_nt_store_4zmm_vec((char *) dst + bk, (const char *) src + bk);
                 }
-            } else // Temporal stores with 8zmm loops
+                ALM_STORE_FENCE()
+            }
+            else
             {
-                if (((size_t) dst & (ZMM_SZ - 1)) == ((size_t) src & (ZMM_SZ - 1)))
+                while (bk > 4 * ZMM_SZ)
                 {
-                    offset = __aligned_load_and_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-                } else
-                    offset = __unaligned_load_aligned_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
-
-                // remaining data to be copied
-                uint16_t rem_data = size - offset;
-
-                // data vector blocks to be copied
-                uint8_t rem_vecs = (rem_data >> 6) + !!(rem_data & (ZMM_SZ - 1));
-
-                // load-store blocks based on leftover vectors
-                switch (rem_vecs)
-                {
-                case 8:
-                case 7:
-                case 6:
-                case 5:
-                    // handle the tail with up to 4xVEC load-stores
-                    __load_store_le_8zmm_vec(dst + offset, src + offset, rem_data);
-                    break;
-                case 4:
-                case 3:
-                    // handle the tail with up to 4xVEC load-stores
-                    __load_store_le_4zmm_vec(dst + offset, src + offset, rem_data);
-                    break;
-                case 2:
-                    // handle the tail with up to 2xVEC load-stores
-                    __load_store_le_2zmm_vec(dst + offset, src + offset, rem_data);
-                    break;
-                case 1:
-                    // handle the tail with up to 1xVEC load-stores
-                    __load_store_ble_zmm_vec(dst + offset, src + offset, rem_data);
+                    bk -= 4 * ZMM_SZ;
+                    __unaligned_load_aligned_store_4zmm_vec((char *) dst + bk, (const char *) src + bk);
                 }
             }
-            // store the first VEC
-            _mm512_storeu_si512(dst_temp, z8);
+            OVERLAP_RESTORE_TAIL1_HEAD4(AVX512, dst, size);
+        }
+        else
+        {
+            OVERLAP_SAVE_HEAD_1VEC(AVX512, src);
+            OVERLAP_SAVE_TAIL_4VEC(AVX512, src, size);
+
+            const char *sp = (const char *) src;
+            char *dp = (char *) dst;
+            size_t rem;
+            ALIGN_ADVANCE_64(sp, dp, size, rem);
+
+            if (unlikely(size >= __nt_start_threshold))
+            {
+                while (rem >= 4 * ZMM_SZ)
+                {
+                    __unaligned_load_nt_store_4zmm_vec(dp, sp);
+                    ADVANCE_4VEC(AVX512, sp, dp, rem);
+                }
+                ALM_STORE_FENCE()
+            }
+            else
+            {
+                while (rem >= 4 * ZMM_SZ)
+                {
+                    __unaligned_load_aligned_store_4zmm_vec(dp, sp);
+                    ADVANCE_4VEC(AVX512, sp, dp, rem);
+                }
+            }
+            OVERLAP_RESTORE_TAIL4_HEAD1(AVX512, dst, size);
         }
         return ret;
     }
 #endif
 
-    // aligned vector stores
-    if (likely(size < COMPUTE_ALIGNED_VEC_MOV_TH(zen_info.zen_cache_info.l1d_per_core)))
+    /* NT streaming tier (all variants: NT outperforms temporal regardless of ERMS) */
+    if (unlikely(size >= __nt_start_threshold))
     {
-        // handle the first 4xVEC irrespective of alignment
-        __load_store_4zmm_vec(dst, src, 0);
+        const char *sp = (const char *) src;
+        char *dp = (char *) dst;
 
-        // align the store address
-        offset = 4 * ZMM_SZ - ((size_t) dst & (ZMM_SZ - 1));
+        __unaligned_load_store_1zmm_vec(dp, sp);
 
-        // loop over 4xVEC temporal aligned stores with prefetch
-        offset = __unaligned_load_aligned_store_4zmm_vec_loop_pftch(dst, src, size - 4 * ZMM_SZ, offset);
+        size_t rem;
+        ALIGN_ADVANCE_64(sp, dp, size, rem);
 
-        // remaining data to be copied
-        uint16_t rem_data = size - offset;
-        // data vector blocks to be copied
-        uint8_t rem_vecs = ((rem_data) >> 6) + !!(rem_data & (0x3F));
-        // load-store blocks based on leftover vectors
-        switch (rem_vecs)
+        while (rem >= 4 * ZMM_SZ)
         {
-        case 4:
-            // handle the tail with last 4xVEC load-stores
-            __load_store_4zmm_vec(dst, src, size - 4 * ZMM_SZ);
-            break;
-        case 3:
-            // handle the tail with last 3xVEC load-stores
-            __load_store_3zmm_vec(dst, src, size - 3 * ZMM_SZ);
-            break;
-        case 2:
-            // handle the tail with last 2xVEC load-stores
-            __load_store_2zmm_vec(dst, src, size - 2 * ZMM_SZ);
-            break;
-        case 1:
-            // handle the tail with last 1xVEC load-stores
-            __load_store_zmm_vec(dst, src, size - ZMM_SZ);
+            __unaligned_load_nt_store_4zmm_vec(dp, sp);
+            ADVANCE_4VEC(AVX512, sp, dp, rem);
         }
+        ALM_STORE_FENCE()
+
+        __unaligned_load_store_4zmm_vec((char *) dst + size - 4 * ZMM_SZ, (const char *) src + size - 4 * ZMM_SZ);
         return ret;
     }
-    // rep-movs up to NT start threshold
-    else if (size < __nt_start_threshold)
+
+    /* ERMS tier (rep movsb) - gated at runtime by __repmov_start_threshold,
+     * which is derived from the ERMS CPU feature flag (see threshold.c). When
+     * ERMS is absent the threshold disables this tier, so no compile-time guard
+     * is needed. */
+    if (unlikely(size >= __repmov_start_threshold))
     {
-        __erms_movsb(dst, src, size);
+        __erms_movsb((void *) dst, src, size);
         return ret;
     }
-    // non-temporal stores for sizes above NT start threshold
-    else
+
+    /* dst-aligned temporal loop */
     {
-        // handle the first 8xVEC irrespective of alignment
-        __load_store_8zmm_vec(dst, src, 0);
+        const char *sp = (const char *) src;
+        char *dp = (char *) dst;
 
-        // align the store address
-        offset = 8 * ZMM_SZ - ((size_t) dst & (ZMM_SZ - 1));
+        __unaligned_load_store_1zmm_vec(dp, sp);
 
-        // loop over 8xVEC non-temporal stores with prefetch
-        __unaligned_load_nt_store_8zmm_vec_loop_pftch(dst, src, size - 8 * ZMM_SZ, offset);
+        size_t rem;
+        ALIGN_ADVANCE_64(sp, dp, size, rem);
 
-        // handle the tail with last 8-vec load-stores
-        __load_store_le_8zmm_vec(dst + size - 8 * ZMM_SZ, src + size - 8 * ZMM_SZ, 8 * ZMM_SZ);
+        while (rem >= 4 * ZMM_SZ)
+        {
+            __unaligned_load_aligned_store_4zmm_vec(dp, sp);
+            ADVANCE_4VEC(AVX512, sp, dp, rem);
+        }
+
+        __unaligned_load_store_4zmm_vec((char *) dst + size - 4 * ZMM_SZ, (const char *) src + size - 4 * ZMM_SZ);
+        return ret;
     }
-    return ret;
 }
+
+/* The rep movsb tier is runtime threshold-gated, so the ERMS and non-ERMS
+ * entry points share a single body. Provide the plain _memcpy_avx512 name for
+ * the generic (non-uarch) dispatch sources. */
+#define _memcpy_avx512 _memcpy_avx512_erms
 
 #ifdef MEMMOVE_AVX512
 #undef MEMMOVE_AVX512
@@ -410,4 +235,4 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
 #undef MEMMOVE_AVX512_ERMS
 #endif
 
-#endif // MEMCPY_IMPL_AVX512_H
+#endif /* MEMCPY_IMPL_AVX512_H */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -79,6 +79,7 @@ extern "C" {
 
 #ifdef __linux__
 #define ALM_MEM_BARRIER() __asm__ __volatile__("":::"memory");
+#define ALM_STORE_FENCE() __asm__ __volatile__("sfence" ::: "memory");
 
 /*
     Intrinsic '_tzcnt_u16' is not supported on GCC major versions 11 and below.

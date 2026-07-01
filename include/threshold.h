@@ -55,6 +55,23 @@
 #define COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) (l3_bytes)
 
 /*
+ * rep-movs (ERMS) start threshold.
+ * Below this size, memcpy/memmove use vector loads+stores; at/above it the
+ * ERMS variants switch to rep-movsb. The crossover is micro-arch specific:
+ *   Zen5/Zen6 - rep-movsb only wins for larger copies (tuned to 26KB).
+ *   Pre-Zen5  - rep-movsb wins earlier (2KB).
+ */
+#define REPMOV_START_THRESHOLD_ZEN5 (26 * 1024)
+#define REPMOV_START_THRESHOLD_DEFAULT (2 * 1024)
+
+/*
+ * Sentinel that disables the rep-movsb tier: set as the start threshold when
+ * ERMS is unavailable so the runtime size check (size >= threshold) is never
+ * satisfied for any valid copy length.
+ */
+#define REPMOV_DISABLED (UINT64_MAX)
+
+/*
  * Zen5 aligned vector move threshold = L1D/2 + 2KB.
  * Below this size, memcpy/memmove use aligned vector loads+stores.
  * Above, they switch to rep-movs (ERMS).

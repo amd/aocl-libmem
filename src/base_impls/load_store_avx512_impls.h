@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -48,6 +48,20 @@ extern "C" {
 
 #define VEC_SZ_AVX512           64
 
+static inline void __load_store_ble_scalar_head_tail(void *dst, const void *src, size_t size)
+{
+    SCALAR_HEAD_TAIL(dst, src, size);
+}
+
+static inline void __load_store_ble_sse_head_tail(void *dst, const void *src, size_t size)
+{
+    SSE_HEAD_TAIL(dst, src, size);
+}
+
+static inline void __load_store_ble_avx_head_tail(void *dst, const void *src, size_t size)
+{
+    AVX_HEAD_TAIL(dst, src, size);
+}
 
 static inline void *__load_store_ble_zmm_vec(void *store_addr, const void *load_addr, size_t size)
 {
@@ -269,10 +283,15 @@ static inline void __load_store_le_8zmm_vec(void *store_addr,
     VEC_8X_LOAD_STORE_HEAD_TAIL(AVX512, UNALIGNED, UNALIGNED)
 }
 
+static inline void __load_store_le_16zmm_vec(void *store_addr, const void *load_addr, size_t size)
+{
+    VEC_16X_LOAD_STORE_HEAD_TAIL(AVX512, UNALIGNED, UNALIGNED)
+}
+
 /* ##################### TEMPORAL - 2xVEC LOOP ####################
  */
-static inline size_t __unaligned_load_and_store_2zmm_vec_loop(void *store_addr,
-            const void *load_addr, size_t size, size_t offset)
+static inline size_t __unaligned_load_and_store_2zmm_vec_loop(void *store_addr, const void *load_addr, size_t size,
+                                                              size_t offset)
 {
     VEC_2X_LOAD_STORE_LOOP(AVX512, PFTCH_ZERO_CL, UNALIGNED, UNALIGNED)
 }
@@ -500,6 +519,30 @@ static inline size_t __unaligned_load_nt_store_8zmm_vec_loop_pftch(void *store_a
                       const void *load_addr, size_t size, size_t offset)
 {
     VEC_8X_LOAD_STORE_LOOP(AVX512, PFTCH_FOUR_CL_TWO_STEP, UNALIGNED, STREAM)
+}
+
+static inline void __unaligned_load_store_1zmm_vec(void *store_addr, const void *load_addr)
+{
+    size_t offset = 0;
+    VEC_1X_LOAD_STORE(AVX512, UNALIGNED, UNALIGNED)
+}
+
+static inline void __unaligned_load_store_4zmm_vec(void *store_addr, const void *load_addr)
+{
+    size_t offset = 0;
+    VEC_4X_LOAD_STORE(AVX512, UNALIGNED, UNALIGNED)
+}
+
+static inline void __unaligned_load_aligned_store_4zmm_vec(void *store_addr, const void *load_addr)
+{
+    size_t offset = 0;
+    VEC_4X_LOAD_STORE(AVX512, UNALIGNED, ALIGNED)
+}
+
+static inline void __unaligned_load_nt_store_4zmm_vec(void *store_addr, const void *load_addr)
+{
+    size_t offset = 0;
+    VEC_4X_LOAD_STORE(AVX512, UNALIGNED, STREAM)
 }
 
 #ifdef __cplusplus
