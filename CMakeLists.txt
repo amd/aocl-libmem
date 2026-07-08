@@ -52,6 +52,15 @@ set(LIBMEM_VERSION_STRING 5.3.1)
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C CXX DESCRIPTION
                         "Library of AMD optimized string/memory functions")
 
+# Target-based build support: when built as a subproject, CMAKE_SOURCE_DIR
+# points at the parent (aocl) project, so cache our own root in LIBMEM_ROOT for
+# subdirectory include paths and set AOCL_LIBMEM_SUBPROJECT to skip the tools.
+set(LIBMEM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "AOCL-LibMem source root")
+if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(AOCL_LIBMEM_SUBPROJECT ON)
+  message(STATUS "[aocl-libmem] building as a subproject; tools/bench utilities are skipped")
+endif()
+
 string(TIMESTAMP BUILD_DATE "%Y%m%d")
 
 set(LIBMEM_BUILD_VERSION_STR
@@ -160,7 +169,9 @@ endif()
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# let the build system know the tools directory
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+# tools are bench/validator/python utilities; skip them in a subproject build
+if(NOT AOCL_LIBMEM_SUBPROJECT)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+endif()
 
 file(WRITE ${CMAKE_BINARY_DIR}/version.h ${LIBMEM_BUILD_VERSION_STR})

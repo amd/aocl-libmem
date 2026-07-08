@@ -33,7 +33,7 @@ list(APPEND ISA_SRC_FILES
 endforeach()
 
 add_library(isa_objlib OBJECT ${ISA_SRC_FILES})
-target_include_directories(isa_objlib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(isa_objlib PUBLIC ${LIBMEM_ROOT}/include)
 
 set(_MODULE_CC_FLAGS ${_CC_Flags} -mbmi -mbmi2 -mlzcnt -mno-vzeroupper)
 if (${ALMEM_ISA} MATCHES "avx512")

@@ -43,7 +43,7 @@ foreach(uarch ${uarch_list})
     endforeach()
 
     add_library(lib_zen${uarch} OBJECT ${UARCH_SRC_FILES})
-    target_include_directories(lib_zen${uarch} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_include_directories(lib_zen${uarch} PRIVATE ${LIBMEM_ROOT}/include)
 
     set(_MODULE_CC_FLAGS ${_CC_Flags}  -mno-vzeroupper)
     if (${CONFIG_COMPILER_HAS_ZEN${uarch}})

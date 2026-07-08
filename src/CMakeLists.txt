@@ -33,8 +33,8 @@ check_c_compiler_flag("-march=znver6"    CONFIG_COMPILER_HAS_ZEN6)
 
 set(ARCH_UNDF 255)
 set(AMD_CPU 1)
-set(CPU_DETECT_SRC_FILES "${CMAKE_SOURCE_DIR}/tools/detect_cpu_info.c")
-set(CPU_INCLUDE "${CMAKE_SOURCE_DIR}/include")
+set(CPU_DETECT_SRC_FILES "${LIBMEM_ROOT}/tools/detect_cpu_info.c")
+set(CPU_INCLUDE "${LIBMEM_ROOT}/include")
 set(CPU_FEATURES AVX512 AVX2 ERMS)
 
 foreach(FEATURE ${CPU_FEATURES})
@@ -171,7 +171,7 @@ endif ()
 
 # common object lib
 add_library(libmem_objlib OBJECT ${SOURCE_FILES})
-target_include_directories(libmem_objlib PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(libmem_objlib PRIVATE ${LIBMEM_ROOT}/include)
 set_target_properties(libmem_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(OBJ-LIST libmem_objlib)
@@ -199,15 +199,33 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${OBJ-LIST})
 add_library("${PROJECT_NAME}_static" STATIC)
 target_link_libraries("${PROJECT_NAME}_static" PRIVATE ${OBJ-LIST})
 
+# Unified AOCL build: merge LibMem's object files into the single libaocl.
+# LTO is disabled on these objects because GNU ld cannot link IFUNC objects that
+# are emitted as LTO bitcode; turning it off keeps them as real, linkable code.
+if(AOCL_TB_UNIFIED_BUILD)
+    if(NOT COMMAND aocl_tb_add_objects)
+        message(FATAL_ERROR "AOCL_TB_UNIFIED_BUILD requires aocl_tb_add_objects() to be defined by the parent project")
+    endif()
+    foreach(_almem_ol IN LISTS OBJ-LIST)
+        set_target_properties(${_almem_ol} PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
+    endforeach()
+    aocl_tb_add_objects(${OBJ-LIST})
+endif()
+
 # renaming static binary
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+# Only override the install prefix for a top-level standalone build; forcing this
+# cache var in a subproject would clobber the parent project's CMAKE_INSTALL_PREFIX.
+if(NOT AOCL_LIBMEM_SUBPROJECT AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR} CACHE PATH "..." FORCE)
 endif()
 
-# installing the target libraries
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
-install(TARGETS "${PROJECT_NAME}_static" ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+# Install LibMem's own libraries only in a standalone build; as a subproject or in
+# the unified libaocl the objects already live there, so skip to avoid duplicates.
+if(NOT AOCL_TB_UNIFIED_BUILD AND NOT AOCL_LIBMEM_SUBPROJECT)
+  install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+  install(TARGETS "${PROJECT_NAME}_static" ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
