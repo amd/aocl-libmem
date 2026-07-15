@@ -42,10 +42,11 @@ extern cpu_info zen_info;
  *   129..256B:          4-vec head/tail
  *   257..512B:          8-vec head/tail
  *   513..1024B (move):  16-vec head/tail
- *   >512/1024B:         overlap check (memmove only), then:
+ *   >512/1024B:         overlap check (memmove only), then (in check order):
+ *     < repmov_start:   dst-aligned 4-vec temporal loop (hot path)
  *     >= nt_start:      NT streaming stores   (all variants)
- *     >= repmov_start:  ERMS (rep movsb)      (ERMS variants only)
- *     else:             dst-aligned 4-vec loop
+ *     else:             ERMS (rep movsb)      (repmov_start <= size < nt_start,
+ *                                              ERMS variants only)
  *
  * memcpy:  __restrict (no overlap handling)
  * memmove: overlap-aware forward/backward via MEMMOVE_AVX512_ERMS guard
@@ -169,6 +170,35 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
     }
 #endif
 
+    /* dst-aligned temporal loop - hoisted ahead of the NT tier so the common
+     * case (513B..repmov_start) takes a single threshold compare on the hot
+     * path; the NT compare moves to the cold path below.
+     *
+     * Correctness: sound only while __repmov_start_threshold <=
+     * __nt_start_threshold. On ERMS parts that always holds (26KB <= L3). If
+     * ERMS is ever absent, __repmov_start_threshold == REPMOV_DISABLED
+     * (UINT64_MAX) makes this guard always-true and would shadow the NT tier,
+     * so the NT tier below MUST remain reachable in that configuration. */
+    if (likely(size < __repmov_start_threshold))
+    {
+        const char *sp = (const char *) src;
+        char *dp = (char *) dst;
+
+        __unaligned_load_store_1zmm_vec(dp, sp);
+
+        size_t rem;
+        ALIGN_ADVANCE_64(sp, dp, size, rem);
+
+        while (rem > 4 * ZMM_SZ)
+        {
+            __unaligned_load_aligned_store_4zmm_vec(dp, sp);
+            ADVANCE_4VEC(AVX512, sp, dp, rem);
+        }
+
+        __unaligned_load_store_4zmm_vec((char *) dst + size - 4 * ZMM_SZ, (const char *) src + size - 4 * ZMM_SZ);
+        return ret;
+    }
+
     /* NT streaming tier (all variants: NT outperforms temporal regardless of ERMS) */
     if (unlikely(size >= __nt_start_threshold))
     {
@@ -180,7 +210,7 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
         size_t rem;
         ALIGN_ADVANCE_64(sp, dp, size, rem);
 
-        while (rem >= 4 * ZMM_SZ)
+        while (rem > 4 * ZMM_SZ)
         {
             __unaligned_load_nt_store_4zmm_vec(dp, sp);
             ADVANCE_4VEC(AVX512, sp, dp, rem);
@@ -191,35 +221,9 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
         return ret;
     }
 
-    /* ERMS tier (rep movsb) - gated at runtime by __repmov_start_threshold,
-     * which is derived from the ERMS CPU feature flag (see threshold.c). When
-     * ERMS is absent the threshold disables this tier, so no compile-time guard
-     * is needed. */
-    if (unlikely(size >= __repmov_start_threshold))
-    {
-        __erms_movsb((void *) dst, src, size);
-        return ret;
-    }
-
-    /* dst-aligned temporal loop */
-    {
-        const char *sp = (const char *) src;
-        char *dp = (char *) dst;
-
-        __unaligned_load_store_1zmm_vec(dp, sp);
-
-        size_t rem;
-        ALIGN_ADVANCE_64(sp, dp, size, rem);
-
-        while (rem >= 4 * ZMM_SZ)
-        {
-            __unaligned_load_aligned_store_4zmm_vec(dp, sp);
-            ADVANCE_4VEC(AVX512, sp, dp, rem);
-        }
-
-        __unaligned_load_store_4zmm_vec((char *) dst + size - 4 * ZMM_SZ, (const char *) src + size - 4 * ZMM_SZ);
-        return ret;
-    }
+    /* ERMS tier (rep movsb) - repmov_start <= size < nt_start */
+    __erms_movsb((void *) dst, src, size);
+    return ret;
 }
 
 /* The rep movsb tier is runtime threshold-gated, so the ERMS and non-ERMS

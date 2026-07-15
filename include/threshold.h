@@ -27,6 +27,7 @@
 #define _THRESHOLD_H_
 
 #include "zen_cpu_info.h"
+#include "almem_defs.h"
 
 /*
  * Threshold computation macros
@@ -89,13 +90,15 @@
 extern "C" {
 #endif
 
-/* Instruction-specific thresholds */
-extern uint64_t __repmov_start_threshold;
-extern uint64_t __repmov_stop_threshold;
-extern uint64_t __repstore_start_threshold;
-extern uint64_t __repstore_stop_threshold;
-extern uint64_t __nt_start_threshold;
-extern uint64_t __nt_stop_threshold;
+/* Instruction-specific thresholds. Declared hidden (matching their
+ * HIDDEN_SYMBOL definitions in threshold.c) so intra-library references use
+ * direct RIP-relative addressing instead of a GOT indirection. */
+extern HIDDEN_SYMBOL uint64_t __repmov_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __repmov_stop_threshold;
+extern HIDDEN_SYMBOL uint64_t __repstore_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __repstore_stop_threshold;
+extern HIDDEN_SYMBOL uint64_t __nt_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __nt_stop_threshold;
 
 #ifdef __cplusplus
 }
