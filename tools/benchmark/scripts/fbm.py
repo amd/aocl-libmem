@@ -31,10 +31,14 @@ import re
 import csv
 import sys
 sys.path.insert(0, '../tools/benchmark')
-from bench import BaseBench
+from bench import BaseBench, _detect_l3_cache_bytes
 
 # Functions supported by FleetBench libc benchmarks
 FBM_SUPPORTED_FUNCS = ['memcpy', 'memmove', 'memset', 'memcmp']
+
+# mem_benchmark asserts 2 * L3 <= kMixedBenchmarkBufferSize (1 GiB), so cap L3 at 512 MiB.
+_FBM_MIXED_BUFFER_BYTES = 1024 * 1024 * 1024   # kMixedBenchmarkBufferSize
+_FBM_MAX_L3_BYTES = _FBM_MIXED_BUFFER_BYTES // 2
 
 # Version configurations for each FBM mode
 FBM_VERSIONS = {
@@ -274,6 +278,23 @@ class FBM(BaseBench):
         else:  # 'a'
             return f"BM_LIBC_{fn}_{workload}_"
 
+    def _cache_size_flags(self):
+        """Pin --L3_size to the per-CCX L3 for LLC-tier modes.
+
+        FleetBench's auto-detected per-socket L3 overshoots the int32 limit in
+        mem_benchmark on large-cache/SMT-off parts and aborts. The per-CCX
+        value matches GBM/TBM and the NT thresholds. v0.2 'cached' has no LLC
+        tier, so nothing is injected there.
+        """
+        if 'LLC' not in self.cache_levels:
+            return []
+        l3_bytes = _detect_l3_cache_bytes()
+        if not l3_bytes:
+            return []
+        # Stay within mem_benchmark's mixed-buffer assert (2 * L3 <= 1 GiB).
+        l3_bytes = min(l3_bytes, _FBM_MAX_L3_BYTES)
+        return [f"--L3_size={l3_bytes}"]
+
     # ------------------------------------------------------------------
     # Benchmark execution
     # ------------------------------------------------------------------
@@ -306,6 +327,9 @@ class FBM(BaseBench):
             env.pop('LD_PRELOAD', None)
 
         all_results = {}
+        cache_flags = self._cache_size_flags()
+        if cache_flags:
+            print(f"  cache override: {' '.join(cache_flags)}")
         for wl in self.workloads:
             bm_filter = self._build_filter(wl)
             cmd = ["taskset", "-c", str(self.core)]
@@ -320,6 +344,7 @@ class FBM(BaseBench):
                 "--benchmark_display_aggregates_only=true",
                 f"--benchmark_filter={bm_filter}",
             ]
+            cmd += cache_flags
 
             if self.allocator != 'tcmalloc':
                 env["TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD"] = \
