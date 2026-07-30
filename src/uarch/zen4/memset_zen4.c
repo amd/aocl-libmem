@@ -56,8 +56,8 @@ HIDDEN_SYMBOL void * __attribute__((flatten)) __memset_zen4(void * mem, int  val
         if (size > 2 * ZMM_SZ)
         {
             _mm512_storeu_si512(mem + ZMM_SZ, z0);
-            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
             _mm512_storeu_si512(mem + size - 2 * ZMM_SZ, z0);
+            _mm512_storeu_si512(mem + size - ZMM_SZ, z0);
             return ret;
         }
 
