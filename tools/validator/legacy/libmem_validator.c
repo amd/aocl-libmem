@@ -466,6 +466,18 @@ char *test_strchr(const char *s, int c) {
     return (char *)s;
 }
 
+char *test_strrchr(const char *s, int c) {
+    const char *last = NULL;
+
+    do {
+        if ((unsigned char)*s == (unsigned char)c) {
+            last = s;
+        }
+    } while (*s++ != '\0');
+
+    return (char *)last;
+}
+
 static uint8_t * alloc_buffer(uint8_t **head_buff, uint8_t **tail_buff,\
                                          size_t size, alloc_mode mode)
 {
@@ -2640,8 +2652,8 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt __attribut
         if(strchr((char*)str_alnd_addr,'#') != NULL)
         {
             printf("ERROR:[VALIDATION] failure for size 0 ");
-            free(buff);
         }
+        free(buff);
         return;
 
     }
@@ -2696,7 +2708,7 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt __attribut
     if (size == 1)
         find = *(str_alnd_addr);
     else
-        *(str_alnd_addr + size - NULL_BYTE - 1) = find;
+        find = *(str_alnd_addr + size - NULL_BYTE);
 
     res = strchr((char*)str_alnd_addr,(int)find);
 
@@ -2749,12 +2761,162 @@ static inline void strchr_validator(size_t size, uint32_t str2_alnmnt __attribut
         if (size == 1)
             find = *(str_alnd_addr);
         else
-            *(str_alnd_addr + size - NULL_BYTE - 1) = find;
+            find = *(str_alnd_addr + size - NULL_BYTE);
         res = strchr((char*)str_alnd_addr,(int)find);
         if(test_strchr((char*)str_alnd_addr,(int)find) != (char*)res) {
             printf("ERROR:[PAGE-CROSS (MATCH:END)] failure for str1_aln:%u size: %lu,"\
                         " return_value = %s, EXP= %s\n",str1_alnmnt, size, res, \
                         test_strchr((char*)str_alnd_addr,(int)find));
+        }
+
+        cleanup_page_cross_buffer(page_buff, page_cnt);
+    }
+    free(buff);
+}
+
+static inline void strrchr_validator(size_t size, uint32_t str2_alnmnt __attribute__((unused)),\
+                                                  uint32_t str1_alnmnt)
+{
+    uint8_t *buff = NULL, *buff_head, *buff_tail;
+    uint8_t *str_alnd_addr = NULL;
+    size_t index;
+    char find, not_found;
+    char *res;
+
+    buff = alloc_buffer(&buff_head, &buff_tail, size + NULL_BYTE + BOUNDARY_BYTES, NON_OVERLAP_BUFFER);
+
+    if (buff == NULL)
+    {
+        printf("[ERROR] Failed to allocate memory\n");
+        exit(-1);
+    }
+
+    str_alnd_addr = buff_tail + str1_alnmnt;
+    prepare_boundary(str_alnd_addr, size);
+
+    if (size == 0)
+    {
+        *str_alnd_addr = NULL_TERM_CHAR;
+        if (strrchr((char *)str_alnd_addr, '#') != NULL)
+        {
+            printf("ERROR:[VALIDATION] failure for size 0 ");
+        }
+        free(buff);
+        return;
+    }
+
+    for (index = 0; index < size; index++)
+    {
+        *(str_alnd_addr + index) = random_char();
+    }
+    *(str_alnd_addr + size) = NULL_TERM_CHAR;
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find = str_alnd_addr[rand() % (size - 1)];
+
+    res = strrchr((char *)str_alnd_addr, (int)find);
+    if (test_strrchr((char *)str_alnd_addr, (int)find) != (char *)res)
+    {
+        printf("ERROR:[VALIDATION (MATCH)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %p, EXP= %p\n", str1_alnmnt, size, (void *)res,\
+                (void *)test_strrchr((char *)str_alnd_addr, (int)find));
+    }
+
+    if (size > 2)
+    {
+        find = '!';
+        for (index = 0; index < size; index++)
+        {
+            if (*(str_alnd_addr + index) == find)
+            {
+                do
+                {
+                    not_found = random_char();
+                } while (not_found == find);
+                *(str_alnd_addr + index) = not_found;
+            }
+        }
+        *(str_alnd_addr + 0) = find;
+        *(str_alnd_addr + size / 2) = find;
+        res = strrchr((char *)str_alnd_addr, (int)find);
+        if (res != (char *)(str_alnd_addr + size / 2))
+        {
+            printf("ERROR:[VALIDATION (LAST-MATCH)] failure for str1_aln:%u size: %lu,"\
+                    " return_value = %p, EXP= %p\n", str1_alnmnt, size, res, str_alnd_addr + size / 2);
+        }
+    }
+
+    res = strrchr((char *)str_alnd_addr, '\0');
+    if (res != (char *)(str_alnd_addr + size))
+    {
+        printf("ERROR:[VALIDATION (NULL-CHAR)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %p, EXP= %p\n", str1_alnmnt, size, res, str_alnd_addr + size);
+    }
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find = str_alnd_addr[rand() % (size - 1)];
+    for (index = 0; index < size; index++)
+    {
+        if (*(str_alnd_addr + index) == find)
+        {
+            do
+            {
+                not_found = random_char();
+            } while (find == not_found);
+            *(str_alnd_addr + index) = not_found;
+        }
+    }
+
+    res = strrchr((char *)str_alnd_addr, (int)find);
+    if (res != NULL)
+    {
+        printf("ERROR:[VALIDATION (NON-MATCH)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %s, EXP= NULL\n", str1_alnmnt, size, res);
+    }
+
+    if (size == 1)
+        find = *(str_alnd_addr);
+    else
+        find = *(str_alnd_addr + size - NULL_BYTE);
+    res = strrchr((char *)str_alnd_addr, (int)find);
+    if (test_strrchr((char *)str_alnd_addr, (int)find) != (char *)res)
+    {
+        printf("ERROR:[VALIDATION (MATCH:END)] failure for str1_aln:%u size: %lu,"\
+                " return_value = %p, EXP= %p\n", str1_alnmnt, size, (void *)res,\
+                (void *)test_strrchr((char *)str_alnd_addr, (int)find));
+    }
+
+    if (is_page_cross_candidate(size, str1_alnmnt)) {
+        void *page_buff = NULL;
+        uint32_t page_cnt = PAGE_CNT(size);
+
+        alloc_page_cross_buffer(&page_buff, page_cnt, buff);
+
+        str_alnd_addr = (uint8_t *)page_buff + page_cnt * PAGE_SZ - (size + NULL_BYTE + str1_alnmnt);
+        for (index = 0; index < size; index++) {
+            *(str_alnd_addr + index) = random_char();
+        }
+        *(str_alnd_addr + size) = NULL_TERM_CHAR;
+
+        if (size == 1)
+            find = *(str_alnd_addr);
+        else
+            find = str_alnd_addr[rand() % (size - 1)];
+        res = strrchr((char *)str_alnd_addr, (int)find);
+        if (test_strrchr((char *)str_alnd_addr, (int)find) != (char *)res) {
+            printf("ERROR:[PAGE-CROSS (MATCH)] failure for str1_aln:%u size: %lu,"\
+                    " return_value = %p, EXP= %p\n", str1_alnmnt, size, (void *)res,\
+                    (void *)test_strrchr((char *)str_alnd_addr, (int)find));
+        }
+
+        res = strrchr((char *)str_alnd_addr, '\0');
+        if (res != (char *)(str_alnd_addr + size)) {
+            printf("ERROR:[PAGE-CROSS (NULL-CHAR)] failure for str1_aln:%u size: %lu,"\
+                    " return_value = %p, EXP= %p\n", str1_alnmnt, size, res, str_alnd_addr + size);
         }
 
         cleanup_page_cross_buffer(page_buff, page_cnt);
@@ -2781,6 +2943,7 @@ libmem_func supp_funcs[]=
     {"strstr",  strstr_validator},
     {"strspn",  strspn_validator},
     {"strchr",  strchr_validator},
+    {"strrchr", strrchr_validator},
     {"none",    NULL}
 };
 

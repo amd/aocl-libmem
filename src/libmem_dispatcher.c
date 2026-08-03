@@ -189,6 +189,7 @@ static inline void dispatcher_init()
     _strlen_variant     = (amd_strlen_fn) libmem_cpu_impls[STRLEN][cpu_var_idx];
     _strnlen_variant    = (amd_strnlen_fn) libmem_cpu_impls[STRNLEN][cpu_var_idx];
     _strchr_variant     = (amd_strchr_fn) libmem_cpu_impls[STRCHR][cpu_var_idx];
+    _strrchr_variant    = (amd_strrchr_fn) libmem_cpu_impls[STRRCHR][cpu_var_idx];
     _strspn_variant     = (amd_strspn_fn) libmem_cpu_impls[STRSPN][cpu_var_idx];
 
 #ifdef ALMEM_TUNABLES

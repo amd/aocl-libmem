@@ -141,7 +141,7 @@ set(SOURCE_FILES libmem.c)
 set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 
 # String Functions
-set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strnlen strchr strspn)
+set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strnlen strchr strrchr strspn)
 
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})

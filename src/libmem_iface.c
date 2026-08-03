@@ -108,6 +108,11 @@ __attribute__((visibility("default"))) amd_strchr_fn _strchr_variant  = __strchr
 LIBMEM_FN_MAP(strchr);
 WEAK_ALIAS(strchr, MK_FN_NAME(strchr));
 
+__attribute__((visibility("default"))) amd_strrchr_fn _strrchr_variant  = __strrchr_system;
+// strrchr mapping
+LIBMEM_FN_MAP(strrchr);
+WEAK_ALIAS(strrchr, MK_FN_NAME(strrchr));
+
 __attribute__((visibility("default"))) amd_strspn_fn _strspn_variant = __strspn_system;
 // strspn mapping
 LIBMEM_FN_MAP(strspn);

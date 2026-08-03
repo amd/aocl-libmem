@@ -48,6 +48,7 @@ struct StrncmpTag {};
 struct StrlenTag {};
 struct StrnlenTag {};
 struct StrchrTag {};
+struct StrrchrTag {};
 struct StrstrTag {};
 struct StrspnTag {};
 
@@ -220,6 +221,22 @@ struct FunctionTraits<StrchrTag> : StringTraitsBase {
 
     static char* invoke(char* s, int c) {
         return std::strchr(s, c);
+    }
+};
+
+template<>
+struct FunctionTraits<StrrchrTag> : StringTraitsBase {
+    using ReturnType = char*;
+    using FunctionPtr = char*(*)(const char*, int);
+
+    static const char* name() { return "strrchr"; }
+
+    static constexpr FunctionCategory category = FunctionCategory::SEARCH;
+    static constexpr ReturnCategory return_category = ReturnCategory::FOUND_PTR;
+    static constexpr size_t arg_count = 2;
+
+    static char* invoke(char* s, int c) {
+        return std::strrchr(s, c);
     }
 };
 

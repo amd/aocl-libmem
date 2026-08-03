@@ -1017,6 +1017,8 @@ template<typename Tag>
 class PageOverrunStrchrTest : public PageOverrunTestCase<Tag> {
 protected:
     TestResult runPageOverrunTest(size_t size) override {
+        if (size == 0) return TestResult::success();
+
         auto buf = this->setupAtGuard(size);
         if (!buf.valid()) return this->error("allocation failed");
 
@@ -1038,6 +1040,134 @@ protected:
             if (ret != expected)
                 return this->error("search at end failed: expected=%p got=%p",
                                    static_cast<void*>(expected), static_cast<void*>(ret));
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageBoundaryStrrchrTest (strrchr-specific: finds LAST occurrence)
+// ============================================================================
+
+/**
+ * Tests: strrchr across a page boundary
+ *
+ * Places TWO occurrences of the search character: an early decoy at
+ * search_pos/2 and the authoritative last occurrence at search_pos.
+ * strrchr must return the rightmost (search_pos) pointer, not the decoy.
+ * Using PageBoundaryStrchrTest would not catch this because with a single
+ * occurrence first==last and strrchr accidentally passes.
+ */
+template<typename Tag>
+class PageBoundaryStrrchrTest : public PageBoundaryTestCase<Tag> {
+protected:
+    // off2 unused; collapse off2 loop.
+    bool usesOff2() const override { return false; }
+
+    TestResult runPageBoundaryTest(size_t size, size_t search_pos,
+                            uint32_t off1, uint32_t /*off2*/) override {
+        AllocParams p = this->ctx_.alloc_params;
+        p.page_mode = PageMode::PageCross;
+        p.cross_offset = off1;
+        auto buf = allocateSingle(size + 1, p);
+        if (!buf.valid()) return this->error("allocation failed");
+
+        uint8_t* str = buf.src;
+
+        if (!this->fitsInAlloc(buf, str, size + 1)) {
+            return TestResult::success();
+        }
+
+        this->seedRandom(size, search_pos, off1, 0);
+        fillFullByteRange(str, size + 1);
+
+        const char search_char = '!';
+        // Scrub all occurrences of the search char and null bytes.
+        for (size_t i = 0; i < size; ++i) {
+            if (str[i] == 0 || str[i] == search_char)
+                str[i] = 'a' + (i % LOWER_CHARS);
+        }
+        str[size] = '\0';
+
+        // Place a decoy occurrence before search_pos so that returning the
+        // first match (strchr behaviour) would give the wrong answer.
+        // Only possible when search_pos > 0; if search_pos == 0 there is no
+        // index before it, so we fall back to a single-occurrence test for
+        // that position (getTestPositions() never returns 0 in practice, but
+        // this guard makes the invariant explicit).
+        if (search_pos > 0)
+            str[search_pos / 2] = search_char;
+
+        // The authoritative last occurrence is at search_pos.
+        str[search_pos] = search_char;
+
+        char* ret = TestCase<Tag>::Traits::invoke(
+            reinterpret_cast<char*>(str), static_cast<int>(search_char));
+
+        char* expected = reinterpret_cast<char*>(str + search_pos);
+        if (ret != expected) {
+            return this->error("strrchr page-boundary: pos=%zu expected=%p got=%p",
+                               search_pos,
+                               static_cast<void*>(expected),
+                               static_cast<void*>(ret));
+        }
+
+        return TestResult::success();
+    }
+};
+
+// ============================================================================
+// PageOverrunStrrchrTest (strrchr-specific: finds LAST occurrence)
+// ============================================================================
+//
+// Note: PageBoundaryStrrchrTest is kept separate from PageBoundaryStrchrTest
+// because it places two occurrences to verify last-occurrence semantics.
+
+/**
+ * Tests: strrchr
+ * - String ends at trap page with '\0' as last byte
+ * - Tests finding last occurrence before the null terminator
+ */
+template<typename Tag>
+class PageOverrunStrrchrTest : public PageOverrunTestCase<Tag> {
+protected:
+    TestResult runPageOverrunTest(size_t size) override {
+        if (size == 0) return TestResult::success();
+
+        auto buf = this->setupAtGuard(size);
+        if (!buf.valid()) return this->error("allocation failed");
+
+        const char search_char = '!';
+        for (size_t i = 0; i < size - 1; ++i)
+            buf.src[i] = 'a' + (i % LOWER_CHARS);
+        buf.src[size - 1] = '\0';
+
+        // Test 1: search_char not found should return NULL
+        char* ret = TestCase<Tag>::Traits::invoke(
+            reinterpret_cast<char*>(buf.src), static_cast<int>(search_char));
+        if (ret != nullptr)
+            return this->error("expected NULL for not-found");
+
+        // Test 2: place search_char near the end and find it
+        if (size > 1) {
+            buf.src[size - 2] = search_char;
+            ret = TestCase<Tag>::Traits::invoke(
+                reinterpret_cast<char*>(buf.src), static_cast<int>(search_char));
+            char* expected = reinterpret_cast<char*>(buf.src + size - 2);
+            if (ret != expected)
+                return this->error("search at end failed: expected=%p got=%p",
+                                   static_cast<void*>(expected), static_cast<void*>(ret));
+
+            // Test 3: place search_char earlier too, but strrchr should return the later one
+            if (size > 3) {
+                buf.src[size - 4] = search_char;
+                ret = TestCase<Tag>::Traits::invoke(
+                    reinterpret_cast<char*>(buf.src), static_cast<int>(search_char));
+                if (ret != expected)  // Should still be at size-2, not size-4
+                    return this->error("strrchr should find LAST occurrence at %p, got %p",
+                                       static_cast<void*>(expected), static_cast<void*>(ret));
+            }
         }
 
         return TestResult::success();

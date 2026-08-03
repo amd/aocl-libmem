@@ -47,7 +47,7 @@ VALIDATOR_PATH = '../tools/validator/libmem_validator'
 LIBMEM_FUNCS = [
     'memcpy', 'mempcpy', 'memmove', 'memset', 'memcmp', 'memchr',
     'strcpy', 'strncpy', 'strcmp', 'strncmp', 'strlen', 'strnlen',
-    'strcat', 'strncat', 'strstr', 'strspn', 'strchr'
+    'strcat', 'strncat', 'strstr', 'strspn', 'strchr', 'strrchr'
 ]
 
 
