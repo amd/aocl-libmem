@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2025-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -34,7 +34,7 @@
 extern cpu_info zen_info;
 
 #ifdef MEMMOVE_ZEN4
-static inline void *_memcpy_zen4_impl(void *dst, const void *src, size_t size)
+static inline void *_memmove_zen4_impl(void *dst, const void *src, size_t size)
 #else
 static inline void *_memcpy_zen4_impl(void *__restrict dst, const void *__restrict src, size_t size)
 #endif
@@ -43,17 +43,9 @@ static inline void *_memcpy_zen4_impl(void *__restrict dst, const void *__restri
     ret = dst;
 
 #ifdef MEMMOVE_ZEN4
-    if (size <= 2 * ZMM_SZ) // 128B
-    {
-        if (size < ZMM_SZ)
-        {
-            return __load_store_ble_zmm_vec_head_tail(dst, src, size);
-        }
-        // 64-127B: ZMM head-tail
-        __load_store_le_2zmm_vec(dst, src, (uint8_t) size);
-        return ret;
-    }
-    else if (size <= 8 * ZMM_SZ) // 512B
+    /* __memmove_zen4 handles size <= 2 * ZMM_SZ (128B) in its own overlap-safe
+     * head+tail tier and only delegates here for size > 128B */
+    if (size <= 8 * ZMM_SZ) // 512B
     {
         if (size <= 4 * ZMM_SZ) // 256B
         {
