@@ -1,3 +1,4 @@
+AOCL-LibMem v5.3.2 - LICENSE
 SECTION 1: AMD Contributions
 AMD copyrighted code (BSD-3-Clause)
 Copyright (C) 2008–2022, Advanced Micro Devices, Inc. All rights reserved.
@@ -6,7 +7,7 @@ License: BSD-3-Clause (SPDX: BSD-3-Clause)
 See full license text in Section 3.
 
 SECTION 2: Third-Party Components
-The following third-party components are included in AOCL-LibMem v5.2:
+The following third-party components are included in AOCL-LibMem v5.3.2:
 
 tinymembench
 Copyright: Siarhei Siamashka
