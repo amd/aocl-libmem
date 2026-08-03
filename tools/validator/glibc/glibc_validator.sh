@@ -43,7 +43,7 @@ LIB_DIR="$BUILD_DIR/lib"
 # Find repository root for CMakeLists.txt (one level up from build)
 REPO_ROOT="$(cd "$BUILD_DIR/.." && pwd)"
 
-KNOWN_STABLE_VER="2.43"
+KNOWN_STABLE_VER="2.42"
 GLIBC_VERSION="glibc-${KNOWN_STABLE_VER}"
 echo "Using glibc release: $GLIBC_VERSION"
 
@@ -87,7 +87,7 @@ else
     # Fallback list if CMakeLists.txt is not found
     FUNCTIONS=(
         "memcpy" "mempcpy" "memmove" "memset" "memcmp" "memchr"
-        "strcpy" "strncpy" "strcmp" "strncmp" "strcat" "strncat" "strstr" "strlen" "strchr"
+        "strcpy" "strncpy" "strcmp" "strncmp" "strcat" "strncat" "strstr" "strspn" "strlen" "strnlen" "strchr" "strrchr"
     )
 fi
 
@@ -109,7 +109,7 @@ is_usable_source() {
 download_source_file() {
     local url="$1" dest="$2" tmp="$2.part"
     local attempt delay http_code
-    delay=2
+    delay=4
     for attempt in 1 2 3 4 5; do
         http_code=$(curl -sS --max-time 60 -w '%{http_code}' -o "$tmp" "$url" 2>/dev/null || echo 000)
         if [ "$http_code" = "200" ] && is_usable_source "$tmp"; then
@@ -211,62 +211,81 @@ int main(void) {
     echo "Applied patches to test-string.h"
 }
 
-GLIBC_EXACT_VERSION=$(curl -s "https://sourceware.org/git/?p=glibc.git&a=blob_plain&hb=${GLIBC_VERSION}&f=version.h" | grep -oP 'VERSION "\K[^"]+')
+GLIBC_REPO_URL="https://github.com/bminor/glibc.git"
+GLIBC_SRC_DIR="${GLIBC_TESTS_DIR}/glibc-src"
+
+# Clone glibc source (shallow, sparse) to avoid rate-limiting/timeout issues
+# with individual file downloads from sourceware.org.
+if [ -d "$GLIBC_SRC_DIR/.git" ]; then
+    echo "glibc source already cloned at $GLIBC_SRC_DIR"
+else
+    echo ""
+    echo "Cloning glibc ${GLIBC_VERSION} from GitHub (sparse, depth=1)..."
+    echo "========================================="
+    rm -rf "$GLIBC_SRC_DIR"
+    git clone --depth=1 --filter=blob:none --sparse \
+        --branch "${GLIBC_VERSION}" \
+        "$GLIBC_REPO_URL" "$GLIBC_SRC_DIR"
+    cd "$GLIBC_SRC_DIR"
+    git sparse-checkout init --no-cone
+    git sparse-checkout set 'string/*' 'version.h'
+    cd "$REPO_ROOT"
+fi
+
+GLIBC_EXACT_VERSION=$(grep -oP 'VERSION "\K[^"]+' "$GLIBC_SRC_DIR/version.h" 2>/dev/null)
 echo "Exact glibc version: ${GLIBC_EXACT_VERSION:-unknown}"
 
 echo ""
-echo "Downloading glibc ${GLIBC_EXACT_VERSION:-$GLIBC_VERSION} test files..."
+echo "Copying glibc ${GLIBC_EXACT_VERSION:-$GLIBC_VERSION} test files..."
 echo "========================================="
 
-GLIBC_BLOB_URL="https://sourceware.org/git/?p=glibc.git&a=blob_plain&hb=${GLIBC_VERSION}&f=string"
+GLIBC_STRING_DIR="${GLIBC_SRC_DIR}/string"
 FAILED_DOWNLOADS=()
 
-# Download test-string.h first, since the per-test cleaning below depends on it
+# Copy test-string.h first, since the per-test cleaning below depends on it
 # already being patched.
 test_string_file="${GLIBC_TESTS_DIR}/test-string.h"
 if is_usable_source "$test_string_file"; then
-    echo "test-string.h already exists, skipping download"
+    echo "test-string.h already exists, skipping"
 else
-    rm -f "$test_string_file"
-    echo "Downloading test-string.h..."
-    if download_source_file "${GLIBC_BLOB_URL}/test-string.h" "$test_string_file"; then
-        echo "Downloaded test-string.h"
+    if [ -f "${GLIBC_STRING_DIR}/test-string.h" ]; then
+        cp "${GLIBC_STRING_DIR}/test-string.h" "$test_string_file"
+        echo "Copied test-string.h"
         patch_test_string_h
     else
-        echo "Failed to download test-string.h"
+        echo "Failed to find test-string.h in cloned source"
         exit 1
     fi
 fi
 
-# Download test-memcpy-support.h
+# Copy test-memcpy-support.h
 test_memcpy_support_file="${GLIBC_TESTS_DIR}/test-memcpy-support.h"
 if is_usable_source "$test_memcpy_support_file"; then
-    echo "test-memcpy-support.h already exists, skipping download"
+    echo "test-memcpy-support.h already exists, skipping"
 else
-    rm -f "$test_memcpy_support_file"
-    echo "Downloading test-memcpy-support.h..."
-    if download_source_file "${GLIBC_BLOB_URL}/test-memcpy-support.h" "$test_memcpy_support_file"; then
-        echo "Downloaded test-memcpy-support.h"
+    if [ -f "${GLIBC_STRING_DIR}/test-memcpy-support.h" ]; then
+        cp "${GLIBC_STRING_DIR}/test-memcpy-support.h" "$test_memcpy_support_file"
+        echo "Copied test-memcpy-support.h"
     else
-        echo "Failed to download test-memcpy-support.h"
+        echo "test-memcpy-support.h not found in source (non-fatal)"
         FAILED_DOWNLOADS+=("test-memcpy-support.h")
     fi
 fi
 
-# Download test files from glibc repository. Each file is cleaned as soon as it
+# Copy test files from cloned source. Each file is cleaned as soon as it
 # arrives, so a cached tree and a freshly fetched one end up in the same state.
 for func in "${FUNCTIONS[@]}"; do
     test_file="${GLIBC_TESTS_DIR}/test-${func}.c"
     if is_usable_source "$test_file"; then
-        echo "test-${func}.c already exists, skipping download"
+        echo "test-${func}.c already exists, skipping"
     else
-        rm -f "$test_file"
-        echo "Downloading test-${func}.c..."
-        if download_source_file "${GLIBC_BLOB_URL}/test-${func}.c" "$test_file"; then
-            echo "Downloaded test-${func}.c"
+        src_file="${GLIBC_STRING_DIR}/test-${func}.c"
+        if [ -f "$src_file" ]; then
+            cp "$src_file" "$test_file"
+            echo "Copied test-${func}.c"
             clean_file "$test_file"
         else
-            echo "Failed to download test-${func}.c"
+            echo "test-${func}.c not found in source"
             FAILED_DOWNLOADS+=("test-${func}.c")
         fi
     fi
