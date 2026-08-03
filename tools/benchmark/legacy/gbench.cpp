@@ -128,6 +128,11 @@ struct Misc_MemData {
 const char* my_strchr(const char* s, int c) {
     return strchr(s, c);
 }
+
+const char* my_strrchr(const char* s, int c) {
+    return strrchr(s, c);
+}
+
 struct Misc_StrData {
     const char *functionName;
     const char* (*functionPtr)(char *src, int value);
@@ -785,6 +790,7 @@ Misc_MemData Misc_Mem_functionList[] = {
 
 Misc_StrData MiscStrfunctionList[] = {
     {"strchr", (const char *(*)(char *, int)) my_strchr},
+    {"strrchr", (const char *(*)(char *, int)) my_strrchr},
 };
 
 StrData strfunctionList[] = {
@@ -961,7 +967,7 @@ int main(int argc, char** argv) {
             registerBenchmark(strlenBenchmark);
         } else if (func.compare(0, 6, "strstr") == 0) {
             registerBenchmark(substrBenchmark);
-        } else if (func.compare(0, 6, "strchr") == 0) {
+        } else if (func == "strchr" || func == "strrchr") {
             registerBenchmark(misc_string_Benchmark);
         } else {
             registerBenchmark(stringBenchmark);

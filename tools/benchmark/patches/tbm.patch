@@ -353,7 +353,7 @@
      if (maxspeed > 0 && s / maxspeed * 100. >= 0.1)
      {
          printf("%s%-52s : %8.1f MB/s (%.1f%%)\n", indent_prefix, description,
-@@ -150,42 +180,74 @@
+@@ -150,42 +180,78 @@
      }
      return maxspeed;
  }
@@ -453,10 +453,14 @@
 +{
 +    return strchr((char *)src,'!');
 +}
++int strrchr_wrapper(int64_t *dst, int64_t *src, size_t size)
++{
++    return strrchr((char *)src,'!');
++}
  void bandwidth_bench(int64_t *dstbuf, int64_t *srcbuf, int64_t *tmpbuf,
                       int size, int blocksize, const char *indent_prefix,
                       bench_info *bi)
-@@ -199,391 +261,111 @@
+@@ -199,391 +265,112 @@
          bi++;
      }
  }
@@ -754,6 +758,7 @@
 +    {"strspn", 0, strspn_wrapper},
 +    {"strstr", 0, strstr_wrapper},
 +    {"strchr", 0, strchr_wrapper},
++    {"strrchr", 0, strrchr_wrapper},
 +    {"none", 0,  NULL}
 +};
 +void generate_uniq_random_string(char * str, size_t length) {

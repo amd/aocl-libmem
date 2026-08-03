@@ -111,7 +111,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                                            (0 stands for size<<1; other +ve integers stands for incremental iterations.)
                         LibMem_function  : mem and str functions
                                           (memcpy,memmove,memset,memcmp,memchr,mempcpy,
-                                          strcpy,strncpy,strcmp,strncmp,strlen,strnlen,strcat,strncat,strspn,strstr,strchr)
+                                          strcpy,strncpy,strcmp,strncmp,strlen,strnlen,strcat,strncat,strspn,strstr,strchr,strrchr)
                         -perf            : Performance report type
                                           l - Performance analysis for LibMem
                                           g - Performance analysis for Glibc
