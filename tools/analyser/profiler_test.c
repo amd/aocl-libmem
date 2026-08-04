@@ -30,9 +30,9 @@
  * Supports custom alignment for src/dst buffers via --align-src=SIZE / --align-dst=SIZE.
  * If alignment is not specified for a buffer, it is left unaligned (offset by 3 bytes).
  *
- * Supported functions (17 total):
+ * Supported functions (18 total):
  *   Distribution: memset memcpy mempcpy memmove memcmp memchr strncpy strncmp strncat strnlen
- *   Count-only:   strcpy strcmp strcat strlen strchr strstr strspn
+ *   Count-only:   strcpy strcmp strcat strlen strchr strrchr strstr strspn
  */
 #define _GNU_SOURCE
 #include <pthread.h>

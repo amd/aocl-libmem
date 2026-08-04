@@ -155,7 +155,7 @@ All three binaries take the same positional layout for the basic case:
 
 - **function** -- one of: `memcpy`, `mempcpy`, `memmove`, `memset`, `memcmp`, `memchr`,
   `strcpy`, `strncpy`, `strcmp`, `strncmp`, `strlen`, `strnlen`, `strcat`, `strncat`,
-  `strstr`, `strspn`, `strchr`
+    `strstr`, `strspn`, `strchr`, `strrchr`
 - **size** -- size parameter for the function
 - **src_align** / **dst_align** -- alignment offsets (default `0`)
 - **all_alignments** -- `1` to sweep every (src, dst) combination
@@ -213,7 +213,7 @@ $ ./validator.py -r [start] [end] -a [src] [dst] -t [iterator] <mem_function>
 -t iterator    iteration pattern (default: "2x" of starting size -- '<<1')
 <function>     memcpy, memset, memcmp, memmove, mempcpy, memchr,
                strcpy, strncpy, strcmp, strncmp, strlen, strnlen,
-               strcat, strncat, strstr, strspn, strchr
+               strcat, strncat, strstr, strspn, strchr, strrchr
 ```
 
 ### Example

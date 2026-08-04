@@ -420,7 +420,7 @@ The correctness verification framework accounts for these exceptions using the f
 
 ## Correctness Test Suite
 
-The profiler includes a comprehensive correctness test suite to validate call counting, size distribution accuracy, alignment tracking, and multithreading behavior across **all 17 supported functions**.
+The profiler includes a comprehensive correctness test suite to validate call counting, size distribution accuracy, alignment tracking, and multithreading behavior across **all 18 supported functions**.
 
 ### Components
 
@@ -441,7 +441,7 @@ All test suite files are located in the `tools/analyser/` directory alongside th
 The test runner script orchestrates end-to-end correctness testing. It:
 1. Checks root privileges (BPF requirement)
 2. Auto-builds binaries if missing (`cmake .. && make`)
-3. Iterates over all 17 functions across four test categories (call count, multithreaded, alignment, alignment+threading)
+3. Iterates over all 18 functions across four test categories (call count, multithreaded, alignment, alignment+threading)
 4. Captures profiler output and extracts `EXPECTED_*` metadata emitted by the test application
 5. Invokes `profiler_verifier.py` to compare actual vs expected results
 6. Reports per-test PASS/FAIL and a final summary
@@ -505,7 +505,7 @@ When the 5th argument (unaligned_calls) is provided, the test runs in alignment 
 
 **Supported function names:**
 - Distribution: `memset`, `memcpy`, `mempcpy`, `memmove`, `memcmp`, `memchr`, `strncpy`, `strncmp`, `strncat`, `strnlen`
-- Count-only: `strcpy`, `strcmp`, `strcat`, `strlen`, `strchr`, `strstr`, `strspn`
+- Count-only: `strcpy`, `strcmp`, `strcat`, `strlen`, `strchr`, `strrchr`, `strstr`, `strspn`
 
 The test application outputs expected metadata to `stderr` for automated verification:
 
@@ -539,15 +539,15 @@ The test runner automatically:
 2. Checks that the profiler binaries are available (build with `make tools`)
 3. Runs **four test categories** covering all functions, threading, and alignment:
 
-#### Test Category 1: Call Count Tests (All 17 Functions)
-Tests each of the 17 supported functions with 500 calls in a single thread:
+#### Test Category 1: Call Count Tests (All 18 Functions)
+Tests each of the 18 supported functions with 500 calls in a single thread:
 - Distribution functions (10) are tested with default profiler flags (`-vv -t 5`)
-- Count-only functions (7) are tested with the `-c` flag to enable count tracking
+- Count-only functions (8) are tested with the `-c` flag to enable count tracking
 
-#### Test Category 2: Multithreaded Tests (All 17 Functions)
+#### Test Category 2: Multithreaded Tests (All 18 Functions)
 Tests **every** function across multiple thread counts (`1`, `2`, `4`, `$(nproc)`), each with 1000 calls per thread:
 - Distribution functions (10): `memset`, `memcpy`, `mempcpy`, `memmove`, `memcmp`, `memchr`, `strncpy`, `strncmp`, `strncat`, `strnlen`
-- Count-only functions (7): `strcpy`, `strcmp`, `strcat`, `strlen`, `strchr`, `strstr`, `strspn` (with `-c` flag)
+- Count-only functions (8): `strcpy`, `strcmp`, `strcat`, `strlen`, `strchr`, `strrchr`, `strstr`, `strspn` (with `-c` flag)
 
 Validates that the profiler correctly aggregates counts across all threads for every supported function.
 
