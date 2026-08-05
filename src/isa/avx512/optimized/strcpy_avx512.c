@@ -1,4 +1,4 @@
-/* Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -29,20 +29,39 @@
 #include "almem_defs.h"
 #include "zen_cpu_info.h"
 #include "../../../base_impls/memset_erms_impls.h"
+
+#define SINGLE_VEC_THRESHOLD (16 * 1024)
+
 #ifdef STRNCPY_AVX512
-/* This is an optimized function to fill a memory region with null bytes ('\0') */
+/* Store vector v at dst_off, clipped to strncpy size, fill remainder with nulls */
+#define STRNCPY_STORE_AND_FILL(vec, dst_off, vec_off)                        \
+    do {                                                                      \
+        unsigned _np = _tzcnt_u64(_mm512_testn_epi8_mask((vec), (vec)));     \
+        size_t _abs = (dst_off) + _np;                                       \
+        size_t _cl = (_abs + 1 < size) ? _np + 1 : size - (dst_off);        \
+        if (_cl >= ZMM_SZ)                                                   \
+            _mm512_storeu_si512((__m512i *) (dst + (dst_off)), (vec));        \
+        else {                                                               \
+            __mmask64 _m = _bzhi_u64(UINT64_MAX, _cl);                       \
+            _mm512_mask_storeu_epi8(dst + (dst_off), _m, (vec));             \
+        }                                                                    \
+        if (_abs + 1 < size)                                                 \
+            _fill_null_avx512(dst + _abs + 1, size - (_abs + 1));            \
+        return ret;                                                          \
+    } while (0)
+#endif
+
+#ifdef STRNCPY_AVX512
+/* This is an optimized function to fill a memory region with null bytes ('\0').
+ * Uses AVX-512 stores for large sizes, falls back to ERMS for small sizes. */
 static inline void *_fill_null_avx512(void *mem, size_t size)
 {
     __m512i z0;
-
+    // Use ERMS stosb for small sizes (< 2*ZMM_SZ)
     if (size < 2 * ZMM_SZ)
-    {
-        // Use the ERMS feature to fill memory with zeros
-        // This is likely more efficient for small sizes
         return __erms_stosb(mem, 0, size);
-    }
 
-    z0 = _mm512_set1_epi8(0);
+    z0 = _mm512_setzero_si512();
     if (size <= 4 * ZMM_SZ)
     {
         _mm512_storeu_si512(mem , z0);
@@ -65,9 +84,9 @@ static inline void *_fill_null_avx512(void *mem, size_t size)
 
     size_t offset = 4 * ZMM_SZ;
     size -= 4 * ZMM_SZ;
-    offset -= ((uint64_t)mem & (ZMM_SZ-1));
+    offset -= ((uintptr_t)mem & (ZMM_SZ-1));
 
-    while( offset < size )
+    while (offset < size)
     {
         _mm512_store_si512(mem + offset + 0 * ZMM_SZ, z0);
         _mm512_store_si512(mem + offset + 1 * ZMM_SZ, z0);
@@ -79,8 +98,11 @@ static inline void *_fill_null_avx512(void *mem, size_t size)
 }
 #endif
 
-/* This function is an optimized version of strcpy and strncpy using AVX-512 instructions.
-It copies a null-terminated string from `src` to `dst`, returning the original value of `dst` */
+/* This function is an optimized version of strcpy/strncpy using AVX-512 instructions.
+ * strcpy: Uses 2x unrolled main loop with back-copy technique for null termination
+ *         to avoid expensive masked-store latency on Zen5.
+ * strncpy: Uses 4x unrolled main loop with min_epu8 reduction for batch null detection
+ *          across 256 bytes before unpacking individual masks. */
 #ifdef STRNCPY_AVX512
 static inline char * __attribute__((flatten)) _strncpy_avx512(char *dst, const char *src, size_t size)
 #else
@@ -90,343 +112,486 @@ static inline char * __attribute__((flatten)) _strcpy_avx512(char *dst, const ch
 #ifdef STRNCPY_AVX512
     if (unlikely(size == 0))
         return dst;
-    size_t slen,rem,null_idx,null_start;
 #endif
 
-    size_t offset, index;
-    __m512i z0, z1, z2, z3, z4, z5, z6;
-    uint64_t match, match1,match2;
-    __mmask64 mask;
+    register char *ret __asm__("rax") = dst;
+    __m512i z1;
+    __mmask64 match;
+    size_t offset;
 
-    // Store the original destination pointer to return at the end
-    register void *ret asm("rax");
-    ret = dst;
-
-    // Initialize a zeroed AVX-512 register for comparisons
-    z0 = _mm512_setzero_epi32();
-
-    // Calculate the offset to align the source pointer to 64 bytes
-    offset = (uintptr_t)src & (ZMM_SZ - 1);
-
-    // Handle cases where `src` is close to the end of a memory page
-    if (unlikely((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ - 1) & (uintptr_t)src)))
+    // Calculate the page offset to determine if src is close to a page boundary
+    size_t page_off = (uintptr_t) src & (PAGE_SZ - 1);
+    if (likely(page_off <= (PAGE_SZ - ZMM_SZ)))
     {
-        // Load bytes from `src` into z1 with a offsetted mask to avoid crossing the page boundary
-        z6 = _mm512_set1_epi8(0xff);
-        mask = UINT64_MAX >> offset;
-        z1 =  _mm512_mask_loadu_epi8(z6 ,mask, src);
-
-        // Compare `z1` with zero register to find the null terminator
-        match = _mm512_cmpeq_epu8_mask(z1, z0);
-
-        // If a null terminator is found, calculate the index and store the result
+#ifdef STRNCPY_AVX512
+        // For strncpy with size <= YMM_SZ, use masked YMM load/store
+        if (size <= YMM_SZ)
+        {
+            __mmask32 ymask = _bzhi_u32(UINT32_MAX, (unsigned int) size);
+            __m256i y0 = _mm256_maskz_loadu_epi8(ymask, src);
+            __mmask32 match1 = _mm256_testn_epi8_mask(y0, y0) & ymask;
+            if (match1)
+            {
+                unsigned int null_pos = _tzcnt_u32(match1);
+                unsigned int copy_len = null_pos + 1;
+                __mmask32 mask = _bzhi_u32(UINT32_MAX, copy_len);
+                _mm256_mask_storeu_epi8(dst, mask, y0);
+                if (copy_len < size)
+                    _fill_null_avx512(dst + copy_len, size - copy_len);
+            }
+            else
+            {
+                _mm256_mask_storeu_epi8(dst, ymask, y0);
+            }
+            return ret;
+        }
+        // For strncpy with YMM_SZ < size < ZMM_SZ, use masked ZMM load/store
+        if (size < ZMM_SZ)
+        {
+            __mmask64 mask = _bzhi_u64(UINT64_MAX, size);
+            z1 = _mm512_maskz_loadu_epi8(mask, src);
+            match = _mm512_testn_epi8_mask(z1, z1) & mask;
+            if (match)
+            {
+                size_t null_pos = _tzcnt_u64(match);
+                size_t copy_len = null_pos + 1;
+                mask = _bzhi_u64(UINT64_MAX, copy_len);
+                _mm512_mask_storeu_epi8(dst, mask, z1);
+                if (copy_len < size)
+                    _fill_null_avx512(dst + copy_len, size - copy_len);
+            }
+            else
+            {
+                _mm512_mask_storeu_epi8(dst, mask, z1);
+            }
+            return ret;
+        }
+#endif
+#ifndef STRNCPY_AVX512
+        /* First 64B as two YMM loads: YMM masked stores have lower
+         * latency than ZMM on Zen5 for short strings (<= 64B). */
+        {
+            __m256i y0 = _mm256_loadu_si256((const __m256i *) src);
+            __mmask32 match1 = _mm256_testn_epi8_mask(y0, y0);
+            if (match1)
+            {
+                unsigned np = _tzcnt_u32(match1);
+                __mmask32 mask = _bzhi_u32(UINT32_MAX, np + 1);
+                _mm256_mask_storeu_epi8(dst, mask, y0);
+                return ret;
+            }
+            __m256i y1 = _mm256_loadu_si256((const __m256i *) (src + YMM_SZ));
+            __mmask32 match2 = _mm256_testn_epi8_mask(y1, y1);
+            if (match2)
+            {
+                unsigned np = _tzcnt_u32(match2);
+                _mm256_storeu_si256((__m256i *) dst, y0);
+                __mmask32 mask = _bzhi_u32(UINT32_MAX, np + 1);
+                _mm256_mask_storeu_epi8(dst + YMM_SZ, mask, y1);
+                return ret;
+            }
+            _mm256_storeu_si256((__m256i *) dst, y0);
+            _mm256_storeu_si256((__m256i *) (dst + YMM_SZ), y1);
+        }
+        offset = ZMM_SZ - ((uintptr_t) src & (ZMM_SZ - 1));
+#else
+        // For strncpy: load first 64 bytes and check for null terminator
+        z1 = _mm512_loadu_si512((const __m512i *) src);
+        match = _mm512_testn_epi8_mask(z1, z1);
         if (match)
         {
-            index =  _tzcnt_u64(match);
-#ifdef STRNCPY_AVX512
-            slen = (index + 1 < size) ? index + 1 : size;
-            mask = _bzhi_u64(UINT64_MAX, slen);
+            // Null found: copy up to null or size bytes, then null-fill remainder
+            unsigned null_pos = _tzcnt_u64(match);
+            size_t copy_len = (null_pos + 1 < size) ? null_pos + 1 : size;
+            if (copy_len >= ZMM_SZ)
+                _mm512_storeu_si512((__m512i *) dst, z1);
+            else
+            {
+                __mmask64 mask = _bzhi_u64(UINT64_MAX, copy_len);
+                _mm512_mask_storeu_epi8(dst, mask, z1);
+            }
+            if (null_pos + 1 < size)
+                _fill_null_avx512(dst + null_pos + 1, size - (null_pos + 1));
+            return ret;
+        }
+        if (size <= ZMM_SZ)
+        {
+            __mmask64 mask = _bzhi_u64(UINT64_MAX, size);
             _mm512_mask_storeu_epi8(dst, mask, z1);
-            // Null fill
-            if (likely(index + 1 < size))
-                _fill_null_avx512(dst + index + 1, size - (index + 1));
-#else
-            mask = UINT64_MAX >> (63 - (index));
-            _mm512_mask_storeu_epi8(dst, mask, z1);
-#endif
             return ret;
         }
+        // No null in first 64 bytes: store them and calculate alignment offset
+        _mm512_storeu_si512((__m512i *) dst, z1);
+        offset = ZMM_SZ - ((uintptr_t) src & (ZMM_SZ - 1));
+#endif
     }
-    // Load the first 64 bytes from `src` and check for null terminator
-#ifdef STRNCPY_AVX512
-    // For strncpy with small size, use masked load to avoid reading beyond valid memory
-    if (size < ZMM_SZ) {
-        mask = _bzhi_u64(UINT64_MAX, size);
-        z1 = _mm512_maskz_loadu_epi8(mask, src);
-    }
-    else {
-        z1 = _mm512_loadu_si512(src);
-    }
-#else
-    z1 = _mm512_loadu_si512(src);
-#endif
-    match = _mm512_cmpeq_epu8_mask(z0, z1);
-    if (match)
-    {
-        index =  _tzcnt_u64(match);
-#ifdef STRNCPY_AVX512
-        slen = (index + 1 < size) ? index + 1 : size;
-        mask = _bzhi_u64(UINT64_MAX, slen);
-        _mm512_mask_storeu_epi8(dst, mask, z1);
-        // NULL fill
-        if (likely(index + 1 < size))
-            _fill_null_avx512(dst + index + 1, size - (index + 1));
-#else
-        mask = UINT64_MAX >> (63 - index);
-        _mm512_mask_storeu_epi8(dst, mask, z1);
-#endif
-
-        return ret;
-    }
-    // Store the first 64 bytes to `dst`
-#ifdef STRNCPY_AVX512
-    // Use fast path for full vector, masked operation only if needed
-    if (size >= ZMM_SZ) {
-        _mm512_storeu_si512(dst, z1);
-    } else {
-        mask = _bzhi_u64(UINT64_MAX, size);
-        _mm512_mask_storeu_epi8(dst, mask, z1);
-    }
-#else
-    _mm512_storeu_si512(dst, z1);
-#endif
-
-    // Adjust the offset for the next load operation
-    offset = ZMM_SZ - offset;
-
-    // Initialize a counter to process the next 192 bytes (3 * 64B) from the source
-    uint8_t cnt_vec = 2;
-    do
-    {
-#ifdef STRNCPY_AVX512
-        if (offset >= size) break;
-#endif
-        z2 = _mm512_load_si512(src + offset);
-        match = _mm512_cmpeq_epu8_mask(z2, z0);
-
-        // If a null terminator is found within the loaded bytes, copy the tail vector.
-        // Load and copy the remaining bytes up to and including the null terminator
-        if (match)
-        {
-#ifdef STRNCPY_AVX512
-            null_idx = _tzcnt_u64(match);
-            rem = size - offset;
-            slen = (null_idx + 1 < rem) ? null_idx + 1 : rem;
-            
-            // Use fast path for full vector, masked operation only if needed
-            if (slen >= ZMM_SZ) {
-                _mm512_storeu_si512(dst + offset, z2);
-            } else {
-                mask = _bzhi_u64(UINT64_MAX, slen);
-                _mm512_mask_storeu_epi8(dst + offset, mask, z2);
-            }
-            
-            // Null fill
-            null_start = offset + null_idx + 1;
-            if (likely(null_start < size)) {
-                _fill_null_avx512(dst + null_start, size - null_start);
-            }
-#else
-            index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
-            z5 = _mm512_loadu_si512(src + index);
-            _mm512_storeu_si512(dst + index, z5);
-#endif
-
-            return ret;
-        }
-
-#ifdef STRNCPY_AVX512
-        rem = size - offset;
-        
-        // Use fast path for full vector, masked operation only if needed
-        if (rem >= ZMM_SZ) {
-            _mm512_storeu_si512(dst + offset, z2);
-        } else {
-            mask = _bzhi_u64(UINT64_MAX, rem);
-            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
-        }
-#else
-        _mm512_storeu_si512(dst + offset, z2);
-#endif
-        offset += ZMM_SZ;
-    } while (cnt_vec--);
-
-
-    // Determine if the next four 64-byte blocks (256 bytes total) are within the same memory
-    // page , this is to avoid crossing a page boundary, which could lead to a page fault if
-    // the memory is not mapped. Here it calculates and processes the maximum number of 64-byte
-    // vectors that can be handled without the risk of crossing into an adjacent memory page.
-    cnt_vec = 4 - ((((uintptr_t)src + offset) & (4 * ZMM_SZ - 1)) >> 6);
-    while (cnt_vec--)
-    {
-#ifdef STRNCPY_AVX512
-        if (offset >= size) break;
-#endif
-        z2 = _mm512_load_si512(src + offset);
-        match = _mm512_cmpeq_epu8_mask(z2, z0);
-
-        if (match)
-        {
-            index =  _tzcnt_u64(match);
-#ifdef STRNCPY_AVX512
-            rem = size - offset;
-            slen = (index + 1 < rem) ? index + 1 : rem;
-            
-            // Use fast path for full vector, masked operation only if needed
-            if (slen >= ZMM_SZ) {
-                _mm512_storeu_si512(dst + offset, z2);
-            } else {
-                mask = _bzhi_u64(UINT64_MAX, slen);
-                _mm512_mask_storeu_epi8(dst + offset, mask, z2);
-            }
-            
-            // Null fill
-            null_start = offset + index + 1;
-            if (likely(null_start < size)) {
-                _fill_null_avx512(dst + null_start, size - null_start);
-            }
-#else
-            mask = UINT64_MAX >> (63 - index);
-            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
-#endif
-
-            return ret;
-        }
-
-#ifdef STRNCPY_AVX512
-        rem = size - offset;
-        
-        // Use fast path for full vector, masked operation only if needed
-        if (rem >= ZMM_SZ) {
-            _mm512_storeu_si512(dst + offset, z2);
-        } else {
-            mask = _bzhi_u64(UINT64_MAX, rem);
-            _mm512_mask_storeu_epi8(dst + offset, mask, z2);
-        }
-#else
-        _mm512_storeu_si512(dst + offset, z2);
-#endif
-        offset += ZMM_SZ;
-    }
-
-    // Main loop to process 4 vectors at a time for larger sizes(> 256B)
-#ifdef STRNCPY_AVX512
-    while (offset + 4 * ZMM_SZ <= size)
-#else
-    while (1)
-#endif
-    {
-        // Load 4 vectors from `src`
-        z1 = _mm512_load_si512(src + offset);
-        z2 = _mm512_load_si512(src + offset + ZMM_SZ);
-        z3 = _mm512_load_si512(src + offset + 2 * ZMM_SZ);
-        z4 = _mm512_load_si512(src + offset + 3 * ZMM_SZ);
-
-        // Find the minimum of the loaded vectors to check for null terminator
-        z5 = _mm512_min_epu8(z1,z2);
-        z6 = _mm512_min_epu8(z3,z4);
-
-        // Compare the minimums to find the null terminator
-        match = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
-        if (match)
-          break; // If found, exit the loop
-
-        // Store the 4 vectors to `dst`
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
-        _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
-        _mm512_storeu_si512(dst + offset + 3 * ZMM_SZ, z4);
-        offset += 4 * ZMM_SZ;
-    }
-
-#ifdef STRNCPY_AVX512
-    // Handle remaining bytes
-    if (offset < size) goto handle_remaining;
-    return ret;
-#endif
-
-    // Check for null terminator in the first two vectors (z1, z2)
-    if ((match1 = _mm512_cmpeq_epu8_mask(z5, z0)))
-    {
-        if ((match2 = _mm512_cmpeq_epu8_mask(z1, z0)))
-        {
-            match = match2;
-            goto copy_tail_vec;
-        }
-        _mm512_storeu_si512(dst + offset, z1);
-        offset += ZMM_SZ;
-        match = match1;
-    }
-    // Check for null terminator in the last two vectors (z3, z4)
     else
     {
-        _mm512_storeu_si512(dst + offset, z1);
-        _mm512_storeu_si512(dst + offset + ZMM_SZ, z2);
-        if ((match2 =_mm512_cmpeq_epu8_mask(z3, z0)))
+        /* Page-crossing fallback: copy byte-by-byte until src is aligned. */
+        offset = 0;
+        while ((uintptr_t) (src + offset) & (ZMM_SZ - 1))
         {
-            match = match2;
-            offset += 2 * ZMM_SZ;
-            goto copy_tail_vec;
+#ifdef STRNCPY_AVX512
+            if (offset >= size)
+                return ret;
+#endif
+            char c = src[offset];
+            dst[offset] = c;
+            if (c == '\0')
+            {
+#ifdef STRNCPY_AVX512
+                if (offset + 1 < size)
+                    _fill_null_avx512(dst + offset + 1, size - (offset + 1));
+#endif
+                return ret;
+            }
+            offset++;
         }
-        _mm512_storeu_si512(dst + offset + 2 * ZMM_SZ, z3);
-        offset += 3 * ZMM_SZ;
     }
-    // Label for copying the tail of the string where the null terminator was found
-    copy_tail_vec:
+
+#ifdef STRNCPY_AVX512
+    const size_t safe_4vec = (size > 4 * ZMM_SZ) ? size - 4 * ZMM_SZ : 0;
+#endif
+
+    /* Single-vector warmup: the aligned load may read past 'size' bytes but
+     * this is safe because we verified above that we are not near a page
+     * boundary and the semantics are preserved by clipping the copy/null-fill
+     * to 'size'. */
     {
 #ifdef STRNCPY_AVX512
-        null_idx = _tzcnt_u64(match) + 1;
-        rem = size - offset;
-        slen = (null_idx < rem) ? null_idx : rem;
-        
-        if (slen >= ZMM_SZ) {
-            z5 = _mm512_loadu_si512(src + offset);
-            _mm512_storeu_si512(dst + offset, z5);
-        } else {
-            mask = _bzhi_u64(UINT64_MAX, slen);
-            z5 = _mm512_maskz_loadu_epi8(mask, src + offset);
-            _mm512_mask_storeu_epi8(dst + offset, mask, z5);
-        }
-        
-        // Null fill
-        null_start = offset + null_idx;
-        if (likely(null_start < size)) {
-            _fill_null_avx512(dst + null_start, size - null_start);
-        }
-#else
-        index = offset + _tzcnt_u64(match) - ZMM_SZ + 1;
-        z5 = _mm512_loadu_si512(src + index);
-        _mm512_storeu_si512(dst + index, z5);
+        if (offset >= size)
+            return ret;
 #endif
-        return ret;
+        z1 = _mm512_load_si512((const __m512i *) (src + offset));
+        match = _mm512_testn_epi8_mask(z1, z1);
+        if (match)
+        {
+            unsigned null_pos = _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+            size_t abs_null = offset + null_pos;
+            size_t cl = (abs_null + 1 < size) ? null_pos + 1 : size - offset;
+            if (cl >= ZMM_SZ)
+                _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+            else
+            {
+                __mmask64 m = _bzhi_u64(UINT64_MAX, cl);
+                _mm512_mask_storeu_epi8(dst + offset, m, z1);
+            }
+            if (abs_null + 1 < size)
+                _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+#else
+            {
+                size_t end = offset + null_pos + 1;
+                if (end >= ZMM_SZ) {
+                    __m512i tail = _mm512_loadu_si512((const __m512i *) (src + end - ZMM_SZ));
+                    _mm512_storeu_si512((__m512i *) (dst + end - ZMM_SZ), tail);
+                }
+                else
+                {
+                    __mmask64 mask = _bzhi_u64(UINT64_MAX, null_pos + 1);
+                    _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+                }
+            }
+#endif
+            return ret;
+        }
+#ifdef STRNCPY_AVX512
+        if (offset + ZMM_SZ > size)
+        {
+            __mmask64 rm = _bzhi_u64(UINT64_MAX, size - offset);
+            _mm512_mask_storeu_epi8(dst + offset, rm, z1);
+            return ret;
+        }
+#endif
+        _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+        offset += ZMM_SZ;
+#ifdef STRNCPY_AVX512
+        if (offset >= size)
+            return ret;
+#endif
     }
 
-#ifdef STRNCPY_AVX512
-handle_remaining:
-    // Remaining bytes handling
-    while (offset < size) {
-        rem = size - offset;
-        __mmask64 block = (rem >= ZMM_SZ) ? UINT64_MAX : _bzhi_u64(UINT64_MAX, rem);
-        z1 = _mm512_maskz_loadu_epi8(block, src + offset);
+#ifndef STRNCPY_AVX512
+    /* strcpy main loop: 2x unrolled with back-copy technique.
+     * On null detection, load the final 64B ending at the null position and
+     * do a full unmasked store to avoid expensive masked-store latency on Zen5. */
+    while (1)
+    {
+        if (unlikely(offset >= SINGLE_VEC_THRESHOLD))
+            goto large_str_loop;
 
-        uint64_t null_mask = _mm512_cmpeq_epu8_mask(z1, z0) & block;
-        if (null_mask) {
-            // Found null
-            null_idx = _tzcnt_u64(null_mask) + 1;
-            slen = (null_idx < rem) ? null_idx : rem;
-            
-            if (slen >= ZMM_SZ) {
-                _mm512_storeu_si512(dst + offset, z1);
-            } else {
-                mask = _bzhi_u64(UINT64_MAX, slen);
-                _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+        // Page-boundary guard: fall back to single-vector processing
+        // when within 2*ZMM_SZ of a page boundary to avoid faulting
+        if (unlikely(((uintptr_t) (src + offset) & (PAGE_SZ - 1)) > (PAGE_SZ - 2 * ZMM_SZ)))
+        {
+            z1 = _mm512_load_si512((const __m512i *) (src + offset));
+            match = _mm512_testn_epi8_mask(z1, z1);
+            if (match)
+            {
+                unsigned null_pos = _tzcnt_u64(match);
+                size_t end = offset + null_pos + 1;
+                __m512i tail = _mm512_loadu_si512((const __m512i *) (src + end - ZMM_SZ));
+                _mm512_storeu_si512((__m512i *) (dst + end - ZMM_SZ), tail);
+                return ret;
             }
-            
-            // Null fill
-            null_start = offset + null_idx;
-            if (null_start < size)
-                _fill_null_avx512(dst + null_start, size - null_start);
+            _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+            offset += ZMM_SZ;
+            continue;
+        }
+
+        // Load 2 vectors and check for null terminator
+        {
+            __m512i z2 = _mm512_load_si512((const __m512i *) (src + offset));
+            __m512i z3 = _mm512_load_si512((const __m512i *) (src + offset + ZMM_SZ));
+            __mmask64 match1 = _mm512_testn_epi8_mask(z2, z2);
+            __mmask64 match2 = _mm512_testn_epi8_mask(z3, z3);
+
+            if (unlikely(match1 | match2))
+            {
+                if (match1)
+                {
+                    unsigned null_pos = _tzcnt_u64(match1);
+                    size_t end = offset + null_pos + 1;
+                    __m512i tail = _mm512_loadu_si512((const __m512i *) (src + end - ZMM_SZ));
+                    _mm512_storeu_si512((__m512i *) (dst + end - ZMM_SZ), tail);
+                    return ret;
+                }
+                _mm512_storeu_si512((__m512i *) (dst + offset), z2);
+                {
+                    unsigned null_pos = _tzcnt_u64(match2);
+                    size_t end = offset + ZMM_SZ + null_pos + 1;
+                    __m512i tail = _mm512_loadu_si512((const __m512i *) (src + end - ZMM_SZ));
+                    _mm512_storeu_si512((__m512i *) (dst + end - ZMM_SZ), tail);
+                }
+                return ret;
+            }
+
+            _mm_prefetch((const char *) src + offset + 6 * ZMM_SZ, _MM_HINT_T0);
+            _mm512_storeu_si512((__m512i *) (dst + offset), z2);
+            _mm512_storeu_si512((__m512i *) (dst + offset + ZMM_SZ), z3);
+        }
+        offset += 2 * ZMM_SZ;
+    }
+#else
+    /* strncpy main loop: 4x unrolled with vectorized null detection.
+     * Uses min_epu8 reduction across 4 vectors to batch-check 256 bytes
+     * for null before unpacking individual masks.  Same page-boundary
+     * guard as strcpy but widened to 4*ZMM_SZ. */
+    while (1)
+    {
+        if (unlikely(offset >= SINGLE_VEC_THRESHOLD))
+            goto large_str_loop;
+
+        // Page-boundary guard: fall back to single-vector processing
+        // when within 4*ZMM_SZ of a page boundary to avoid faulting
+        if (unlikely(((uintptr_t) (src + offset) & (PAGE_SZ - 1)) > (PAGE_SZ - 4 * ZMM_SZ)))
+        {
+            z1 = _mm512_load_si512((const __m512i *) (src + offset));
+            match = _mm512_testn_epi8_mask(z1, z1);
+            if (match)
+            {
+                unsigned null_pos = _tzcnt_u64(match);
+                size_t abs_null = offset + null_pos;
+                size_t cl = (abs_null + 1 < size) ? null_pos + 1 : size - offset;
+                if (cl >= ZMM_SZ)
+                    _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+                else
+                {
+                    __mmask64 m = _bzhi_u64(UINT64_MAX, cl);
+                    _mm512_mask_storeu_epi8(dst + offset, m, z1);
+                }
+                if (abs_null + 1 < size)
+                    _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+                return ret;
+            }
+            {
+                size_t rem = size - offset;
+                if (rem >= ZMM_SZ)
+                    _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+                else
+                {
+                    __mmask64 m = _bzhi_u64(UINT64_MAX, rem);
+                    _mm512_mask_storeu_epi8(dst + offset, m, z1);
+                    return ret;
+                }
+            }
+            offset += ZMM_SZ;
+            continue;
+        }
+
+        // Handle remaining bytes when fewer than 4 vectors remain
+        if (unlikely(offset > safe_4vec))
+        {
+            if (offset >= size)
+                return ret;
+            size_t remaining = size - offset;
+            while (remaining >= ZMM_SZ)
+            {
+                z1 = _mm512_load_si512((const __m512i *) (src + offset));
+                match = _mm512_testn_epi8_mask(z1, z1);
+                if (match)
+                {
+                    unsigned np = _tzcnt_u64(match);
+                    size_t abs_null = offset + np;
+                    __mmask64 mask = _bzhi_u64(UINT64_MAX, np + 1);
+                    _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+                    if (abs_null + 1 < size)
+                        _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+                    return ret;
+                }
+                _mm512_storeu_si512((__m512i *) (dst + offset), z1);
+                offset += ZMM_SZ;
+                remaining -= ZMM_SZ;
+            }
+            if (remaining > 0)
+            {
+                __mmask64 lm = _bzhi_u64(UINT64_MAX, remaining);
+                z1 = _mm512_maskz_loadu_epi8(lm, src + offset);
+                match = _mm512_testn_epi8_mask(z1, z1) & lm;
+                if (match)
+                {
+                    unsigned np = _tzcnt_u64(match);
+                    __mmask64 mask = _bzhi_u64(UINT64_MAX, np + 1);
+                    _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+                    size_t abs_null = offset + np;
+                    if (abs_null + 1 < size)
+                        _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+                }
+                else
+                {
+                    _mm512_mask_storeu_epi8(dst + offset, lm, z1);
+                }
+            }
             return ret;
         }
 
-        // No null found 
-        if (rem >= ZMM_SZ) {
-            _mm512_storeu_si512(dst + offset, z1);
-        } else {
-            _mm512_mask_storeu_epi8(dst + offset, block, z1);
+        // Load 4 vectors from src
+        {
+            __m512i z2 = _mm512_load_si512((const __m512i *) (src + offset));
+            __m512i z3 = _mm512_load_si512((const __m512i *) (src + offset + ZMM_SZ));
+            __m512i z4 = _mm512_load_si512((const __m512i *) (src + offset + 2 * ZMM_SZ));
+            __m512i z5 = _mm512_load_si512((const __m512i *) (src + offset + 3 * ZMM_SZ));
+
+            // Find the minimum of the loaded vectors to check for null terminator
+            __m512i z6 = _mm512_min_epu8(z2, z3);
+            __m512i z7 = _mm512_min_epu8(z4, z5);
+            __m512i z8 = _mm512_min_epu8(z6, z7);
+            __mmask64 match_all = _mm512_testn_epi8_mask(z8, z8);
+
+            // If null found in any of the 4 vectors, determine which one
+            if (unlikely(match_all))
+            {
+                __mmask64 match1 = _mm512_testn_epi8_mask(z2, z2);
+                if (match1)
+                    STRNCPY_STORE_AND_FILL(z2, offset, 0);
+                _mm512_storeu_si512((__m512i *) (dst + offset), z2);
+
+                __mmask64 match2 = _mm512_testn_epi8_mask(z3, z3);
+                if (match2)
+                    STRNCPY_STORE_AND_FILL(z3, offset + ZMM_SZ, ZMM_SZ);
+                _mm512_storeu_si512((__m512i *) (dst + offset + ZMM_SZ), z3);
+
+                __mmask64 match3 = _mm512_testn_epi8_mask(z4, z4);
+                if (match3)
+                    STRNCPY_STORE_AND_FILL(z4, offset + 2 * ZMM_SZ, 2 * ZMM_SZ);
+                _mm512_storeu_si512((__m512i *) (dst + offset + 2 * ZMM_SZ), z4);
+
+                STRNCPY_STORE_AND_FILL(z5, offset + 3 * ZMM_SZ, 3 * ZMM_SZ);
+            }
+
+            // No null found: store all 4 vectors to dst
+            _mm512_storeu_si512((__m512i *) (dst + offset), z2);
+            _mm512_storeu_si512((__m512i *) (dst + offset + ZMM_SZ), z3);
+            _mm512_storeu_si512((__m512i *) (dst + offset + 2 * ZMM_SZ), z4);
+            _mm512_storeu_si512((__m512i *) (dst + offset + 3 * ZMM_SZ), z5);
         }
+        offset += 4 * ZMM_SZ;
+    }
+#endif
+
+// Large-string single-vector loop: reduces icache pressure for strings
+// exceeding SINGLE_VEC_THRESHOLD by processing one vector at a time
+// with page-boundary awareness for safe memory access.
+large_str_loop:
+    while (1)
+    {
+        if (unlikely(((uintptr_t) (src + offset) & (PAGE_SZ - 1)) > (PAGE_SZ - ZMM_SZ)))
+        {
+            size_t page_rem = PAGE_SZ - ((uintptr_t) (src + offset) & (PAGE_SZ - 1));
+            {
+                __mmask64 lm = _bzhi_u64(UINT64_MAX, page_rem);
+                z1 = _mm512_maskz_loadu_epi8(lm, src + offset);
+                match = _mm512_testn_epi8_mask(z1, z1) & lm;
+                if (match)
+                {
+                    unsigned null_pos = _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+                    size_t abs_null = offset + null_pos;
+                    size_t cl = (abs_null + 1 < size) ? null_pos + 1 : size - offset;
+                    __mmask64 mask = _bzhi_u64(UINT64_MAX, cl);
+                    _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+                    if (abs_null + 1 < size)
+                        _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+#else
+                    size_t end = offset + null_pos + 1;
+                    __m512i tail = _mm512_loadu_si512((const __m512i *) (src + end - ZMM_SZ));
+                    _mm512_storeu_si512((__m512i *) (dst + end - ZMM_SZ), tail);
+#endif
+                    return ret;
+                }
+                _mm512_mask_storeu_epi8(dst + offset, lm, z1);
+                offset += page_rem;
+#ifdef STRNCPY_AVX512
+                if (offset >= size) return ret;
+#endif
+                continue;
+            }
+        }
+#ifdef STRNCPY_AVX512
+        if (offset >= size) return ret;
+        if (offset + ZMM_SZ > size) {
+            size_t rem = size - offset;
+            __mmask64 lm = _bzhi_u64(UINT64_MAX, rem);
+            z1 = _mm512_maskz_loadu_epi8(lm, src + offset);
+            match = _mm512_testn_epi8_mask(z1, z1) & lm;
+            if (match) {
+                unsigned np = _tzcnt_u64(match);
+                __mmask64 mask = _bzhi_u64(UINT64_MAX, np + 1);
+                _mm512_mask_storeu_epi8(dst + offset, mask, z1);
+                size_t abs_null = offset + np;
+                if (abs_null + 1 < size)
+                    _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+            } else {
+                _mm512_mask_storeu_epi8(dst + offset, lm, z1);
+            }
+            return ret;
+        }
+#endif
+        z1 = _mm512_load_si512((const __m512i *)(src + offset));
+        match = _mm512_testn_epi8_mask(z1, z1);
+        if (match) {
+            unsigned null_pos = _tzcnt_u64(match);
+#ifdef STRNCPY_AVX512
+            size_t abs_null = offset + null_pos;
+            size_t cl = (abs_null + 1 < size) ? null_pos + 1 : size - offset;
+            if (cl >= ZMM_SZ)
+                _mm512_storeu_si512((__m512i *)(dst + offset), z1);
+            else {
+                __mmask64 m = _bzhi_u64(UINT64_MAX, cl);
+                _mm512_mask_storeu_epi8(dst + offset, m, z1);
+            }
+            if (abs_null + 1 < size)
+                _fill_null_avx512(dst + abs_null + 1, size - (abs_null + 1));
+#else
+            {
+                size_t end = offset + null_pos + 1;
+                __m512i tail = _mm512_loadu_si512((const __m512i *)(src + end - ZMM_SZ));
+                _mm512_storeu_si512((__m512i *)(dst + end - ZMM_SZ), tail);
+            }
+#endif
+            return ret;
+        }
+        _mm512_storeu_si512((__m512i *)(dst + offset), z1);
         offset += ZMM_SZ;
     }
-    return ret;
-#endif
 }
