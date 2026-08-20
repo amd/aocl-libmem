@@ -38,6 +38,7 @@ HIDDEN_SYMBOL extern char * __strchr_zen2(const char *, int);
 HIDDEN_SYMBOL extern char * __strchr_zen3(const char *, int);
 HIDDEN_SYMBOL extern char * __strchr_zen4(const char *, int);
 HIDDEN_SYMBOL extern char * __strchr_zen5(const char *, int);
+HIDDEN_SYMBOL extern char * __strchr_zen6(const char *, int);
 
 //System solution which takes in system config.
 HIDDEN_SYMBOL extern char * __strchr_system(const char *, int);

@@ -49,6 +49,7 @@ typedef enum{
     STRNLEN,
     STRCHR,
     STRSPN,
+    STRRCHR,
     FUNC_COUNT,
     TUN_FUNC_COUNT = MEMCMP + 1
 }func_index;
@@ -83,15 +84,15 @@ typedef enum{
 } tunable_variant_idx;
 #endif //end of tunables
 
-
-typedef enum{
-/*uArch based*/
+typedef enum {
+    /*uArch based*/
     ARCH_ZEN1,
     ARCH_ZEN2,
     ARCH_ZEN3,
     ARCH_ZEN4,
     ARCH_ZEN5,
-/*System feature & Threshold*/
+    ARCH_ZEN6,
+    /*System feature & Threshold*/
     SYSTEM,
     CPU_VARIANT_COUNT
 } cpu_variant_idx;
@@ -153,7 +154,8 @@ HIDDEN_SYMBOL func_ptr libmem_tun_impls[TUN_FUNC_COUNT][TUN_VARIANT_COUNT] =
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen2), \
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen3), \
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen4), \
-    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5),
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5), \
+    (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6),
 
 #define generate_system_variant(func) \
     (func_ptr) __ALMEM_CONCAT(__ALMEM_PREFIX(func), system)
@@ -185,6 +187,7 @@ HIDDEN_SYMBOL func_ptr libmem_cpu_impls[FUNC_COUNT][CPU_VARIANT_COUNT] =
     add_cpu_func_variants(strnlen),
     add_cpu_func_variants(strchr),
     add_cpu_func_variants(strspn),
+    add_cpu_func_variants(strrchr),
 };
 
 

@@ -47,10 +47,19 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 # set the project name and version
-set(LIBMEM_VERSION_STRING 5.3.0)
+set(LIBMEM_VERSION_STRING 5.3.2)
 
 project(aocl-libmem VERSION ${LIBMEM_VERSION_STRING} LANGUAGES C CXX DESCRIPTION
                         "Library of AMD optimized string/memory functions")
+
+# Target-based build support: when built as a subproject, CMAKE_SOURCE_DIR
+# points at the parent (aocl) project, so cache our own root in LIBMEM_ROOT for
+# subdirectory include paths and set AOCL_LIBMEM_SUBPROJECT to skip the tools.
+set(LIBMEM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "AOCL-LibMem source root")
+if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(AOCL_LIBMEM_SUBPROJECT ON)
+  message(STATUS "[aocl-libmem] building as a subproject; tools/bench utilities are skipped")
+endif()
 
 string(TIMESTAMP BUILD_DATE "%Y%m%d")
 
@@ -74,10 +83,10 @@ option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
 
 option(ALMEM_GCOV "Enable Code Coverage" OFF)
 
-set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5). Leave empty for auto-detection.")
+set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5, zen6). Leave empty for auto-detection.")
 # Define supported Zen version range
 set(MIN_ZEN_VER 1)
-set(MAX_ZEN_VER 5)
+set(MAX_ZEN_VER 6)
 
 
 option(ALMEM_STRICT_BOUNDS "Enable strict-bounds variant (masked loads only)" OFF)
@@ -160,7 +169,9 @@ endif()
 # let the build system know the source directory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# let the build system know the tools directory
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+# tools are bench/validator/python utilities; skip them in a subproject build
+if(NOT AOCL_LIBMEM_SUBPROJECT)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+endif()
 
 file(WRITE ${CMAKE_BINARY_DIR}/version.h ${LIBMEM_BUILD_VERSION_STR})

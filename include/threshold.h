@@ -27,6 +27,7 @@
 #define _THRESHOLD_H_
 
 #include "zen_cpu_info.h"
+#include "almem_defs.h"
 
 /*
  * Threshold computation macros
@@ -55,6 +56,23 @@
 #define COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) (l3_bytes)
 
 /*
+ * rep-movs (ERMS) start threshold.
+ * Below this size, memcpy/memmove use vector loads+stores; at/above it the
+ * ERMS variants switch to rep-movsb. The crossover is micro-arch specific:
+ *   Zen5/Zen6 - rep-movsb only wins for larger copies (tuned to 26KB).
+ *   Pre-Zen5  - rep-movsb wins earlier (2KB).
+ */
+#define REPMOV_START_THRESHOLD_ZEN5 (26 * 1024)
+#define REPMOV_START_THRESHOLD_DEFAULT (2 * 1024)
+
+/*
+ * Sentinel that disables the rep-movsb tier: set as the start threshold when
+ * ERMS is unavailable so the runtime size check (size >= threshold) is never
+ * satisfied for any valid copy length.
+ */
+#define REPMOV_DISABLED (UINT64_MAX)
+
+/*
  * Zen5 aligned vector move threshold = L1D/2 + 2KB.
  * Below this size, memcpy/memmove use aligned vector loads+stores.
  * Above, they switch to rep-movs (ERMS).
@@ -72,13 +90,15 @@
 extern "C" {
 #endif
 
-/* Instruction-specific thresholds */
-extern uint64_t __repmov_start_threshold;
-extern uint64_t __repmov_stop_threshold;
-extern uint64_t __repstore_start_threshold;
-extern uint64_t __repstore_stop_threshold;
-extern uint64_t __nt_start_threshold;
-extern uint64_t __nt_stop_threshold;
+/* Instruction-specific thresholds. Declared hidden (matching their
+ * HIDDEN_SYMBOL definitions in threshold.c) so intra-library references use
+ * direct RIP-relative addressing instead of a GOT indirection. */
+extern HIDDEN_SYMBOL uint64_t __repmov_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __repmov_stop_threshold;
+extern HIDDEN_SYMBOL uint64_t __repstore_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __repstore_stop_threshold;
+extern HIDDEN_SYMBOL uint64_t __nt_start_threshold;
+extern HIDDEN_SYMBOL uint64_t __nt_stop_threshold;
 
 #ifdef __cplusplus
 }

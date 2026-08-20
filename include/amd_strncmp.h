@@ -38,6 +38,7 @@ HIDDEN_SYMBOL extern int __strncmp_zen2(const char *,const char *, size_t);
 HIDDEN_SYMBOL extern int __strncmp_zen3(const char *,const char *, size_t);
 HIDDEN_SYMBOL extern int __strncmp_zen4(const char *,const char *, size_t);
 HIDDEN_SYMBOL extern int __strncmp_zen5(const char *,const char *, size_t);
+HIDDEN_SYMBOL extern int __strncmp_zen6(const char *, const char *, size_t);
 
 //System solution which takes in system config.
 HIDDEN_SYMBOL extern int __strncmp_system(const char *,const char *, size_t);

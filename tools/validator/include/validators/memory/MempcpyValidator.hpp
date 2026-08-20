@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_MEMPCPY_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_MEMPCPY_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/MemoryTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * MempcpyValidator - Validates mempcpy implementation
  */
-class MempcpyValidator : public FunctionValidator<traits::MempcpyTag, MempcpyValidator> {
+class MempcpyValidator : public TestRunner<traits::MempcpyTag, MempcpyValidator> {
 public:
     void registerTests() {
         tests()
@@ -49,7 +49,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(MempcpyValidator)
+REGISTER_VALIDATOR(MempcpyValidator, "mempcpy")
 
 } // namespace validator
 } // namespace libmem

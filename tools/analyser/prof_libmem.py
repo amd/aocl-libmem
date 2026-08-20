@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
- Copyright (C) 2023-25 Advanced Micro Devices, Inc. All rights reserved.
+ Copyright (C) 2023-26 Advanced Micro Devices, Inc. All rights reserved.
 
  Redistribution and use in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
@@ -219,6 +219,97 @@ def check_libbcc_workaround():
 
     return my_bcc_symbol_option
 
+
+def sum_percpu(percpu_values):
+    """Sum per-CPU values from BPF_PERCPU_ARRAY map lookup.
+
+    Per-CPU BPF maps return one value per CPU core. This function
+    aggregates them into a single total, providing a lock-free,
+    low-overhead alternative to atomic counters.
+
+    Args:
+        percpu_values: An iterable of per-CPU values returned by
+            BPF_PERCPU_ARRAY table lookup, or a single ctypes value
+            for non-per-CPU maps (fallback).
+
+    Returns:
+        The sum of all per-CPU values as an integer.
+    """
+    try:
+        # BCC returns per-CPU values as an iterable (list/array)
+        # Each element may be a ctypes value with .value attribute
+        return sum(v.value if hasattr(v, 'value') else int(v) for v in percpu_values)
+    except TypeError:
+        # Fallback for non-per-CPU maps (single ctypes value)
+        if hasattr(percpu_values, 'value'):
+            return percpu_values.value
+        return int(percpu_values)
+
+
+# Number of log2 histogram buckets (covers sizes from 0 to 2^64)
+LOG2_HIST_BUCKETS = 65
+
+
+def print_log2_hist_percpu(table, label="size:"):
+    """Print a log2 histogram from a BPF_PERCPU_ARRAY with LOG2_HIST_BUCKETS entries.
+
+    Aggregates per-CPU values for each bucket and displays a distribution
+    chart matching the format used by BCC's built-in print_log2_hist().
+
+    Args:
+        table: A BPF_PERCPU_ARRAY table with LOG2_HIST_BUCKETS entries,
+            where each entry holds per-CPU u64 counters.
+        label: Column label for the size axis (default: "size:").
+    """
+    vals = {}
+    for i in range(LOG2_HIST_BUCKETS):
+        try:
+            total = sum_percpu(table[ct.c_int(i)])
+            if total > 0:
+                vals[i] = total
+        except (KeyError, IndexError):
+            continue
+
+    if not vals:
+        return
+
+    max_val = max(vals.values())
+    max_bar = 40
+
+    print(f"     {label:<20} : count     distribution")
+    for bucket in sorted(vals.keys()):
+        count = vals[bucket]
+        if bucket == 0:
+            low, high = 0, 0
+        else:
+            low = 1 << (bucket - 1)
+            high = (1 << bucket) - 1
+
+        bar_len = int(count * max_bar / max_val) if max_val > 0 else 0
+        bar = '*' * bar_len
+        padding = ' ' * (max_bar - bar_len)
+
+        print(f"     {low:>9} -> {high:<12} : {count:<8} |{bar}{padding}|")
+
+
+def hist_percpu_sum(table):
+    """Return the total count across all buckets of a per-CPU histogram.
+
+    Args:
+        table: A BPF_PERCPU_ARRAY table with LOG2_HIST_BUCKETS entries.
+
+    Returns:
+        The sum of all per-CPU values across all buckets.
+    """
+    total = 0
+    for i in range(LOG2_HIST_BUCKETS):
+        try:
+            total += sum_percpu(table[ct.c_int(i)])
+        except (KeyError, IndexError):
+            continue
+    return total
+
+
 class FuncInfo():
     STT_GNU_IFUNC = 1 << 10
     def __init__(self, libname, name, symbol, argSZ = 3, argSRC = 2, argDST = 1):
@@ -343,6 +434,8 @@ int submit_resolv_func_addr(struct pt_regs *ctx) {
             output_buf = ct.create_string_buffer(10)
             libc.__getattr__(self.name)(output_buf, input_buf, 4)
 
+            max_poll_attempts = 50  # Timeout after 50 attempts (~5 seconds)
+            poll_attempt = 0
             while True:
                 try:
                     if resolv_func_addr and impl_func_addr:
@@ -350,7 +443,12 @@ int submit_resolv_func_addr(struct pt_regs *ctx) {
                         b.detach_uretprobe(name=self.libname, addr=self.indirect_symbol.offset, pid=os.getpid())
                         b.cleanup()
                         break
-                    b.perf_buffer_poll()
+                    b.perf_buffer_poll(timeout=100)  # 100ms timeout per poll
+                    poll_attempt += 1
+                    if poll_attempt >= max_poll_attempts:
+                        LOG.error("Timed out waiting for IFUNC resolution of %s after %d attempts", self.name, max_poll_attempts)
+                        b.cleanup()
+                        break
                 except KeyboardInterrupt:
                     LOG.warning("Interrupted while resolving %s", self.name)
                     exit()
@@ -368,49 +466,152 @@ int submit_resolv_func_addr(struct pt_regs *ctx) {
             LOG.warning("Fallback: Function %s assigned offset: 0x%x", self.name, self.indirect_func_offset)
 
 
-def _build_bpf_text(functions_dist, functions_cnt, target_pid=-1, check_alignment=False, verbose=False):
+def parse_alignment_value(alignment_str):
+    """Parse an alignment value string and return the alignment in bytes.
+
+    Accepts numeric values (interpreted as bytes) or human-readable forms
+    with suffixes: B, KB, MB, GB.
+
+    Args:
+        alignment_str: A string like '64', '64B', '4KB', '2MB', '1GB'.
+
+    Returns:
+        The alignment value in bytes as an integer.
+
+    Raises:
+        ValueError: If the alignment string is invalid or the value is not
+            a power of two.
+    """
+    if alignment_str is None:
+        return 0
+
+    s = alignment_str.strip().upper()
+
+    # Map of suffixes to multipliers
+    suffixes = {
+        'GB': 1024 * 1024 * 1024,
+        'MB': 1024 * 1024,
+        'KB': 1024,
+        'B': 1,
+    }
+
+    multiplier = 1
+    for suffix, mult in suffixes.items():
+        if s.endswith(suffix):
+            s = s[:-len(suffix)].strip()
+            multiplier = mult
+            break
+
+    try:
+        value = int(s)
+    except ValueError:
+        raise ValueError(
+            f"Invalid alignment value: '{alignment_str}'. "
+            f"Expected a number optionally followed by B, KB, MB, or GB "
+            f"(e.g., 64, 64B, 4KB, 2MB, 1GB).")
+
+    alignment_bytes = value * multiplier
+
+    if alignment_bytes <= 0:
+        raise ValueError(f"Alignment must be a positive value, got {alignment_bytes}")
+
+    # Check that alignment is a power of two
+    if (alignment_bytes & (alignment_bytes - 1)) != 0:
+        raise ValueError(
+            f"Alignment must be a power of two, got {alignment_bytes} bytes. "
+            f"Valid examples: 16, 32, 64, 128, 256, 512, 1024, 4096, etc.")
+
+    return alignment_bytes
+
+
+def format_alignment_label(alignment_bytes):
+    """Return a human-readable label for the given alignment in bytes.
+
+    Args:
+        alignment_bytes: Alignment value in bytes (must be a power of two).
+
+    Returns:
+        A string like '64B', '4KB', '2MB', or '1GB'.
+    """
+    if alignment_bytes >= 1024 * 1024 * 1024 and alignment_bytes % (1024 * 1024 * 1024) == 0:
+        return f"{alignment_bytes // (1024 * 1024 * 1024)}GB"
+    elif alignment_bytes >= 1024 * 1024 and alignment_bytes % (1024 * 1024) == 0:
+        return f"{alignment_bytes // (1024 * 1024)}MB"
+    elif alignment_bytes >= 1024 and alignment_bytes % 1024 == 0:
+        return f"{alignment_bytes // 1024}KB"
+    else:
+        return f"{alignment_bytes}B"
+
+
+def _build_bpf_text(functions_dist, functions_cnt, target_pid=-1, alignment_bytes=0, verbose=False, track_timing=False):
     text = """
 #include <uapi/linux/ptrace.h>
 
-// Helper function to increment a counter atomically
-static inline void increment_counter(u64 *counter) {
-    if (counter) {
-        __sync_fetch_and_add(counter, 1);
-    }
-}
+/*
+ * Per-CPU maps eliminate cross-CPU cache-line contention.
+ * No atomic operations needed - each CPU increments its own copy.
+ * Userspace aggregates per-CPU values when reading.
+ */
 """
 
-    # Add debug counter for verbose mode
+    # Add debug counter for verbose mode (per-CPU for lock-free operation)
     if verbose:
         text += """
-// Debug counter - only enabled in verbose mode
-BPF_ARRAY(total_calls, u64, 1);
+// Debug counter - per-CPU for lock-free, low-overhead profiling
+BPF_PERCPU_ARRAY(total_calls, u64, 1);
 """
 
     # Add a counter to track global function call distribution
     text += """
-// Global function call counters for distribution analysis
+// Per-CPU function call counters for lock-free distribution analysis
 """
 
     # Combine all functions for more unified processing
     all_functions = functions_dist + functions_cnt
 
-    # Add counters for all functions
+    # Add per-CPU counters for all functions (no atomics needed)
     for func in functions_dist:
-        text += f"BPF_ARRAY(dist_{func.name}, u64, 1);\n"
+        text += f"BPF_PERCPU_ARRAY(dist_{func.name}, u64, 1);\n"
     for func in functions_cnt:
-        text += f"BPF_ARRAY(callCount_{func.name}, u64, 1);\n"
+        text += f"BPF_PERCPU_ARRAY(callCount_{func.name}, u64, 1);\n"
 
-    # Add alignment counters if requested
-    if check_alignment:
-        text += "\n// Memory alignment counters (64-byte alignment)\n"
+    # Add per-CPU alignment counters if requested
+    if alignment_bytes > 0:
+        alignment_mask = alignment_bytes - 1
+        alignment_label = format_alignment_label(alignment_bytes)
+        text += f"\n// Per-CPU memory alignment counters ({alignment_label} alignment)\n"
         for func in all_functions:
             if func.argSRC > 0:
-                text += f"BPF_ARRAY(aligned_src_{func.name}, u64, 1);\n"
+                text += f"BPF_PERCPU_ARRAY(aligned_src_{func.name}, u64, 1);\n"
             if func.argDST > 0:
-                text += f"BPF_ARRAY(aligned_dst_{func.name}, u64, 1);\n"
+                text += f"BPF_PERCPU_ARRAY(aligned_dst_{func.name}, u64, 1);\n"
             if func.argSRC > 0 and func.argDST > 0:
-                text += f"BPF_ARRAY(aligned_both_{func.name}, u64, 1);\n"
+                text += f"BPF_PERCPU_ARRAY(aligned_both_{func.name}, u64, 1);\n"
+
+    # Add timing tracking maps if requested (per-CPU for lock-free operation)
+    if track_timing:
+        text += "\n// Per-CPU timing tracking maps\n"
+        text += """
+// Structure to store timing context (timestamp and size)
+struct timing_ctx {
+    u64 start_ts;
+    u32 size_bucket;
+};
+
+// Map to store timing context for each thread
+BPF_HASH(timing_context, u64, struct timing_ctx);
+
+"""
+
+        # Add per-CPU timing sum arrays by size ranges for distribution functions
+        text += "// Per-CPU total time accumulator for each size bucket\n"
+        for func in functions_dist:
+            text += f"BPF_PERCPU_ARRAY(timing_sum_{func.name}, u64, 64);\n"
+            text += f"BPF_PERCPU_ARRAY(timing_count_{func.name}, u64, 64);\n"
+
+        # For count functions, we track total time since there's no size parameter
+        for func in functions_cnt:
+            text += f"BPF_PERCPU_ARRAY(timing_total_{func.name}, u64, 1);\n"
 
     text += "\n// Function implementations\n"
 
@@ -419,9 +620,10 @@ BPF_ARRAY(total_calls, u64, 1);
         # Determine if this is a distribution function
         is_dist_func = func in functions_dist
 
-        # Add histogram only for distribution functions
+        # Add per-CPU histogram array for distribution functions
+        # Using BPF_PERCPU_ARRAY with LOG2_HIST_BUCKETS entries for log2 distribution
         if is_dist_func:
-            text += f"BPF_HISTOGRAM(lenHist_{func.name});\n"
+            text += f"BPF_PERCPU_ARRAY(lenHist_{func.name}, u64, {LOG2_HIST_BUCKETS});\n"
 
         text += f"""
 int count_{func.name}(struct pt_regs *ctx) {{
@@ -438,81 +640,159 @@ int count_{func.name}(struct pt_regs *ctx) {{
     }}
 """.format(target_pid)
 
-        # For distribution functions, add histogram code
+        # Combined code path for both timing and non-timing modes
         if is_dist_func:
+            # Distribution functions with size parameters
             text += """
-    // Get size argument
+"""
+            # Conditional timing: Record timestamp FIRST if timing is enabled
+            if track_timing:
+                text += """    // TIMING: Record start timestamp FIRST (minimizes overhead)
+    u64 start_ts = bpf_ktime_get_ns();
+
+"""
+
+            # Common code for all distribution functions (per-CPU, no atomics needed)
+            text += """    // Get size argument and compute bucket
     size_t len = PT_REGS_PARM{0}(ctx);
-
-    // Convert to log2 bucket and use atomic increment
     u32 bucket_idx = bpf_log2l(len);
-    u64 *hist_count = (u64*)lenHist_{1}.lookup(&bucket_idx);
-    increment_counter(hist_count);
 
-    // Update distribution counter for this function
+    // Update per-CPU histogram and counter (no atomics needed)
+    u64 *hist_count = lenHist_{1}.lookup(&bucket_idx);
+    if (hist_count) (*hist_count)++;
     u64 *func_count = dist_{1}.lookup(&zero);
-    increment_counter(func_count);
+    if (func_count) (*func_count)++;
 """.format(func.argSZ, func.name)
-        else:
-            # For count functions
-            text += """
-    // Update function-specific counter
-    u64 *count = callCount_{0}.lookup(&zero);
-    increment_counter(count);
 
+            # Conditional timing context storage
+            if track_timing:
+                text += """
+    // Store timing context (only when timing enabled)
+    u64 tid = bpf_get_current_pid_tgid();
+    struct timing_ctx ctx_data = {};
+    ctx_data.start_ts = start_ts;
+    ctx_data.size_bucket = bucket_idx;
+    timing_context.update(&tid, &ctx_data);
+"""
+        else:
+            # Count functions without size parameters (per-CPU, no atomics needed)
+            text += """    // Update per-CPU function counter (no atomics needed)
+    u64 *count = callCount_{0}.lookup(&zero);
+    if (count) (*count)++;
 """.format(func.name)
 
-        # Add debug counter for verbose mode
+            # Conditional timing for count functions
+            if track_timing:
+                text += """
+    // TIMING: Record timestamp and context (only when timing enabled)
+    u64 start_ts = bpf_ktime_get_ns();
+    u64 tid = bpf_get_current_pid_tgid();
+    struct timing_ctx ctx_data = {};
+    ctx_data.start_ts = start_ts;
+    ctx_data.size_bucket = 0;
+    timing_context.update(&tid, &ctx_data);
+"""
+
+        # Add debug counter for verbose mode (per-CPU, no atomics needed)
         if verbose:
             text += """
-    // Update total call counter for debugging (only in verbose mode)
+    // Update per-CPU total call counter for debugging (no atomics needed)
     u64 *total = total_calls.lookup(&zero);
-    increment_counter(total);
+    if (total) (*total)++;
 """
         else:
             text += "    // Debug counter disabled in non-verbose mode\n"
 
         # Add alignment checks if requested - this is common for both function types
-        if check_alignment:
+        if alignment_bytes > 0:
             # Add source alignment check
             if func.argSRC > 0:
                 text += """
-    // Source pointer alignment check
+    // Source pointer %s alignment check
     u64 src_ptr = PT_REGS_PARM%d(ctx);
-    bool src_aligned = (src_ptr & 0x3F) == 0;
+    bool src_aligned = (src_ptr & 0x%xULL) == 0;
 
     if (src_aligned) {
         u64 *src_count = aligned_src_%s.lookup(&zero);
-        increment_counter(src_count);
+        if (src_count) (*src_count)++;
     }
-""" % (func.argSRC, func.name)
+""" % (alignment_label, func.argSRC, alignment_mask, func.name)
 
             # Add destination alignment check
             if func.argDST > 0:
                 text += """
-    // Destination pointer alignment check
+    // Destination pointer %s alignment check (per-CPU, no atomics needed)
     u64 dst_ptr = PT_REGS_PARM%d(ctx);
-    bool dst_aligned = (dst_ptr & 0x3F) == 0;
+    bool dst_aligned = (dst_ptr & 0x%xULL) == 0;
 
     if (dst_aligned) {
         u64 *dst_count = aligned_dst_%s.lookup(&zero);
-        increment_counter(dst_count);
+        if (dst_count) (*dst_count)++;
     }
-""" % (func.argDST, func.name)
+""" % (alignment_label, func.argDST, alignment_mask, func.name)
 
             # Add both-aligned check if both source and destination are specified
             if func.argSRC > 0 and func.argDST > 0:
                 text += """
-    // Both source and destination aligned check
+    // Both source and destination %s aligned check (per-CPU, no atomics needed)
     if (src_aligned && dst_aligned) {
         u64 *both_count = aligned_both_%s.lookup(&zero);
-        increment_counter(both_count);
+        if (both_count) (*both_count)++;
     }
-""" % func.name
+""" % (alignment_label, func.name)
 
         # Close the function
         text += """
     return 0;
+}
+"""
+
+    # Add return probe functions for timing tracking
+    if track_timing:
+        text += "\n// Return probe functions for timing tracking\n"
+
+        for func in all_functions:
+            is_dist_func = func in functions_dist
+
+            text += f"""
+int count_{func.name}_return(struct pt_regs *ctx) {{
+    u64 tid = bpf_get_current_pid_tgid();
+    struct timing_ctx *ctx_data = timing_context.lookup(&tid);
+
+    if (ctx_data == 0) {{
+        return 0;  // No timing context recorded
+    }}
+
+    // Calculate elapsed time in nanoseconds
+    u64 delta = bpf_ktime_get_ns() - ctx_data->start_ts;
+    u32 size_bucket = ctx_data->size_bucket;
+
+    // Clean up the timing context
+    timing_context.delete(&tid);
+
+"""
+
+            if is_dist_func:
+                # For distribution functions, accumulate time in the appropriate size bucket (per-CPU)
+                text += f"""    // Accumulate time in the per-CPU size bucket (no atomics needed)
+    u64 *time_sum = timing_sum_{func.name}.lookup(&size_bucket);
+    if (time_sum) (*time_sum) += delta;
+
+    // Increment per-CPU count for this size bucket
+    u64 *time_count = timing_count_{func.name}.lookup(&size_bucket);
+    if (time_count) (*time_count)++;
+
+"""
+            else:
+                # For count functions, accumulate total time (per-CPU)
+                text += f"""    // Accumulate per-CPU total time for count functions (no atomics needed)
+    int zero = 0;
+    u64 *total_time = timing_total_{func.name}.lookup(&zero);
+    if (total_time) (*total_time) += delta;
+
+"""
+
+            text += """    return 0;
 }
 """
 
@@ -541,18 +821,16 @@ def main():
         FuncInfo('c', 'memchr',  'memchr'),
         FuncInfo('c', 'strncpy', 'strncpy'),
         FuncInfo('c', 'strncmp', 'strncmp'),
-        FuncInfo('c', 'strncat', 'strncat'),
-        FuncInfo('c', 'strnlen', 'strnlen', argSZ=2, argSRC=1, argDST=0)
+        FuncInfo('c', 'strncat', 'strncat')
     ]
     TARGET_CNT_FUNCTIONS = [
         # Functions without size parameters
         FuncInfo('c', 'strcpy',  'strcpy', argSZ = 0),
         FuncInfo('c', 'strcmp',  'strcmp', argSZ = 0),
         FuncInfo('c', 'strcat',  'strcat', argSZ = 0),
-        FuncInfo('c', 'strlen',  'strlen', argSZ = 0, argSRC = 1, argDST = 0),
+        FuncInfo('c', 'strlen',  'strlen', argSZ = 0, argSRC = 0),
         FuncInfo('c', 'strchr',  'strchr', argSZ = 0),
         FuncInfo('c', 'strstr',  'strstr', argSZ = 0),
-        FuncInfo('c', 'strspn',  'strspn', argSZ = 0, argSRC = 1, argDST = 2),
     ]
 
     # Combine function names for argument parsing
@@ -579,10 +857,31 @@ def main():
         help = 'Output file for logging results (default: stdout)')
     p.add_argument('-d', '--debug-log', type=str, default=None,
         help = 'Separate file for detailed debug logs')
-    p.add_argument('-a', '--check-alignment', action='store_true',
-        help = 'Check memory alignment of arguments (64-byte boundary)')
+    p.add_argument('-a', '--check-alignment', type=str, default=None, nargs='?', const='64B',
+        metavar='ALIGNMENT',
+        help = 'Check memory alignment of arguments at the specified boundary. '
+               'Default: 64B if no value given. '
+               'Accepts values like 16, 32, 64, 128, 256, 512, 1024, 4096 (in bytes) '
+               'or human-readable forms: 16B, 32B, 64B, 128B, 256B, 512B, 1KB, 2KB, 4KB, 2MB, 1GB. '
+               'Only the single specified alignment is checked (e.g., 4KB checks 4096-byte alignment only).')
+    p.add_argument('-T', '--track-timing', action='store_true',
+        help = 'Track execution time for each function call and create timing histograms by size ranges')
+    p.add_argument('-P', '--perf-profile', action='store_true',
+        help = 'Enable perf-based profiling for low-overhead aggregate statistics (categorizes kernel vs library calls)')
 
     args = p.parse_args()
+
+    # Parse and validate alignment value if provided
+    alignment_bytes = 0
+    alignment_label = ""
+    if args.check_alignment:
+        try:
+            alignment_bytes = parse_alignment_value(args.check_alignment)
+            alignment_label = format_alignment_label(alignment_bytes)
+            print(f"Alignment check configured: {alignment_label} ({alignment_bytes} bytes, mask=0x{alignment_bytes - 1:x})")
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
 
     # Initialize BCC now that we know we need it (not just showing help)
     bcc, BPF, lib, bcc_symbol, bcc_symbol_option = initialize_bcc()
@@ -721,8 +1020,14 @@ Command-line parameters:
     if args.debug_log:
         header += f"- Debug log file: {args.debug_log}\n"
 
-    if args.check_alignment:
-        header += "- Checking memory alignment of arguments (64-byte boundary)\n"
+    if alignment_bytes > 0:
+        header += f"- Checking memory alignment of arguments ({alignment_label} boundary)\n"
+
+    if args.track_timing:
+        header += "- Tracking execution time with timing histograms\n"
+
+    if args.perf_profile:
+        header += "- Perf profiling enabled (low-overhead sampling)\n"
 
     header += "- Verbosity level: " + ("Low" if args.verbose == 0 else
                                      "Medium" if args.verbose == 1 else
@@ -797,9 +1102,9 @@ Command-line parameters:
         target_pid = args.pid
 
 
-    # Generate BPF code with proper function lists, including verbose flag
+    # Generate BPF code with proper function lists, including verbose and timing flags
     bpf_text = _build_bpf_text(unique_dist_funcs, unique_count_funcs, target_pid,
-                              args.check_alignment, args.verbose > 0)
+                              alignment_bytes, args.verbose > 0, args.track_timing)
 
     # Debug the generated BPF code if verbose
     if args.verbose >= 2:
@@ -839,10 +1144,8 @@ Command-line parameters:
             if funcInfo.attach(b, target_pid, fn_name):
                 try:
                     funcInfo.call_counter = b['callCount_{}'.format(funcInfo.name)]
-                    # Initialize counter to 0 immediately to ensure it's valid
-                    if funcInfo.call_counter[0].value != 0:
-                        funcInfo.call_counter[0] = ct.c_ulonglong(0)
-                    LOG.debug("Successfully initialized counter for %s", funcInfo.name)
+                    # Per-CPU maps start at 0 on all CPUs, no initialization needed
+                    LOG.debug("Successfully initialized per-CPU counter for %s", funcInfo.name)
                     funcInfo.type = "call"
                     successful_attaches += 1
                 except Exception as e:
@@ -852,6 +1155,26 @@ Command-line parameters:
         except Exception as e:
             LOG.error("Error during function attachment for %s: %s", funcInfo.name, str(e))
 
+    # Attach return probes for timing tracking if requested
+    if args.track_timing:
+        LOG.info("Attaching return probes for timing tracking...")
+        timing_attach_count = 0
+
+        for funcInfo in unique_dist_funcs + unique_count_funcs:
+            try:
+                ret_fn_name = 'count_{}_return'.format(funcInfo.name).encode()
+                if funcInfo.is_indirect:
+                    b.attach_uretprobe(name=ct.cast(funcInfo.indirect_symbol.module, ct.c_char_p).value,
+                                      addr=funcInfo.indirect_func_offset, fn_name=ret_fn_name, pid=target_pid)
+                else:
+                    b.attach_uretprobe(name=funcInfo.libname, sym=funcInfo.symbol, fn_name=ret_fn_name, pid=target_pid)
+                timing_attach_count += 1
+                LOG.debug("Attached return probe for %s", funcInfo.name)
+            except Exception as e:
+                LOG.error("Failed to attach return probe for %s: %s", funcInfo.name, str(e))
+
+        LOG.info("Successfully attached %d return probes for timing", timing_attach_count)
+
     if successful_attaches == 0:
         LOG.error("Failed to attach any probes. Exiting.")
         if args.exec:
@@ -859,6 +1182,42 @@ Command-line parameters:
         return
 
     LOG.info("Successfully attached %d/%d probes", successful_attaches, len(unique_dist_funcs) + len(unique_count_funcs))
+
+    # Initialize perf profiling if requested
+    perf_proc = None
+    perf_data_file = None
+
+    if args.perf_profile and args.exec:
+        # Create temporary file for perf data
+        perf_data_file = tempfile.NamedTemporaryFile(prefix='perf_', suffix='.data', delete=False)
+        perf_data_path = perf_data_file.name
+        perf_data_file.close()
+
+        LOG.info("Starting perf record for low-overhead sampling...")
+        # Use perf record with call-graph sampling at 999 Hz
+        # -F 999: Sample at 999 Hz (high frequency for good coverage, but not too high)
+        # -g: Record call graphs
+        # -p: Target specific PID
+        perf_cmd = ['perf', 'record', '-F', '999', '-g', '-p', str(target_pid), '-o', perf_data_path]
+
+        try:
+            perf_proc = subprocess.Popen(
+                perf_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            LOG.info(f"Perf recording started (PID: {perf_proc.pid}), output file: {perf_data_path}")
+            time.sleep(0.5)  # Give perf time to initialize
+        except Exception as e:
+            LOG.error(f"Failed to start perf record: {e}")
+            LOG.warning("Continuing without perf profiling")
+            args.perf_profile = False
+            if perf_data_file:
+                try:
+                    os.unlink(perf_data_path)
+                except:
+                    pass
 
     # --- Resume the Process ---
     if args.exec:
@@ -880,7 +1239,7 @@ Command-line parameters:
 
     # Update print_call_distribution function to ensure accurate counts
     def print_call_distribution():
-        print("\n--- Function Call Distribution ---")
+        print("\n--- Function Call Distribution (by Count) ---")
 
         # Collect all function call counts
         function_counts = []
@@ -890,7 +1249,7 @@ Command-line parameters:
         for func in unique_dist_funcs:
             if hasattr(func, 'dist_counter'):
                 # Read the counter value directly from BPF map for consistency
-                count = func.dist_counter[0].value
+                count = sum_percpu(func.dist_counter[0])
                 if count > 0:  # Only include functions with non-zero counts
                     function_counts.append((func.name, count))
                     total_func_calls += count
@@ -898,8 +1257,8 @@ Command-line parameters:
         # Get distribution counts for count-only functions
         for func in unique_count_funcs:
             if hasattr(func, 'call_counter'):
-                # Read the counter value directly from BPF map for consistency
-                count = func.call_counter[0].value
+                # Sum per-CPU values for consistent count
+                count = sum_percpu(func.call_counter[0])
                 if count > 0:  # Only include functions with non-zero counts
                     function_counts.append((func.name, count))
                     total_func_calls += count
@@ -926,12 +1285,77 @@ Command-line parameters:
         print(f"\nTotal function calls (sum of all functions): {total_func_calls}")
 
         if args.verbose > 0 and total_calls is not None:
-            global_total = total_calls[0].value
+            global_total = sum_percpu(total_calls[0])
             print(f"Global counter value: {global_total}")
 
             # If there's a discrepancy, log a warning
             if global_total != total_func_calls and global_total > 0:
                 print(f"Note: There's a {abs(global_total - total_func_calls) / max(global_total, 1) * 100:.2f}% difference between the sum and global counter.")
+
+    def print_time_distribution():
+        """Print distribution of time spent across functions"""
+        if not args.track_timing:
+            return
+
+        print("\n--- Function Time Distribution (by Execution Time) ---")
+
+        # Collect all function time data
+        function_times = []
+        total_time_ns = 0
+
+        # Get timing data for distribution functions
+        for func in unique_dist_funcs:
+            if hasattr(func, 'dist_counter'):
+                count = sum_percpu(func.dist_counter[0])
+                if count > 0:
+                    # Sum per-CPU time across all size buckets
+                    timing_sum_map = b[f'timing_sum_{func.name}']
+                    func_total_time = sum(sum_percpu(timing_sum_map[i]) for i in range(64))
+
+                    if func_total_time > 0:
+                        function_times.append((func.name, func_total_time, count))
+                        total_time_ns += func_total_time
+
+        # Get timing data for count-only functions
+        for func in unique_count_funcs:
+            if hasattr(func, 'call_counter'):
+                count = sum_percpu(func.call_counter[0])
+                if count > 0:
+                    func_total_time = sum_percpu(b[f'timing_total_{func.name}'][0])
+
+                    if func_total_time > 0:
+                        function_times.append((func.name, func_total_time, count))
+                        total_time_ns += func_total_time
+
+        # Sort by time in descending order
+        function_times.sort(key=lambda x: x[1], reverse=True)
+
+        if total_time_ns == 0:
+            print("No timing data recorded yet.")
+            return
+
+        # Calculate percentages and print
+        max_name_length = max([len(name) for name, _, _ in function_times]) if function_times else 10
+        print(f"{'Function':<{max_name_length+2}} {'Total Time (µs)':<18} {'Avg (µs)':<12} {'Percent':<8} {'Distribution'}")
+        print("-" * (max_name_length + 65))
+
+        for name, time_ns, count in function_times:
+            time_us = time_ns / 1000.0
+            avg_us = time_us / count if count > 0 else 0
+            percentage = (time_ns / total_time_ns) * 100
+            bar_length = int(percentage / 2)  # Scale to reasonable length
+            bar = '*' * bar_length
+            print(f"{name:<{max_name_length+2}} {time_us:>16,.2f}  {avg_us:>10,.2f}  {percentage:>6.2f}%  |{bar}")
+
+        # Show the total time
+        total_time_ms = total_time_ns / 1_000_000.0
+        total_time_s = total_time_ns / 1_000_000_000.0
+        print(f"\nTotal execution time: {total_time_ns:,} ns ({total_time_ms:,.2f} ms / {total_time_s:.6f} s)")
+
+        # Summary notes footer
+        print("\nSummary Notes:")
+        print("⚠️  Timing measurements include eBPF probe overhead (~100-500ns per call)")
+        print("📊 Use timing data for relative comparisons, not absolute performance measurements")
 
     # Update the print_function_stats function to handle histograms correctly
 
@@ -941,8 +1365,8 @@ Command-line parameters:
 
         # Print histograms for distribution functions
         for func in unique_dist_funcs:
-            # Always use dist_counter for consistency
-            func_calls = func.dist_counter[0].value if hasattr(func, 'dist_counter') else 0
+            # Always use dist_counter for consistency (aggregate per-CPU values)
+            func_calls = sum_percpu(func.dist_counter[0]) if hasattr(func, 'dist_counter') else 0
             if func_calls == 0:
                 continue  # Skip functions with no calls
 
@@ -954,15 +1378,10 @@ Command-line parameters:
                     # Calculate histogram sum directly from the histogram data
                     # This will give us the actual number of entries recorded in the histogram
                     if args.verbose > 0:
-                        hist_count = sum(v.value for v in func.histo.values())
+                        hist_count = hist_percpu_sum(func.histo)
 
-                    # Capture the histogram output to ensure it's also logged to file
-                    output = StringIO()
-                    old_stdout = sys.stdout
-                    sys.stdout = output
-
-                    # Print the actual histogram
-                    func.histo.print_log2_hist('     size:')
+                    # Print the per-CPU histogram (aggregates across all CPUs)
+                    print_log2_hist_percpu(func.histo, '     size:')
 
                     # Add information about histogram counts
                     if args.verbose > 0:
@@ -973,12 +1392,13 @@ Command-line parameters:
                             print(f"Warning: Histogram count ({hist_count}) differs from call counter ({func_calls})")
                             print(f"         This may be due to lost events or BPF histogram limitations")
 
-                    sys.stdout = old_stdout
-                    print(output.getvalue().rstrip())
-
                     # Add alignment statistics if available
-                    if args.check_alignment:
+                    if alignment_bytes > 0:
                         print_alignment_stats(b, func.name)
+
+                    # Add timing statistics if available
+                    if args.track_timing:
+                        print_timing_stats(b, func.name)
 
                 except Exception as e:
                     LOG.error(f"Error handling histogram for {func.name}: {str(e)}")
@@ -987,21 +1407,21 @@ Command-line parameters:
         for func in unique_count_funcs:
             try:
                 if hasattr(func, 'call_counter'):
-                    # Always use call_counter for consistency (not func.counter)
-                    call_value = func.call_counter[0].value
+                    # Aggregate per-CPU call counter values
+                    call_value = sum_percpu(func.call_counter[0])
 
                     if call_value == 0:
                         continue  # Skip functions with no calls
 
                     print(f"\n{'=' * 30} {func.name} ({call_value} calls) {'=' * 30}")
 
-                    # Reset individual counter if needed but not distribution counter
-                    if hasattr(func, 'call'):
-                        func.call_counter[0] = ct.c_ulonglong(0)
-
                     # Add alignment statistics for count-only functions if available
-                    if args.check_alignment and (func.argSRC > 0 or func.argDST > 0):
+                    if alignment_bytes > 0 and (func.argSRC > 0 or func.argDST > 0):
                         print_alignment_stats(b, func.name)
+
+                    # Add timing statistics for count-only functions if available
+                    if args.track_timing:
+                        print_timing_stats(b, func.name)
                 else:
                     LOG.warning("No call_counter attribute for function %s", func.name)
             except Exception as e:
@@ -1011,11 +1431,15 @@ Command-line parameters:
         if include_distribution:
             print_call_distribution()
 
+            # Add time distribution if timing is enabled
+            if args.track_timing:
+                print_time_distribution()
+
         print("-" * 60)
 
     # Update alignment stats function to ensure consistency
     def print_alignment_stats(b, func_name):
-        """Print alignment statistics for a function"""
+        """Print alignment statistics for a function at the configured alignment boundary"""
         try:
             # Find the function object to get parameter information
             func = next((f for f in unique_dist_funcs + unique_count_funcs if f.name == func_name), None)
@@ -1025,9 +1449,9 @@ Command-line parameters:
 
             # Get the total calls to this function
             if hasattr(func, 'dist_counter'):
-                total_calls = func.dist_counter[0].value
+                total_calls = sum_percpu(func.dist_counter[0])
             elif hasattr(func, 'call_counter'):
-                total_calls = func.call_counter[0].value
+                total_calls = sum_percpu(func.call_counter[0])
             else:
                 LOG.error(f"No counter attribute for function {func_name}")
                 return
@@ -1035,10 +1459,11 @@ Command-line parameters:
             if total_calls == 0:
                 return  # Nothing to report
 
-            print(f"{'Alignment Type':<20} {'Count':<10} {'Percentage':<10} {'Distribution'}")
-            print("-" * 60)
+            print(f"\n  Memory Alignment Statistics ({alignment_label} boundary):")
+            print(f"  {'Alignment Type':<25} {'Count':<10} {'Percentage':<10} {'Distribution'}")
+            print("  " + "-" * 65)
 
-            # Get alignment counts only for the parameters that are tracked
+            # Get per-CPU alignment counts only for the parameters that are tracked
             has_src = func.argSRC > 0
             has_dst = func.argDST > 0
 
@@ -1047,32 +1472,351 @@ Command-line parameters:
             both_aligned = 0
 
             if has_src:
-                src_aligned = b[f'aligned_src_{func_name}'][0].value
+                src_aligned = sum_percpu(b[f'aligned_src_{func_name}'][0])
                 src_pct = (src_aligned / total_calls) * 100
                 src_bar = '*' * int(src_pct / 5)  # Scale to reasonable length
-                print(f"Source aligned    : {src_aligned:<10} {src_pct:>6.2f}%    |{src_bar}")
+                print(f"  Src {alignment_label}-aligned   : {src_aligned:<10} {src_pct:>6.2f}%    |{src_bar}")
             if has_dst:
-                dst_aligned = b[f'aligned_dst_{func_name}'][0].value
+                dst_aligned = sum_percpu(b[f'aligned_dst_{func_name}'][0])
                 dst_pct = (dst_aligned / total_calls) * 100
                 dst_bar = '*' * int(dst_pct / 5)
-                print(f"Dest aligned      : {dst_aligned:<10} {dst_pct:>6.2f}%    |{dst_bar}")
+                print(f"  Dst {alignment_label}-aligned   : {dst_aligned:<10} {dst_pct:>6.2f}%    |{dst_bar}")
             if has_src and has_dst:
-                both_aligned = b[f'aligned_both_{func_name}'][0].value
+                both_aligned = sum_percpu(b[f'aligned_both_{func_name}'][0])
                 both_pct = (both_aligned / total_calls) * 100
                 both_bar = '*' * int(both_pct / 5)
-                print(f"Both aligned      : {both_aligned:<10} {both_pct:>6.2f}%    |{both_bar}")
+                print(f"  Both {alignment_label}-aligned  : {both_aligned:<10} {both_pct:>6.2f}%    |{both_bar}")
 
                 # Calculate not-aligned only when we have both src and dst
                 not_aligned = total_calls - (src_aligned + dst_aligned - both_aligned)
                 not_pct = (not_aligned / total_calls) * 100
                 not_bar = '*' * int(not_pct / 5)
-                print(f"Neither aligned   : {not_aligned:<10} {not_pct:>6.2f}%    |{not_bar}")
+                print(f"  Neither aligned     : {not_aligned:<10} {not_pct:>6.2f}%    |{not_bar}")
 
         except Exception as e:
             LOG.error(f"Error printing alignment stats for {func_name}: {str(e)}")
 
+    def print_timing_stats(b, func_name):
+        """Print timing statistics for a function correlated with size ranges"""
+        if not args.track_timing:
+            return
+
+        try:
+            # Find the function object
+            func = next((f for f in unique_dist_funcs + unique_count_funcs if f.name == func_name), None)
+            if not func:
+                LOG.error(f"Could not find function object for {func_name}")
+                return
+
+            # Get the total calls to this function
+            if hasattr(func, 'dist_counter'):
+                total_calls = sum_percpu(func.dist_counter[0])
+            elif hasattr(func, 'call_counter'):
+                total_calls = sum_percpu(func.call_counter[0])
+            else:
+                return
+
+            if total_calls == 0:
+                return  # Nothing to report
+
+            print("\n  Timing Statistics (by size range):")
+
+            # Check if this is a distribution function or count function
+            is_dist_func = func in unique_dist_funcs
+
+            if is_dist_func:
+                # For distribution functions, show timing data correlated with size buckets
+                timing_sum = b[f'timing_sum_{func_name}']
+                timing_count = b[f'timing_count_{func_name}']
+                size_histogram = func.histo
+
+                # Collect data for each size bucket that has entries
+                timing_data = []
+                total_time_all_buckets = 0
+
+                for bucket_idx in range(LOG2_HIST_BUCKETS):
+                    count = sum_percpu(size_histogram[ct.c_int(bucket_idx)])
+                    if count > 0:
+                        time_sum_ns = sum_percpu(timing_sum[bucket_idx])
+                        time_count_val = sum_percpu(timing_count[bucket_idx])
+
+                        if time_count_val > 0:
+                            avg_time_ns = time_sum_ns / time_count_val
+                        else:
+                            avg_time_ns = 0
+
+                        total_time_all_buckets += time_sum_ns
+
+                        # Calculate size range for this bucket
+                        if bucket_idx == 0:
+                            size_range = "0-1"
+                        else:
+                            size_min = 2 ** (bucket_idx - 1)
+                            size_max = (2 ** bucket_idx) - 1
+                            size_range = f"{size_min}-{size_max}"
+
+                        timing_data.append((bucket_idx, size_range, count, time_sum_ns, avg_time_ns))
+
+                if timing_data:
+                    # Print header
+                    print(f"  {'Size Range':<20} {'Calls':<10} {'Total Time (ns)':<20} {'Avg Time (ns)':<15} {'Avg Time (µs)'}")
+                    print("  " + "-" * 90)
+
+                    # Print each size bucket's timing data
+                    for bucket_idx, size_range, count, total_time, avg_time in timing_data:
+                        avg_time_us = avg_time / 1000.0
+                        print(f"  {size_range:<20} {count:<10} {total_time:<20,} {avg_time:<15,.0f} {avg_time_us:>10.2f}")
+
+                    # Print summary
+                    print(f"  {'-'*20} {'-'*10} {'-'*20} {'-'*15} {'-'*11}")
+                    overall_avg = total_time_all_buckets / total_calls if total_calls > 0 else 0
+                    overall_avg_us = overall_avg / 1000.0
+                    print(f"  {'Total/Average':<20} {total_calls:<10} {total_time_all_buckets:<20,} {overall_avg:<15,.0f} {overall_avg_us:>10.2f}")
+                else:
+                    print("  No timing data collected for any size range")
+
+            else:
+                # For count functions, show total time and average
+                timing_total = sum_percpu(b[f'timing_total_{func_name}'][0])
+                if timing_total > 0:
+                    avg_time = timing_total / total_calls
+                    avg_time_us = avg_time / 1000.0
+                    print(f"  Total time: {timing_total:,} ns ({timing_total/1e9:.6f} s)")
+                    print(f"  Average time per call: {avg_time:,.0f} ns ({avg_time_us:.2f} µs)")
+                else:
+                    print("  No timing data collected")
+
+        except Exception as e:
+            LOG.error(f"Error printing timing stats for {func_name}: {str(e)}")
+
+    def parse_perf_report(perf_data_path):
+        """Parse perf report and categorize samples by kernel vs library"""
+        LOG.info("Parsing perf report...")
+
+        try:
+            # Run perf report to get symbol breakdown
+            # Use --no-children to get self percentages (not cumulative from call stacks)
+            perf_report_cmd = ['perf', 'report', '-i', perf_data_path, '--stdio', '-n', '--percent-limit', '0.01', '--no-children']
+            result = subprocess.run(perf_report_cmd, capture_output=True, text=True, timeout=30)
+
+            if result.returncode != 0:
+                LOG.error(f"Perf report failed: {result.stderr}")
+                return None
+
+            # Parse the output to categorize samples
+            # Note: Perf percentages are already normalized (0-100%)
+            kernel_samples = 0
+            library_samples = 0
+
+            all_function_samples = {}  # Track ALL functions with their percentages
+            kernel_functions = {}  # Kernel functions separately
+            library_functions = {}  # Library functions separately
+
+            lines = result.stdout.split('\n')
+            for line in lines:
+                # Skip header and empty lines
+                if not line.strip() or line.startswith('#'):
+                    continue
+
+                # Parse lines like: "  45.67%  1234  program  libc.so.6  [.] memcpy"
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+
+                # Try to extract percentage, library name, and function name
+                try:
+                    if '%' in parts[0]:
+                        percent_str = parts[0].rstrip('%')
+                        percent = float(percent_str)  # This is already 0-100%
+
+                        # Find the library/module name and function name
+                        func_name = None
+                        library_name = None
+                        is_kernel = False
+
+                        for i, part in enumerate(parts):
+                            if part == '[k]':  # Kernel symbol
+                                is_kernel = True
+                                if i + 1 < len(parts):
+                                    func_name = parts[i + 1]
+                                # Library name is before [k] marker
+                                if i > 0:
+                                    library_name = parts[i - 1]
+                                break
+                            elif part == '[.]':  # User-space symbol
+                                is_kernel = False
+                                if i + 1 < len(parts):
+                                    func_name = parts[i + 1]
+                                # Library name is before [.] marker
+                                if i > 0:
+                                    library_name = parts[i - 1]
+                                break
+
+                        if func_name:
+                            # Create a unique key combining library and function
+                            if library_name:
+                                display_name = f"{func_name} ({library_name})"
+                            else:
+                                display_name = func_name
+
+                            # Track all functions - percent is already 0-100%
+                            category = 'kernel' if is_kernel else 'library'
+                            all_function_samples[display_name] = {
+                                'percent': percent,  # Already a percentage (0-100)
+                                'category': category,
+                                'function': func_name,
+                                'library': library_name or 'unknown'
+                            }
+
+                            # Categorize by kernel vs library - just sum the percentages
+                            if is_kernel:
+                                kernel_samples += percent
+                                kernel_functions[display_name] = percent
+                            else:
+                                library_samples += percent
+                                library_functions[display_name] = percent
+
+                except (ValueError, IndexError):
+                    continue
+
+            # kernel_samples and library_samples are already summed percentages
+            # No need to normalize - they're already in the 0-100% range
+            kernel_percent = kernel_samples
+            library_percent = library_samples
+
+            return {
+                'kernel_percent': kernel_percent,
+                'library_percent': library_percent,
+                'all_functions': all_function_samples,
+                'kernel_functions': kernel_functions,
+                'library_functions': library_functions
+            }
+
+        except subprocess.TimeoutExpired:
+            LOG.error("Perf report parsing timed out")
+            return None
+        except Exception as e:
+            LOG.error(f"Error parsing perf report: {e}")
+            return None
+
+    def print_perf_summary():
+        """Print perf profiling summary with kernel vs library categorization"""
+        if not args.perf_profile or not perf_data_file:
+            return
+
+        # Stop perf recording
+        if perf_proc and perf_proc.poll() is None:
+            LOG.info("Stopping perf record...")
+            perf_proc.terminate()
+            try:
+                perf_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                perf_proc.kill()
+                perf_proc.wait()
+
+        # Parse the perf data
+        perf_stats = parse_perf_report(perf_data_path)
+
+        if perf_stats:
+            print("\n" + "=" * 70)
+            print("Perf Profiling Summary (Sampling-based, Low Overhead)")
+            print("=" * 70)
+
+            kernel_pct = perf_stats['kernel_percent']
+            library_pct = perf_stats['library_percent']
+            other_pct = 100.0 - kernel_pct - library_pct
+
+            print(f"\n{'Category':<20} {'Percentage':<12} {'Distribution'}")
+            print("-" * 60)
+
+            # Kernel calls
+            kernel_bar = '*' * int(kernel_pct / 2)
+            print(f"{'Kernel calls':<20} {kernel_pct:>10.2f}%  |{kernel_bar}")
+
+            # Library calls
+            library_bar = '*' * int(library_pct / 2)
+            print(f"{'Library calls':<20} {library_pct:>10.2f}%  |{library_bar}")
+
+            # Other (if any)
+            if other_pct > 0.1:
+                other_bar = '*' * int(other_pct / 2)
+                print(f"{'Other':<20} {other_pct:>10.2f}%  |{other_bar}")
+
+            # Library function distribution - showing only user-space library calls
+            if perf_stats['library_functions']:
+                print("\n" + "=" * 70)
+                print("Library Function Call Distribution (User-Space Only)")
+                print("=" * 70)
+
+                # Get only library functions and sort by percentage (descending)
+                sorted_lib_funcs = sorted(
+                    [(name, data) for name, data in perf_stats['all_functions'].items()
+                     if data['category'] == 'library'],
+                    key=lambda x: x[1]['percent'],
+                    reverse=True
+                )
+
+                # Display library functions table
+                print(f"\n{'#':<4} {'Function':<30} {'Library':<25} {'Percent':<10} {'Bar'}")
+                print("-" * 85)
+
+                for idx, (func_name, func_data) in enumerate(sorted_lib_funcs[:20], 1):  # Top 20 library functions
+                    percent = func_data['percent']  # This is already a percentage from perf
+                    library = func_data['library']
+                    func_only = func_data['function']
+
+                    # percent is already the actual percentage value, use it directly
+                    func_pct = percent
+                    bar = '*' * int(func_pct / 2)
+
+                    # Truncate long names for better display
+                    func_display = func_only[:30] if len(func_only) <= 30 else func_only[:27] + '...'
+                    lib_display = library[:25] if len(library) <= 25 else library[:22] + '...'
+
+                    print(f"{idx:<4} {func_display:<30} {lib_display:<25} {func_pct:>8.2f}%  |{bar}")
+
+                # Summary breakdown by category
+                print("\nCategory Breakdown:")
+                print(f"  Kernel functions: {len(perf_stats['kernel_functions'])} unique functions")
+                print(f"  Library functions: {len(perf_stats['library_functions'])} unique functions")
+
+                # Top kernel functions
+                if perf_stats['kernel_functions']:
+                    print("\n  Top Kernel Functions:")
+                    sorted_kernel = sorted(perf_stats['kernel_functions'].items(),
+                                         key=lambda x: x[1], reverse=True)
+                    for func_name, percent in sorted_kernel[:5]:
+                        # percent is already the actual percentage, use directly
+                        print(f"    {func_name:<20} {percent:>6.2f}%")
+
+                # Top library functions
+                if perf_stats['library_functions']:
+                    print("\n  Top Library Functions:")
+                    sorted_library = sorted(perf_stats['library_functions'].items(),
+                                          key=lambda x: x[1], reverse=True)
+                    for func_name, percent in sorted_library[:5]:
+                        # percent is already the actual percentage, use directly
+                        print(f"    {func_name:<20} {percent:>6.2f}%")
+
+            print("\nPerf Summary Notes:")
+            print("📊 Perf uses statistical sampling (low overhead, approximate counts)")
+            print("🔍 Provides holistic view of kernel vs library function consumption")
+            print("⚡ [K] = Kernel function, [L] = Library function")
+            print("💡 Complements eBPF exact counting with system-wide context")
+
+        # Clean up perf data file
+        try:
+            os.unlink(perf_data_path)
+            LOG.debug(f"Removed perf data file: {perf_data_path}")
+        except Exception as e:
+            LOG.warning(f"Could not remove perf data file {perf_data_path}: {e}")
+
     # Cleanup function for proper shutdown
     def cleanup_resources():
+        # Print perf summary if enabled
+        if args.perf_profile:
+            print_perf_summary()
+
         # Restore stdout and close log file if using output redirection
         if args.output:
             if hasattr(sys.stdout, 'close'):
@@ -1135,46 +1879,95 @@ Command-line parameters:
     LOG.info("Beginning tracing")
     start_time = time.time()
     last_print_time = start_time
+
     try:
-        while True:
-            time.sleep(args.interval)
+        # For traced executables, monitor process exit continuously
+        if args.exec:
+            iterations = 0
+            poll_interval = 0.1  # Check every 100ms for responsiveness
 
-            # Check if we're getting any calls at all - only in verbose mode
-            if args.verbose > 0 and total_calls is not None:
-                call_count = total_calls[0].value
-                LOG.info("Total function calls detected: %d", call_count)
-            else:
-                # For non-verbose mode, we can estimate by summing function-specific counters
-                call_count = sum([func.dist_counter[0].value for func in unique_dist_funcs if hasattr(func, 'dist_counter')] +
-                                [func.call_counter[0].value for func in unique_count_funcs if hasattr(func, 'call_counter')])
+            while True:
+                time.sleep(poll_interval)
+                iterations += 1
 
-            print('%-8s\n' % time.strftime('%H:%M:%S'), end='')
+                # CRITICAL: Check if child process exited (highest priority)
+                if proc.poll() is not None:
+                    LOG.info("Target process has exited with code: %d", proc.returncode)
+                    # Give a brief moment for final eBPF events to be collected
+                    time.sleep(0.3)
+                    # Exit immediately - don't wait for interval
+                    break
 
-            # Add elapsed time to each interval output
-            if args.verbose > 0:
-                elapsed = time.time() - start_time
-                hours, remainder = divmod(elapsed, 3600)
-                minutes, seconds = divmod(remainder, 60)
-                print(f'Time: {time.strftime("%H:%M:%S")} (Elapsed: {int(hours)}h {int(minutes)}m {int(seconds)}s)\n')
+                # Print statistics at the specified interval only if still running
+                if iterations * poll_interval >= args.interval:
+                    iterations = 0  # Reset counter
 
-            # If we have a specific executable and get no calls after some intervals,
-            # print a helpful message
-            if args.exec and call_count == 0:
-                print("\nNo function calls detected. Possible causes:")
-                print("- The target program isn't using the traced functions")
-                print("- The target program finished too quickly")
-                print("- There might be issues with attaching to the specific functions")
-                print("\nTry running a program with more memory operations or increasing verbosity with -v")
+                    # Check if we're getting any calls at all - only in verbose mode
+                    if args.verbose > 0 and total_calls is not None:
+                        call_count = sum_percpu(total_calls[0])
+                        LOG.info("Total function calls detected: %d", call_count)
+                    else:
+                        # For non-verbose mode, sum per-CPU function-specific counters
+                        call_count = sum([sum_percpu(func.dist_counter[0]) for func in unique_dist_funcs if hasattr(func, 'dist_counter')] +
+                                        [sum_percpu(func.call_counter[0]) for func in unique_count_funcs if hasattr(func, 'call_counter')])
 
-            # Check if child is still running if we launched it
-            if args.exec and proc.poll() is not None:
-                LOG.info("Target process has exited with code: %d", proc.returncode)
-                break
+                    print('%-8s\n' % time.strftime('%H:%M:%S'), end='')
 
-            # Check if the specified run time has elapsed
-            if args.time and (time.time() - start_time) >= args.time:
-                LOG.info("Specified run time has elapsed. Stopping trace.")
-                break
+                    # Add elapsed time to each interval output
+                    if args.verbose > 0:
+                        elapsed = time.time() - start_time
+                        hours, remainder = divmod(elapsed, 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        print(f'Time: {time.strftime("%H:%M:%S")} (Elapsed: {int(hours)}h {int(minutes)}m {int(seconds)}s)\n')
+
+                    # If we have a specific executable and get no calls,
+                    # print a helpful message
+                    if call_count == 0:
+                        print("\nNo function calls detected. Possible causes:")
+                        print("- The target program isn't using the traced functions")
+                        print("- The target program finished too quickly")
+                        print("- There might be issues with attaching to the specific functions")
+                        print("\nTry running a program with more memory operations or increasing verbosity with -v")
+
+                # Check if the specified run time has elapsed
+                if args.time and (time.time() - start_time) >= args.time:
+                    LOG.info("Specified run time has elapsed. Stopping trace.")
+                    break
+        else:
+            # For PID tracing, use the original interval-based approach
+            while True:
+                time.sleep(args.interval)
+
+                # Check if the target process is still alive (for specific PID tracing)
+                if args.pid > 0:
+                    try:
+                        os.kill(args.pid, 0)  # Signal 0 = check existence only
+                    except ProcessLookupError:
+                        LOG.info("Target process %d has exited. Stopping trace.", args.pid)
+                        break
+                    except PermissionError:
+                        pass  # Process exists but we lost permission (still alive)
+
+                # Check if we're getting any calls at all - only in verbose mode
+                if args.verbose > 0 and total_calls is not None:
+                    call_count = sum_percpu(total_calls[0])
+                    LOG.info("Total function calls detected: %d", call_count)
+                else:
+                    call_count = sum([sum_percpu(func.dist_counter[0]) for func in unique_dist_funcs if hasattr(func, 'dist_counter')] +
+                                    [sum_percpu(func.call_counter[0]) for func in unique_count_funcs if hasattr(func, 'call_counter')])
+
+                print('%-8s\n' % time.strftime('%H:%M:%S'), end='')
+
+                if args.verbose > 0:
+                    elapsed = time.time() - start_time
+                    hours, remainder = divmod(elapsed, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    print(f'Time: {time.strftime("%H:%M:%S")} (Elapsed: {int(hours)}h {int(minutes)}m {int(seconds)}s)\n')
+
+                # Check if the specified run time has elapsed
+                if args.time and (time.time() - start_time) >= args.time:
+                    LOG.info("Specified run time has elapsed. Stopping trace.")
+                    break
 
     except KeyboardInterrupt:
         LOG.info("KeyboardInterrupt received, exiting gracefully")

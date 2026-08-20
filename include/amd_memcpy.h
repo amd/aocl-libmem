@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern void * __memcpy_zen2(void *dest,const void *src, size_t siz
 HIDDEN_SYMBOL extern void * __memcpy_zen3(void *dest,const void *src, size_t size);
 HIDDEN_SYMBOL extern void * __memcpy_zen4(void *dest,const void *src, size_t size);
 HIDDEN_SYMBOL extern void * __memcpy_zen5(void *dest,const void *src, size_t size);
+HIDDEN_SYMBOL extern void * __memcpy_zen6(void *dest, const void *src, size_t size);
 
 //System solution which takes in system config and  threshold values.
 HIDDEN_SYMBOL extern void * __memcpy_system(void *dest,const void *src, size_t size);

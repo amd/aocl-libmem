@@ -73,27 +73,24 @@ uint64_t nt_stop_threshold;
 #define     RDPID_MASK      (1 << 22)
 #define     VPCLMULQDQ_MASK (1 << 10)
 #define     MOVDIRI_MASK    (1 << 27)
-
+/* CPUID leaf 7, subleaf 0 (EAX=7, ECX=0): EDX bit 23 */
+#define     AVX512_FP16_MASK    (1 << 23)
 
 #define ZEN1_L3 8*1024*1024     //8MB per CCX
 #define ZEN2_L3 16*1024*1024    //16MB per CCX
 #define ZEN3_L3 32*1024*1024    //32MB per CCX
 #define ZEN4_L3 32*1024*1024    //32MB per CCX
 #define ZEN5_L3 32*1024*1024    //32MB per CCX
+#define ZEN6_L3 64*1024*1024    //64MB per CCX
 
-#define ZEN3_L2 512*1024        //512MB per CORE
+#define ZEN3_L2 512*1024        //512KB per CORE
 #define ZEN4_L2 1*1024*1024     //1MB per CORE
 #define ZEN5_L2 1*1024*1024     //1MB per CORE
+#define ZEN6_L2 1*1024*1024     //1MB per CORE
 
 #define ENABLED 1
 
-typedef enum
-{
-    ZEN1,
-    ZEN2,
-    ZEN3,
-    ZEN4
-} microarch;
+typedef enum { ZEN1, ZEN2, ZEN3, ZEN4, ZEN5, ZEN6 } microarch;
 
 typedef struct {
     unsigned int threads_per_core;
@@ -110,6 +107,7 @@ bool movdiri;
 bool vpclmul;
 bool rdpid;
 bool rdseed;
+bool avx512_fp16;
 } cpu_features;
 
 typedef struct {

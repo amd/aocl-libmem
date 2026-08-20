@@ -39,3 +39,4 @@
 #include "amd_strlen.h"
 #include "amd_strnlen.h"
 #include "amd_strchr.h"
+#include "amd_strrchr.h"

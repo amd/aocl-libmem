@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRCMP_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRCMP_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * StrcmpValidator - Validates strcmp implementation
  */
-class StrcmpValidator : public FunctionValidator<traits::StrcmpTag, StrcmpValidator> {
+class StrcmpValidator : public TestRunner<traits::StrcmpTag, StrcmpValidator> {
 public:
     void registerTests() {
         tests()
@@ -57,7 +57,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrcmpValidator)
+REGISTER_VALIDATOR(StrcmpValidator, "strcmp")
 
 } // namespace validator
 } // namespace libmem

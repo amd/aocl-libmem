@@ -31,7 +31,7 @@
  * @brief Basic copy validation tests.
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 
 namespace libmem {
 namespace validator {
@@ -40,7 +40,7 @@ namespace validator {
  * BasicCopyTest - Basic non-overlapping copy validation
  */
 template<typename Tag>
-class BasicCopyTest : public FunctionTest<Tag> {
+class BasicCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicCopy"; }
 
@@ -48,14 +48,14 @@ public:
         this->ctx_ = ctx;
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffers");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
 
-        if (FunctionTest<Tag>::Traits::is_string_func) {
-            this->nullTerminate(buf.src, ctx.size - 1);
+        if (TestCase<Tag>::Traits::is_string_func) {
+            nullTerminate(buf.src, ctx.size - 1);
         }
 
         this->prepareBoundary(buf.dst, ctx.size);
@@ -73,7 +73,7 @@ public:
  * BasicCopyNoSizeTest - Copy without size parameter
  */
 template<typename Tag>
-class BasicCopyNoSizeTest : public FunctionTest<Tag> {
+class BasicCopyNoSizeTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicCopy"; }
 
@@ -85,16 +85,16 @@ public:
         }
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffers");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->nullTerminate(buf.src, ctx.size - 1);
+        fillLowercaseLetters(buf.src, ctx.size);
+        nullTerminate(buf.src, ctx.size - 1);
 
         this->prepareBoundary(buf.dst, ctx.size);
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );
@@ -118,7 +118,7 @@ public:
  * MultiNullCopyTest - Test that copy stops at first NULL
  */
 template<typename Tag>
-class MultiNullCopyTest : public FunctionTest<Tag> {
+class MultiNullCopyTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "MultiNull"; }
 
@@ -129,11 +129,11 @@ public:
             return TestResult::success();
         }
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
 
         size_t null_pos = ctx.size / 2;
         buf.src[null_pos] = '\0';
@@ -141,7 +141,7 @@ public:
 
         std::memset(buf.dst, 0xFF, ctx.size);
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );
@@ -170,7 +170,7 @@ public:
  * StrncpyStrlenGreaterTest - strncpy when strlen(src) > n
  */
 template<typename Tag>
-class StrncpyStrlenGreaterTest : public FunctionTest<Tag> {
+class StrncpyStrlenGreaterTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "StrlenGreaterThanN"; }
 
@@ -181,18 +181,18 @@ public:
             return TestResult::success();
         }
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size + 1);
+        fillLowercaseLetters(buf.src, ctx.size + 1);
         buf.src[ctx.size + 1] = '\0';
 
         for (size_t i = ctx.size; i < ctx.size + BOUNDARY_BYTES; ++i) {
             buf.dst[i] = '#';
         }
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size
@@ -222,7 +222,7 @@ public:
  * StrncpyStrlenEqualTest - strncpy when strlen(src) == n-1
  */
 template<typename Tag>
-class StrncpyStrlenEqualTest : public FunctionTest<Tag> {
+class StrncpyStrlenEqualTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "StrlenEqualN"; }
 
@@ -234,18 +234,18 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size - 1);
+        fillLowercaseLetters(buf.src, ctx.size - 1);
         buf.src[ctx.size - 1] = '\0';
 
         for (size_t i = ctx.size; i < ctx.size + BOUNDARY_BYTES; ++i) {
             buf.dst[i] = '#';
         }
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size
@@ -275,7 +275,7 @@ public:
  * StrncpyStrlenLessTest - strncpy when strlen(src) < n (should pad with NULLs)
  */
 template<typename Tag>
-class StrncpyStrlenLessTest : public FunctionTest<Tag> {
+class StrncpyStrlenLessTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "StrlenLessThanN"; }
 
@@ -287,12 +287,12 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
         size_t src_len = ctx.size / 2;
-        this->fillLowercaseLetters(buf.src, src_len);
+        fillLowercaseLetters(buf.src, src_len);
         buf.src[src_len] = '\0';
 
         for (size_t i = 0; i < ctx.size; ++i) {
@@ -303,7 +303,7 @@ public:
             buf.dst[i] = '#';
         }
 
-        char* ret = FunctionTest<Tag>::Traits::invoke(
+        char* ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size

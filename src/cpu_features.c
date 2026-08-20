@@ -100,4 +100,9 @@ static inline void get_cpu_capabilities()
         zen_info.zen_cpu_features.rdseed = ENABLED;
         LOG_INFO("CPU feature RDSEED Enabled\n");
     }
+    if (cpuid_regs.edx & AVX512_FP16_MASK)
+    {
+        zen_info.zen_cpu_features.avx512_fp16 = ENABLED;
+        LOG_INFO("CPU feature AVX512_FP16 Enabled\n");
+    }
 }

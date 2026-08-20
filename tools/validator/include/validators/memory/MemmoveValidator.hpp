@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_MEMMOVE_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_MEMMOVE_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/MemoryTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -39,7 +39,7 @@ namespace validator {
 /**
  * MemmoveValidator - Validates memmove implementation (supports overlapping)
  */
-class MemmoveValidator : public FunctionValidator<traits::MemmoveTag, MemmoveValidator> {
+class MemmoveValidator : public TestRunner<traits::MemmoveTag, MemmoveValidator> {
 public:
     void registerTests() {
         tests()
@@ -52,7 +52,7 @@ public:
             .add<PageOverrunCopyTest<traits::MemmoveTag>>("Page overrun");
     }
 };
-REGISTER_VALIDATOR(MemmoveValidator)
+REGISTER_VALIDATOR(MemmoveValidator, "memmove")
 
 } // namespace validator
 } // namespace libmem

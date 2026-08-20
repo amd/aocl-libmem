@@ -38,6 +38,7 @@ HIDDEN_SYMBOL extern size_t __strnlen_zen2(const char *, size_t);
 HIDDEN_SYMBOL extern size_t __strnlen_zen3(const char *, size_t);
 HIDDEN_SYMBOL extern size_t __strnlen_zen4(const char *, size_t);
 HIDDEN_SYMBOL extern size_t __strnlen_zen5(const char *, size_t);
+HIDDEN_SYMBOL extern size_t __strnlen_zen6(const char *, size_t);
 
 //System solution which takes in system config.
 HIDDEN_SYMBOL extern size_t __strnlen_system(const char *, size_t);

@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_STRSPN_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_STRSPN_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/StringTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -40,7 +40,7 @@ namespace validator {
 /**
  * StrspnValidator - Validates strspn implementation
  */
-class StrspnValidator : public FunctionValidator<traits::StrspnTag, StrspnValidator> {
+class StrspnValidator : public TestRunner<traits::StrspnTag, StrspnValidator> {
 public:
     void registerTests() {
         tests()
@@ -57,7 +57,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(StrspnValidator)
+REGISTER_VALIDATOR(StrspnValidator, "strspn")
 
 } // namespace validator
 } // namespace libmem

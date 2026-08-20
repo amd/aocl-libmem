@@ -39,7 +39,12 @@ static inline cpu_variant_idx libmem_cpu_resolver(void)
     // Zen4 and above cpu detection
     if (zen_info.zen_cpu_features.avx512 == ENABLED)
     {
-        if (zen_info.zen_cpu_features.movdiri == ENABLED)// Zen5
+        if (zen_info.zen_cpu_features.avx512_fp16 == ENABLED) // Zen6
+        {
+            cpu_var_idx = ARCH_ZEN6;
+            LOG_INFO("Detected CPU uArch: Zen6\n");
+        }
+        else if (zen_info.zen_cpu_features.movdiri == ENABLED) // Zen5
         {
             cpu_var_idx = ARCH_ZEN5;
             LOG_INFO("Detected CPU uArch: Zen5\n");
@@ -184,6 +189,7 @@ static inline void dispatcher_init()
     _strlen_variant     = (amd_strlen_fn) libmem_cpu_impls[STRLEN][cpu_var_idx];
     _strnlen_variant    = (amd_strnlen_fn) libmem_cpu_impls[STRNLEN][cpu_var_idx];
     _strchr_variant     = (amd_strchr_fn) libmem_cpu_impls[STRCHR][cpu_var_idx];
+    _strrchr_variant    = (amd_strrchr_fn) libmem_cpu_impls[STRRCHR][cpu_var_idx];
     _strspn_variant     = (amd_strspn_fn) libmem_cpu_impls[STRSPN][cpu_var_idx];
 
 #ifdef ALMEM_TUNABLES

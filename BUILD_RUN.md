@@ -3,7 +3,7 @@
 ## Requirements
  * **cmake 3.22**
  * **python 3.10**
- * **gcc 14.1.0** (for znver5 support)
+ * **gcc 14.1.0** (for znver5 support; znver6 requires newer gcc with `-march=znver6`)
  * **aocc 5.0**
  * **Glibc 2.34** (for dynamic dispatcher support)
 
@@ -12,7 +12,7 @@
     #Configure for GCC build
         # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=gcc -S <source_dir> -B <build_dir>
-        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5)
+        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5, zen6)
         $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_ARCH=zen4 -S <source_dir> -B <build_dir>
         # Compiling with Dynamic CPU Dispatcher
         $ cmake -D CMAKE_C_COMPILER=gcc -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>
@@ -25,7 +25,7 @@
     #Configure for AOCC(Clang) build
         # Default Option - Compiling for Native CPU
         $ cmake -D CMAKE_C_COMPILER=clang -S <source_dir> -B <build_dir>
-        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5)
+        # Compiling for Specific Zen Architecture (zen1, zen2, zen3, zen4, zen5, zen6)
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_ARCH=zen4 -S <source_dir> -B <build_dir>
         # Compiling with Dynamic CPU Dispatcher
         $ cmake -D CMAKE_C_COMPILER=clang -D ALMEM_DYN_DISPATCH=Y -S <source_dir> -B <build_dir>

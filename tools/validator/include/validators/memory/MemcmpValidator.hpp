@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_MEMCMP_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_MEMCMP_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/MemoryTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * MemcmpValidator - Validates memcmp implementation
  */
-class MemcmpValidator : public FunctionValidator<traits::MemcmpTag, MemcmpValidator> {
+class MemcmpValidator : public TestRunner<traits::MemcmpTag, MemcmpValidator> {
 public:
     void registerTests() {
         tests()
@@ -51,7 +51,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(MemcmpValidator)
+REGISTER_VALIDATOR(MemcmpValidator, "memcmp")
 
 } // namespace validator
 } // namespace libmem

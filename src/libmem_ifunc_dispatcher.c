@@ -27,11 +27,16 @@
 #include "libmem_impls.h"
 
 
-#if defined(__GNUC__) && (__GNUC__ > 14 && __GNUC_MINOR__ >= 1)
+/* __builtin_cpu_is("znver6") is only recognized starting with GCC 16.
+ * On older compilers fall back to the manual CPUID-based resolver below,
+ * which detects Zen6 via the AVX512_FP16 feature bit. */
+#if defined(__GNUC__) && (__GNUC__ >= 16)
 
 #define AMD_ZEN_CPU_RESOLVER(func) \
     __builtin_cpu_init(); \
     do { \
+        if (__builtin_cpu_is("znver6")) \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); \
         if (__builtin_cpu_is("znver5")) \
             return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5); \
         if (__builtin_cpu_is("znver4")) \
@@ -45,9 +50,7 @@
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system); \
     } while (0)
 
-
-#else //Compilers that do not detect the latest architecture: 'znver5'
-
+#else // Compilers that do not detect the latest architecture: 'znver6'
 #define AMD_ZEN_CPU_RESOLVER(func) \
    do { \
     uint32_t eax= 0x7;        \
@@ -59,6 +62,8 @@
      :"0"(eax), "2"(ecx) ); \
     if (ebx & AVX512_MASK)   \
     {       \
+         if (edx & AVX512_FP16_MASK) \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6); \
          if (ecx & MOVDIRI_MASK) \
             return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5); \
          return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen4); \
@@ -104,4 +109,5 @@ DEF_IFUNC_RESOLVER(strstr)
 DEF_IFUNC_RESOLVER(strlen)
 DEF_IFUNC_RESOLVER(strnlen)
 DEF_IFUNC_RESOLVER(strchr)
+DEF_IFUNC_RESOLVER(strrchr)
 DEF_IFUNC_RESOLVER(strspn)

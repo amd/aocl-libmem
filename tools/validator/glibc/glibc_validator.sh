@@ -43,6 +43,10 @@ LIB_DIR="$BUILD_DIR/lib"
 # Find repository root for CMakeLists.txt (one level up from build)
 REPO_ROOT="$(cd "$BUILD_DIR/.." && pwd)"
 
+KNOWN_STABLE_VER="2.42"
+GLIBC_VERSION="glibc-${KNOWN_STABLE_VER}"
+echo "Using glibc release: $GLIBC_VERSION"
+
 # Find the shared library (version-agnostic - finds versioned or symlink)
 SHARED_LIB=$(find "$LIB_DIR" -name "libaocl-libmem.so*" -type f | head -1)
 
@@ -83,116 +87,55 @@ else
     # Fallback list if CMakeLists.txt is not found
     FUNCTIONS=(
         "memcpy" "mempcpy" "memmove" "memset" "memcmp" "memchr"
-        "strcpy" "strncpy" "strcmp" "strncmp" "strcat" "strncat" "strstr" "strlen" "strchr"
+        "strcpy" "strncpy" "strcmp" "strncmp" "strcat" "strncat" "strstr" "strspn" "strlen" "strnlen" "strchr" "strrchr"
     )
 fi
 
-echo ""
-echo "Downloading fresh glibc test files..."
-echo "========================================="
+# sourceware's cgit endpoint rate-limits bursts of requests and answers with a
+# "429 Too Many Requests" HTML page. curl writes that page out just as happily
+# as real source, which used to leave HTML in the .c files and break the build.
+looks_like_html() {
+    head -c 512 "$1" 2>/dev/null | grep -qi '<html\|<!doctype'
+}
 
-# Download test files from glibc repository
-for func in "${FUNCTIONS[@]}"; do
-    test_file="${GLIBC_TESTS_DIR}/test-${func}.c"
-    if [ -f "$test_file" ]; then
-        echo "test-${func}.c already exists, skipping download"
-    else
-        echo "Downloading test-${func}.c..."
-        curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-${func}.c" \
-             -o "$test_file"
-        
-        if [ -f "$test_file" ]; then
-            echo "Downloaded test-${func}.c"
-        else
-            echo "Failed to download test-${func}.c"
+# A file cached by an earlier run is only reusable if it really holds source,
+# so that a run poisoned by a rate-limited response heals itself.
+is_usable_source() {
+    [ -s "$1" ] && ! looks_like_html "$1"
+}
+
+# Fetch into a temporary file and keep it only on a 200 that carries source,
+# retrying with exponential backoff to ride out the rate limiter.
+download_source_file() {
+    local url="$1" dest="$2" tmp="$2.part"
+    local attempt delay http_code
+    delay=4
+    for attempt in 1 2 3 4 5; do
+        http_code=$(curl -sS --max-time 60 -w '%{http_code}' -o "$tmp" "$url" 2>/dev/null || echo 000)
+        if [ "$http_code" = "200" ] && is_usable_source "$tmp"; then
+            mv "$tmp" "$dest"
+            return 0
         fi
-    fi
-done
+        echo "    attempt $attempt returned HTTP $http_code, retrying in ${delay}s..."
+        sleep "$delay"
+        delay=$((delay * 2))
+    done
+    rm -f "$tmp"
+    return 1
+}
 
-# Download test-string.h
-test_string_file="${GLIBC_TESTS_DIR}/test-string.h"
-DOWNLOADED_FRESH=false
-if [ -f "$test_string_file" ]; then
-    echo "test-string.h already exists, skipping download"
-else
-    echo "Downloading test-string.h..."
-    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-string.h" \
-         -o "$test_string_file"
-
-    if [ -f "$test_string_file" ]; then
-        echo "Downloaded test-string.h"
-        DOWNLOADED_FRESH=true
-    else
-        echo "Failed to download test-string.h"
-        exit 1
-    fi
-fi
-
-# Download test-memcpy-support.h
-test_memcpy_support_file="${GLIBC_TESTS_DIR}/test-memcpy-support.h"
-if [ -f "$test_memcpy_support_file" ]; then
-    echo "test-memcpy-support.h already exists, skipping download"
-else
-    echo "Downloading test-memcpy-support.h..."
-    curl -s "https://sourceware.org/git/?p=glibc.git;a=blob_plain;hb=HEAD;f=string/test-memcpy-support.h" \
-         -o "$test_memcpy_support_file"
-
-    if [ -f "$test_memcpy_support_file" ]; then
-        echo "Downloaded test-memcpy-support.h"
-    else
-        echo "Failed to download test-memcpy-support.h"
-    fi
-fi
-
-echo ""
-echo "Applying patches to test-string.h..."
-echo "======================================"
-
-# Only apply patches if we downloaded fresh files
-if [ "$DOWNLOADED_FRESH" = true ]; then
-    echo "Applying patches to freshly downloaded test-string.h..."
-    
-    # Remove problematic includes
-    sed -i '/#include <support\/support.h>/d' "${GLIBC_TESTS_DIR}/test-string.h"
-    sed -i '/#include <config.h>/d' "${GLIBC_TESTS_DIR}/test-string.h"
-    sed -i '/#include <libc-misc.h>/d' "${GLIBC_TESTS_DIR}/test-string.h"
-
-    # Add necessary includes after sys/cdefs.h
-    sed -i '/#include <sys\/cdefs.h>/a #include <stddef.h>\n#include <stdbool.h>' "${GLIBC_TESTS_DIR}/test-string.h"
-
-    # Comment out ifunc-impl-list.h and add replacements
-    sed -i 's/#include <ifunc-impl-list.h>/\/* #include <ifunc-impl-list.h> *\/  \/* Comment out glibc-internal header *\//' "${GLIBC_TESTS_DIR}/test-string.h"
-
-    # Add forward declarations after _GNU_SOURCE
-    sed -i '/^#define _GNU_SOURCE$/a\\n/* Forward declarations */\nint test_main(void);\nvoid *mempcpy(void *dest, const void *src, size_t n);' "${GLIBC_TESTS_DIR}/test-string.h"
-
-    # Add missing definitions after the forward declarations
-    sed -i '/^void \*mempcpy(void \*dest, const void \*src, size_t n);$/a\\n/* Define MAP_ANON if not available */\n#ifndef MAP_ANON\n#define MAP_ANON MAP_ANONYMOUS\n#endif\n\n/* Define missing glibc structures and functions */\nstruct libc_ifunc_impl {\n  const char *name;\n  void (*fn) (void);\n  bool usable;\n};\n\n/* Mock xmalloc to use regular malloc */\n#define xmalloc malloc\n\n/* Mock glibc ifunc function */\nstatic size_t __libc_ifunc_impl_list(const char *name, struct libc_ifunc_impl *array, size_t max) {\n  return 0; \/\* No ifunc implementations for our test *\/\n}\n\n/* Define missing constants */\n#ifndef EXIT_UNSUPPORTED\n#define EXIT_UNSUPPORTED 77\n#endif' "${GLIBC_TESTS_DIR}/test-string.h"
-
-    # Add main function at the very end of the file
-    echo '
-/* Main function to run the tests */
-int main(void) {
-  test_init();
-  return test_main();
-}' >> "${GLIBC_TESTS_DIR}/test-string.h"
-    
-    echo "Applied patches to test-string.h"
-else
-    echo "Using existing test-string.h, skipping patch application"
-fi
-
-
-# Function to remove problematic includes from a file
+# Strip glibc-internal includes and declarations that cannot be compiled
+# standalone. Only ever run on a freshly downloaded file, since the IMPL
+# registration and the mempcpy include below are not idempotent.
 clean_file() {
     local file="$1"
     if [ ! -f "$file" ]; then
         echo "WARNING: File not found: $file"
         return
     fi
-    
-    echo "Cleaning $file..."
-    
+
+    echo "  Cleaning $(basename "$file")..."
+
     # Remove problematic includes - we don't need test-driver
     sed -i '/#include <support\/test-driver\.c>/d' "$file"
     sed -i '/#include <support\/test-driver\.h>/d' "$file"
@@ -200,7 +143,7 @@ clean_file() {
     sed -i '/^#.*include.*string\/.*\.c/d' "$file"
     sed -i '/^#.*include.*wcsmbs\/.*\.c/d' "$file"
     sed -i '/^#.*include.*".*\.c"/d' "$file"  # Remove any .c file includes
-    
+
     # Remove IMPL declarations for missing default implementations
     sed -i '/IMPL (__[a-z]*_default, 1)/d' "$file"
     sed -i '/IMPL ([A-Z]*_DEFAULT, 1)/d' "$file"
@@ -209,50 +152,151 @@ clean_file() {
     sed -i '/IMPL (STRCHR_DEFAULT, 1)/d' "$file"
     sed -i '/IMPL (STRCHRNUL_DEFAULT, 1)/d' "$file"
     sed -i '/IMPL (C_IMPL, 1)/d' "$file"  # Remove C_IMPL for strstr
-    
+
     # Fix inhibit_loop_to_libcall macro usage on separate lines
     sed -i '/^test_cc_inhibit_loop_to_libcall$/d' "$file"
-    
+
     # Fix c_strstr to use actual strstr function
     sed -i 's/# define STRSTR c_strstr/# define STRSTR strstr/' "$file"
-    
+
     # Fix test_main declaration conflicts (remove static)
     sed -i 's/^static int$/int/' "$file"
-    
+
     # Special handling for test-strnlen.c - add IMPL registration
     if [[ "$file" == *"test-strnlen.c" ]]; then
         # Use the IMPL macro (section-based) so the linker auto-generates
         # correct __start_impls/__stop_impls section boundaries.
         sed -i '/#include "test-string.h"/a\\nIMPL (strnlen, 1)' "$file"
     fi
-    
-    echo "Cleaned $file"
+
+    # test-mempcpy.c is only the mempcpy-specific prologue; the body lives in
+    # test-memcpy.c, whose include the cleaning above has just stripped.
+    if [[ "$file" == *"test-mempcpy.c" ]]; then
+        echo '#include "test-memcpy.c"' >> "$file"
+    fi
 }
 
-echo ""
-echo "Cleaning test files..."
-echo "=========================="
+# Make test-string.h compilable outside the glibc tree. Not idempotent, so it
+# runs only against a freshly downloaded copy.
+patch_test_string_h() {
+    local header="${GLIBC_TESTS_DIR}/test-string.h"
 
-# Only clean files if we downloaded fresh content
-if [ "$DOWNLOADED_FRESH" = true ]; then
-    echo "Cleaning freshly downloaded test files..."
-    # Clean all test files
-    for test_file in "${GLIBC_TESTS_DIR}"/test-*.c; do
-        if [ -f "$test_file" ]; then
+    echo "Applying patches to freshly downloaded test-string.h..."
+
+    # Remove problematic includes
+    sed -i '/#include <support\/support.h>/d' "$header"
+    sed -i '/#include <config.h>/d' "$header"
+    sed -i '/#include <libc-misc.h>/d' "$header"
+
+    # Add necessary includes after sys/cdefs.h
+    sed -i '/#include <sys\/cdefs.h>/a #include <stddef.h>\n#include <stdbool.h>' "$header"
+
+    # Comment out ifunc-impl-list.h and add replacements
+    sed -i 's/#include <ifunc-impl-list.h>/\/* #include <ifunc-impl-list.h> *\/  \/* Comment out glibc-internal header *\//' "$header"
+
+    # Add forward declarations after _GNU_SOURCE
+    sed -i '/^#define _GNU_SOURCE$/a\\n/* Forward declarations */\nint test_main(void);\nvoid *mempcpy(void *dest, const void *src, size_t n);' "$header"
+
+    # Add missing definitions after the forward declarations
+    sed -i '/^void \*mempcpy(void \*dest, const void \*src, size_t n);$/a\\n/* Define MAP_ANON if not available */\n#ifndef MAP_ANON\n#define MAP_ANON MAP_ANONYMOUS\n#endif\n\n/* Define missing glibc structures and functions */\nstruct libc_ifunc_impl {\n  const char *name;\n  void (*fn) (void);\n  bool usable;\n};\n\n/* Mock xmalloc to use regular malloc */\n#define xmalloc malloc\n\n/* Mock glibc ifunc function */\nstatic size_t __libc_ifunc_impl_list(const char *name, struct libc_ifunc_impl *array, size_t max) {\n  return 0; \/\* No ifunc implementations for our test *\/\n}\n\n/* Define missing constants */\n#ifndef EXIT_UNSUPPORTED\n#define EXIT_UNSUPPORTED 77\n#endif' "$header"
+
+    # Add main function at the very end of the file
+    echo '
+/* Main function to run the tests */
+int main(void) {
+  test_init();
+  return test_main();
+}' >> "$header"
+
+    echo "Applied patches to test-string.h"
+}
+
+GLIBC_REPO_URL="https://github.com/bminor/glibc.git"
+GLIBC_SRC_DIR="${GLIBC_TESTS_DIR}/glibc-src"
+
+# Clone glibc source (shallow, sparse) to avoid rate-limiting/timeout issues
+# with individual file downloads from sourceware.org.
+if [ -d "$GLIBC_SRC_DIR/.git" ]; then
+    echo "glibc source already cloned at $GLIBC_SRC_DIR"
+else
+    echo ""
+    echo "Cloning glibc ${GLIBC_VERSION} from GitHub (sparse, depth=1)..."
+    echo "========================================="
+    rm -rf "$GLIBC_SRC_DIR"
+    git clone --depth=1 --filter=blob:none --sparse \
+        --branch "${GLIBC_VERSION}" \
+        "$GLIBC_REPO_URL" "$GLIBC_SRC_DIR"
+    cd "$GLIBC_SRC_DIR"
+    git sparse-checkout init --no-cone
+    git sparse-checkout set 'string/*' 'version.h'
+    cd "$REPO_ROOT"
+fi
+
+GLIBC_EXACT_VERSION=$(grep -oP 'VERSION "\K[^"]+' "$GLIBC_SRC_DIR/version.h" 2>/dev/null)
+echo "Exact glibc version: ${GLIBC_EXACT_VERSION:-unknown}"
+
+echo ""
+echo "Copying glibc ${GLIBC_EXACT_VERSION:-$GLIBC_VERSION} test files..."
+echo "========================================="
+
+GLIBC_STRING_DIR="${GLIBC_SRC_DIR}/string"
+FAILED_DOWNLOADS=()
+
+# Copy test-string.h first, since the per-test cleaning below depends on it
+# already being patched.
+test_string_file="${GLIBC_TESTS_DIR}/test-string.h"
+if is_usable_source "$test_string_file"; then
+    echo "test-string.h already exists, skipping"
+else
+    if [ -f "${GLIBC_STRING_DIR}/test-string.h" ]; then
+        cp "${GLIBC_STRING_DIR}/test-string.h" "$test_string_file"
+        echo "Copied test-string.h"
+        patch_test_string_h
+    else
+        echo "Failed to find test-string.h in cloned source"
+        exit 1
+    fi
+fi
+
+# Copy test-memcpy-support.h
+test_memcpy_support_file="${GLIBC_TESTS_DIR}/test-memcpy-support.h"
+if is_usable_source "$test_memcpy_support_file"; then
+    echo "test-memcpy-support.h already exists, skipping"
+else
+    if [ -f "${GLIBC_STRING_DIR}/test-memcpy-support.h" ]; then
+        cp "${GLIBC_STRING_DIR}/test-memcpy-support.h" "$test_memcpy_support_file"
+        echo "Copied test-memcpy-support.h"
+    else
+        echo "test-memcpy-support.h not found in source (non-fatal)"
+        FAILED_DOWNLOADS+=("test-memcpy-support.h")
+    fi
+fi
+
+# Copy test files from cloned source. Each file is cleaned as soon as it
+# arrives, so a cached tree and a freshly fetched one end up in the same state.
+for func in "${FUNCTIONS[@]}"; do
+    test_file="${GLIBC_TESTS_DIR}/test-${func}.c"
+    if is_usable_source "$test_file"; then
+        echo "test-${func}.c already exists, skipping"
+    else
+        src_file="${GLIBC_STRING_DIR}/test-${func}.c"
+        if [ -f "$src_file" ]; then
+            cp "$src_file" "$test_file"
+            echo "Copied test-${func}.c"
             clean_file "$test_file"
-        fi
-    done
-    
-    if [ -f "${GLIBC_TESTS_DIR}/test-mempcpy.c" ]; then
-        # Add the include at the end of the file if not already present
-        if ! grep -q "test-memcpy.c" "${GLIBC_TESTS_DIR}/test-mempcpy.c"; then
-            echo '#include "test-memcpy.c"' >> "${GLIBC_TESTS_DIR}/test-mempcpy.c"
-            echo "Added test-memcpy.c include to test-mempcpy.c"
+        else
+            echo "test-${func}.c not found in source"
+            FAILED_DOWNLOADS+=("test-${func}.c")
         fi
     fi
-else
-    echo "Using existing test files, skipping cleaning"
+done
+
+if [ ${#FAILED_DOWNLOADS[@]} -gt 0 ]; then
+    echo ""
+    echo "WARNING: ${#FAILED_DOWNLOADS[@]} file(s) could not be downloaded: ${FAILED_DOWNLOADS[*]}"
+    echo "Those tests will be skipped. Re-run the script to retry them."
 fi
+
 
 echo ""
 echo "Compiling all tests..."
@@ -350,7 +394,8 @@ echo ""
 echo "Test execution completed!"
 echo "============================"
 echo "Summary:"
-echo "   - Downloaded ${#FUNCTIONS[@]} glibc test files from internet"
+echo "   - glibc version: ${GLIBC_EXACT_VERSION:-unknown} (${GLIBC_VERSION})"
+echo "   - Downloaded ${#FUNCTIONS[@]} glibc test files"
 echo "   - Applied minimal patches to test-string.h"
 echo "   - Cleaned all test files by removing problematic includes"
 echo "   - Compiled ${#COMPILED_TESTS[@]} tests successfully"

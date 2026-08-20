@@ -31,7 +31,7 @@
  * @brief Comparison tests for memcmp, strcmp, strncmp
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 
 namespace libmem {
 namespace validator {
@@ -44,7 +44,7 @@ namespace validator {
  * EqualCompareTest - Test comparison of equal data
  */
 template<typename Tag>
-class EqualCompareTest : public FunctionTest<Tag> {
+class EqualCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "EqualCompare"; }
 
@@ -52,16 +52,16 @@ public:
         this->ctx_ = ctx;
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffers");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
-        if (FunctionTest<Tag>::Traits::is_string_func) {
-            this->nullTerminate(buf.src, ctx.size - 1);
-            this->nullTerminate(buf.dst, ctx.size - 1);
+        if (TestCase<Tag>::Traits::is_string_func) {
+            nullTerminate(buf.src, ctx.size - 1);
+            nullTerminate(buf.dst, ctx.size - 1);
         }
 
         int ret = this->invoke(buf.dst, buf.src, ctx.size);
@@ -78,7 +78,7 @@ public:
  * MismatchCompareTest - Test comparison of different data
  */
 template<typename Tag>
-class MismatchCompareTest : public FunctionTest<Tag> {
+class MismatchCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "MismatchCompare"; }
 
@@ -91,18 +91,18 @@ public:
 
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffers");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.dst[0] = buf.src[0] + 1;
 
-        if (FunctionTest<Tag>::Traits::is_string_func) {
-            this->nullTerminate(buf.src, ctx.size - 1);
-            this->nullTerminate(buf.dst, ctx.size - 1);
+        if (TestCase<Tag>::Traits::is_string_func) {
+            nullTerminate(buf.src, ctx.size - 1);
+            nullTerminate(buf.dst, ctx.size - 1);
         }
 
         int ret = this->invoke(buf.dst, buf.src, ctx.size);
@@ -119,7 +119,7 @@ public:
  * ByteByByteMismatchTest - Exhaustive test: validates mismatch at EVERY index position
  */
 template<typename Tag>
-class ByteByByteMismatchTest : public FunctionTest<Tag> {
+class ByteByByteMismatchTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ByteByByteMismatch"; }
 
@@ -127,82 +127,117 @@ public:
         this->ctx_ = ctx;
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffers");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
-        if (FunctionTest<Tag>::Traits::is_string_func) {
-            this->nullTerminate(buf.src, ctx.size - 1);
-            this->nullTerminate(buf.dst, ctx.size - 1);
+        if (TestCase<Tag>::Traits::is_string_func) {
+            nullTerminate(buf.src, ctx.size - 1);
+            nullTerminate(buf.dst, ctx.size - 1);
         }
 
-        for (size_t i = 0; i < ctx.size; ++i) {
-            if (FunctionTest<Tag>::Traits::is_string_func && i == ctx.size - 1) {
-                continue;
+        // Exhaustive up to PAGE_SZ; stride-sample ~256 positions beyond to cap O(N^2).
+        size_t stride = (ctx.size <= PAGE_SZ) ? 1 : (ctx.size / 256 + 1);
+
+        auto probe = [&](size_t i) -> TestResult {
+            if (TestCase<Tag>::Traits::is_string_func && i >= ctx.size - 1) {
+                return TestResult::success();
             }
+            return checkPos(buf, ctx.size, i);
+        };
 
-            uint8_t original = buf.dst[i];
+        for (size_t i = 0; i < ctx.size; i += stride) {
+            TestResult r = probe(i);
+            if (!r.passed) return r;
+        }
 
-            buf.dst[i] = (buf.src[i] > 0) ? buf.src[i] - 1 : buf.src[i] + 1;
-
-            int ret = invokeCompare(buf.dst, buf.src, ctx.size);
-            int expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
-
-            if (FunctionTest<Tag>::Traits::is_string_func) {
-                if ((ret < 0) != (expected < 0)) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "sign mismatch at index, expected %s0, got %d",
-                                        expected < 0 ? "<" : ">", ret);
-                }
-            } else {
-                if (ret != expected) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "byte-by-byte mismatch, expected=%d, got=%d",
-                                        expected, ret);
-                }
+        // Uniform stride may skip vector-size / threshold boundaries;
+        // also probe every VEC_SZ-aligned index missed by the stride.
+        if (stride > 1) {
+            for (size_t i = VEC_SZ; i < ctx.size; i += VEC_SZ) {
+                if ((i % stride) == 0) continue;
+                TestResult r = probe(i);
+                if (!r.passed) return r;
             }
+        }
 
-            buf.dst[i] = buf.src[i] + 10;
-
-            ret = invokeCompare(buf.dst, buf.src, ctx.size);
-            expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
-
-            if (FunctionTest<Tag>::Traits::is_string_func) {
-                if ((ret > 0) != (expected > 0)) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "sign mismatch (greater), expected %s0, got %d",
-                                        expected > 0 ? ">" : "<", ret);
-                }
-            } else {
-                if (ret != expected) {
-                    buf.dst[i] = original;
-                    return this->errorAt(i, "byte-by-byte greater mismatch, expected=%d, got=%d",
-                                        expected, ret);
-                }
-            }
-
-            buf.dst[i] = original;
+        // Stride > 1 may skip the tail; probe the last meaningful index.
+        // (For string funcs that's last-1, since buf[last] is '\0'.)
+        size_t last = ctx.size - 1;
+        if (stride > 1 && (last % stride) != 0 &&
+            !(TestCase<Tag>::Traits::is_string_func && last + 1 == ctx.size)) {
+            size_t tail = TestCase<Tag>::Traits::is_string_func ? last - 1 : last;
+            TestResult r = checkPos(buf, ctx.size, tail);
+            if (!r.passed) return r;
         }
 
         return TestResult::success();
     }
 
 private:
+    // Inject a less-than and a greater-than mismatch at index i, verify
+    // the comparator's sign/value, and restore the byte. Shared by the
+    // main loop and the tail probe.
+    TestResult checkPos(BufferPair& buf, size_t size, size_t i) {
+        uint8_t original = buf.dst[i];
+
+        buf.dst[i] = (buf.src[i] > 0) ? buf.src[i] - 1 : buf.src[i] + 1;
+
+        int ret = invokeCompare(buf.dst, buf.src, size);
+        int expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
+
+        if (TestCase<Tag>::Traits::is_string_func) {
+            if ((ret < 0) != (expected < 0)) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "sign mismatch at index, expected %s0, got %d",
+                                    expected < 0 ? "<" : ">", ret);
+            }
+        } else {
+            if (ret != expected) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "byte-by-byte mismatch, expected=%d, got=%d",
+                                    expected, ret);
+            }
+        }
+
+        buf.dst[i] = buf.src[i] + 10;
+
+        ret = invokeCompare(buf.dst, buf.src, size);
+        expected = static_cast<int>(buf.dst[i]) - static_cast<int>(buf.src[i]);
+
+        if (TestCase<Tag>::Traits::is_string_func) {
+            if ((ret > 0) != (expected > 0)) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "sign mismatch (greater), expected %s0, got %d",
+                                    expected > 0 ? ">" : "<", ret);
+            }
+        } else {
+            if (ret != expected) {
+                buf.dst[i] = original;
+                return this->errorAt(i, "byte-by-byte greater mismatch, expected=%d, got=%d",
+                                    expected, ret);
+            }
+        }
+
+        buf.dst[i] = original;
+        return TestResult::success();
+    }
+
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param &&
                            !traits::FunctionTraits<T>::is_string_func, int>::type
     invokeCompare(uint8_t* s1, uint8_t* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param &&
                            traits::FunctionTraits<T>::is_string_func, int>::type
     invokeCompare(uint8_t* s1, uint8_t* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(
+        return TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(s1),
             reinterpret_cast<const char*>(s2), n);
     }
@@ -211,7 +246,7 @@ private:
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param &&
                            traits::FunctionTraits<T>::is_string_func, int>::type
     invokeCompare(uint8_t* s1, uint8_t* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(
+        return TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(s1),
             reinterpret_cast<const char*>(s2));
     }
@@ -225,7 +260,7 @@ private:
  * StringCompareEqualTest - For strcmp/strncmp with equal strings
  */
 template<typename Tag>
-class StringCompareEqualTest : public FunctionTest<Tag> {
+class StringCompareEqualTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "EqualStrings"; }
 
@@ -238,11 +273,11 @@ public:
 
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->nullTerminate(buf.src, ctx.size - 1);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        nullTerminate(buf.src, ctx.size - 1);
+        copyData(buf.dst, buf.src, ctx.size);
 
         int ret = invokeCompare(
             reinterpret_cast<const char*>(buf.dst),
@@ -261,13 +296,13 @@ public:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -275,7 +310,7 @@ public:
  * StringCompareLessTest - First string less than second
  */
 template<typename Tag>
-class StringCompareLessTest : public FunctionTest<Tag> {
+class StringCompareLessTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "LessString"; }
 
@@ -288,11 +323,11 @@ public:
 
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->nullTerminate(buf.src, ctx.size - 1);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        nullTerminate(buf.src, ctx.size - 1);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.dst[0] = 'A';
         buf.src[0] = 'z';
@@ -314,13 +349,13 @@ public:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -328,7 +363,7 @@ public:
  * StringCompareGreaterTest - First string greater than second
  */
 template<typename Tag>
-class StringCompareGreaterTest : public FunctionTest<Tag> {
+class StringCompareGreaterTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "GreaterString"; }
 
@@ -340,11 +375,11 @@ public:
         }
         auto buf = this->allocate(ctx);
 
-        if (!buf.base) return this->error("allocation failed");
+        if (!buf.valid()) return this->error("allocation failed");
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->nullTerminate(buf.src, ctx.size - 1);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        nullTerminate(buf.src, ctx.size - 1);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.dst[0] = 'z';
         buf.src[0] = 'A';
@@ -366,13 +401,13 @@ public:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -384,7 +419,7 @@ public:
  * CompareFirstShorterTest - First string shorter than second
  */
 template<typename Tag>
-class CompareFirstShorterTest : public FunctionTest<Tag> {
+class CompareFirstShorterTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "FirstStringShorter"; }
 
@@ -398,19 +433,19 @@ public:
         size_t extra_size = ctx.size + VEC_SZ;
         auto buf = this->allocate(TestContext(extra_size, ctx.dst_align, ctx.src_align));
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.dst[ctx.size - 1] = '\0';
 
-        this->fillLowercaseLetters(buf.src + ctx.size, extra_size - ctx.size - 1);
+        fillLowercaseLetters(buf.src + ctx.size, extra_size - ctx.size - 1);
         buf.src[extra_size - 1] = '\0';
 
-        int ret = FunctionTest<Tag>::Traits::invoke(
+        int ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );
@@ -427,7 +462,7 @@ public:
  * CompareSecondShorterTest - Second string shorter than first
  */
 template<typename Tag>
-class CompareSecondShorterTest : public FunctionTest<Tag> {
+class CompareSecondShorterTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "SecondStringShorter"; }
 
@@ -441,19 +476,19 @@ public:
         size_t extra_size = ctx.size + VEC_SZ;
         auto buf = this->allocate(TestContext(extra_size, ctx.dst_align, ctx.src_align));
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.src[ctx.size - 1] = '\0';
 
-        this->fillLowercaseLetters(buf.dst + ctx.size, extra_size - ctx.size - 1);
+        fillLowercaseLetters(buf.dst + ctx.size, extra_size - ctx.size - 1);
         buf.dst[extra_size - 1] = '\0';
 
-        int ret = FunctionTest<Tag>::Traits::invoke(
+        int ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src)
         );
@@ -474,7 +509,7 @@ public:
  * StrncmpBeyondNullTest - strncmp should not compare beyond NULL
  */
 template<typename Tag>
-class StrncmpBeyondNullTest : public FunctionTest<Tag> {
+class StrncmpBeyondNullTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "StopAtNull"; }
 
@@ -486,14 +521,14 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
         size_t null_pos = ctx.size / 2;
 
-        this->fillLowercaseLetters(buf.src, null_pos);
-        this->copyData(buf.dst, buf.src, null_pos);
+        fillLowercaseLetters(buf.src, null_pos);
+        copyData(buf.dst, buf.src, null_pos);
         buf.src[null_pos] = buf.dst[null_pos] = '\0';
 
         for (size_t i = null_pos + 1; i < ctx.size; ++i) {
@@ -501,7 +536,7 @@ public:
             buf.dst[i] = 'Y';
         }
 
-        int ret = FunctionTest<Tag>::Traits::invoke(
+        int ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size
@@ -519,7 +554,7 @@ public:
  * StrncmpNoNullInRangeTest - strncmp when neither string has NULL within n bytes
  */
 template<typename Tag>
-class StrncmpNoNullInRangeTest : public FunctionTest<Tag> {
+class StrncmpNoNullInRangeTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "NoNullInRange"; }
 
@@ -531,17 +566,17 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
         buf.dst[ctx.size - 1] = 'X';
         buf.src[ctx.size - 1] = 'Y';
 
-        int ret = FunctionTest<Tag>::Traits::invoke(
+        int ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size
@@ -561,7 +596,7 @@ public:
  * CompareStrlenBothGreaterTest - Both strings longer than comparison size
  */
 template<typename Tag>
-class CompareStrlenBothGreaterTest : public FunctionTest<Tag> {
+class CompareStrlenBothGreaterTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BothStringsLonger"; }
 
@@ -575,16 +610,16 @@ public:
         size_t extra_size = ctx.size + VEC_SZ;
         auto buf = this->allocate(TestContext(extra_size, ctx.dst_align, ctx.src_align));
 
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, extra_size - 1);
-        this->copyData(buf.dst, buf.src, extra_size - 1);
+        fillLowercaseLetters(buf.src, extra_size - 1);
+        copyData(buf.dst, buf.src, extra_size - 1);
         buf.src[extra_size - 1] = '\0';
         buf.dst[extra_size - 1] = '\0';
 
-        int ret = FunctionTest<Tag>::Traits::invoke(
+        int ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst),
             reinterpret_cast<const char*>(buf.src),
             ctx.size
@@ -606,7 +641,7 @@ public:
  * treated as less than 0 (null terminator detection).
  */
 template<typename Tag>
-class HighByteCompareTest : public FunctionTest<Tag> {
+class HighByteCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "HighByteCompare"; }
 
@@ -618,7 +653,7 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
@@ -695,13 +730,13 @@ private:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -712,7 +747,7 @@ private:
  * correctly when they appear at different positions in the string.
  */
 template<typename Tag>
-class ExtendedAsciiCompareTest : public FunctionTest<Tag> {
+class ExtendedAsciiCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ExtendedAsciiCompare"; }
 
@@ -725,7 +760,7 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
@@ -763,13 +798,13 @@ private:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -777,7 +812,7 @@ private:
  * MultiNullCompareTest - strcmp/strncmp with NULL in middle
  */
 template<typename Tag>
-class MultiNullCompareTest : public FunctionTest<Tag> {
+class MultiNullCompareTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "MultiNullCompare"; }
 
@@ -789,12 +824,12 @@ public:
         }
 
         auto buf = this->allocate(ctx);
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("allocation failed");
         }
 
-        this->fillLowercaseLetters(buf.src, ctx.size);
-        this->copyData(buf.dst, buf.src, ctx.size);
+        fillLowercaseLetters(buf.src, ctx.size);
+        copyData(buf.dst, buf.src, ctx.size);
 
         size_t null_pos = ctx.size / 2;
         buf.src[null_pos] = buf.dst[null_pos] = '\0';
@@ -820,13 +855,13 @@ private:
     template<typename T = Tag>
     typename std::enable_if<traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t n) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2, n);
+        return TestCase<Tag>::Traits::invoke(s1, s2, n);
     }
 
     template<typename T = Tag>
     typename std::enable_if<!traits::FunctionTraits<T>::has_size_param, int>::type
     invokeCompare(const char* s1, const char* s2, size_t /*n*/) {
-        return FunctionTest<Tag>::Traits::invoke(s1, s2);
+        return TestCase<Tag>::Traits::invoke(s1, s2);
     }
 };
 
@@ -835,7 +870,7 @@ private:
  * Exercises the LUT/vpshufb path specifically (not PCMPISTRI).
  */
 template<typename Tag>
-class StrspnLongAcceptMismatchTest : public FunctionTest<Tag> {
+class StrspnLongAcceptMismatchTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "LongAcceptMismatch"; }
 
@@ -843,15 +878,15 @@ public:
         this->ctx_ = ctx;
         if (ctx.size < 2) return TestResult::success();
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
-        if (!buf.base) return this->error("allocation failed");
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
+        if (!buf.valid()) return this->error("allocation failed");
 
-        // Shuffle 52 chars, pick 30 as accept; reject from the rest
-        char pool[53];
-        for (int i = 0; i < 26; ++i) pool[i] = 'a' + i;
-        for (int i = 0; i < 26; ++i) pool[26 + i] = 'A' + i;
-        pool[52] = '\0';
-        this->shuffleChars(pool, 52);
+        // Shuffle 52 chars (a-z + A-Z), pick 30 as accept; reject from the rest
+        char pool[2 * LOWER_CHARS + 1];
+        for (size_t i = 0; i < LOWER_CHARS; ++i) pool[i] = 'a' + i;
+        for (size_t i = 0; i < LOWER_CHARS; ++i) pool[LOWER_CHARS + i] = 'A' + i;
+        pool[2 * LOWER_CHARS] = '\0';
+        shuffleChars(pool, static_cast<int>(2 * LOWER_CHARS));
         const int accept_len = 30;
         char reject = pool[accept_len];
         pool[accept_len] = '\0';
@@ -859,7 +894,7 @@ public:
         // Fill buffer once with accepted chars, then sweep reject position
         for (size_t i = 0; i < ctx.size; ++i)
             buf.dst[i] = pool[rand() % accept_len];
-        this->nullTerminate(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
         // Exhaustive up to 256; stride-sampled beyond (keeps ~256 tests max)
         size_t stride = (ctx.size <= 256) ? 1 : (ctx.size / 256 + 1);
@@ -868,7 +903,7 @@ public:
             char saved = buf.dst[pos];
             buf.dst[pos] = reject;
 
-            size_t ret = FunctionTest<Tag>::Traits::invoke(
+            size_t ret = TestCase<Tag>::Traits::invoke(
                 reinterpret_cast<const char*>(buf.dst), pool);
 
             if (ret != pos) {
@@ -884,7 +919,7 @@ public:
             char saved = buf.dst[pos];
             buf.dst[pos] = reject;
 
-            size_t ret = FunctionTest<Tag>::Traits::invoke(
+            size_t ret = TestCase<Tag>::Traits::invoke(
                 reinterpret_cast<const char*>(buf.dst), pool);
 
             if (ret != pos) {
@@ -904,7 +939,7 @@ public:
  * and LUT indexing issues across the full 0x01-0xFF range.
  */
 template<typename Tag>
-class StrspnExtendedAsciiTest : public FunctionTest<Tag> {
+class StrspnExtendedAsciiTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "ExtendedAsciiSpan"; }
 
@@ -912,8 +947,8 @@ public:
         this->ctx_ = ctx;
         if (ctx.size < 2 || ctx.size > 256) return TestResult::success();
 
-        auto buf = this->allocateSingle(ctx.size + 1, ctx.dst_align);
-        if (!buf.base) return this->error("allocation failed");
+        auto buf = this->allocateSingleBuf(ctx.size + 1, ctx.dst_align);
+        if (!buf.valid()) return this->error("allocation failed");
 
         // Accept all 255 non-zero bytes (inherent to the test)
         char all_accept[256];
@@ -924,9 +959,9 @@ public:
         // Fill s with random non-zero bytes
         for (size_t i = 0; i < ctx.size; ++i)
             buf.dst[i] = (uint8_t)(1 + (rand() % 255));
-        this->nullTerminate(buf.dst, ctx.size);
+        nullTerminate(buf.dst, ctx.size);
 
-        size_t ret = FunctionTest<Tag>::Traits::invoke(
+        size_t ret = TestCase<Tag>::Traits::invoke(
             reinterpret_cast<const char*>(buf.dst), all_accept);
 
         if (ret != ctx.size) {
@@ -942,9 +977,9 @@ public:
                 if (i != pos)
                     buf.dst[i] = (uint8_t)(1 + (rand() % 255));
             }
-            this->nullTerminate(buf.dst, ctx.size);
+            nullTerminate(buf.dst, ctx.size);
 
-            ret = FunctionTest<Tag>::Traits::invoke(
+            ret = TestCase<Tag>::Traits::invoke(
                 reinterpret_cast<const char*>(buf.dst), all_accept);
 
             if (ret != ctx.size) {

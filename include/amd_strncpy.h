@@ -39,6 +39,7 @@ HIDDEN_SYMBOL extern char * __strncpy_zen2(char *,const char *, size_t);
 HIDDEN_SYMBOL extern char * __strncpy_zen3(char *,const char *, size_t);
 HIDDEN_SYMBOL extern char * __strncpy_zen4(char *,const char *, size_t);
 HIDDEN_SYMBOL extern char * __strncpy_zen5(char *,const char *, size_t);
+HIDDEN_SYMBOL extern char * __strncpy_zen6(char *, const char *, size_t);
 
 //System solution which takes in system config and  threshold values.
 HIDDEN_SYMBOL extern char * __strncpy_system(char *,const char *, size_t);

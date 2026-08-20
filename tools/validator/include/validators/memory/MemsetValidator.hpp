@@ -26,7 +26,7 @@
 #ifndef LIBMEM_VALIDATOR_MEMSET_VALIDATOR_HPP
 #define LIBMEM_VALIDATOR_MEMSET_VALIDATOR_HPP
 
-#include "core/FunctionValidator.hpp"
+#include "core/TestRunner.hpp"
 #include "traits/MemoryTraits.hpp"
 #include "tests/common/ZeroSizeTests.hpp"
 #include "tests/common/PageCrossTests.hpp"
@@ -38,7 +38,7 @@ namespace validator {
 /**
  * MemsetValidator - Validates memset implementation
  */
-class MemsetValidator : public FunctionValidator<traits::MemsetTag, MemsetValidator> {
+class MemsetValidator : public TestRunner<traits::MemsetTag, MemsetValidator> {
 public:
     void registerTests() {
         tests()
@@ -49,7 +49,7 @@ public:
     }
 };
 
-REGISTER_VALIDATOR(MemsetValidator)
+REGISTER_VALIDATOR(MemsetValidator, "memset")
 
 } // namespace validator
 } // namespace libmem

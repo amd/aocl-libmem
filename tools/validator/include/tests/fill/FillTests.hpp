@@ -31,7 +31,7 @@
  * @brief Fill tests for memset
  */
 
-#include "core/FunctionTest.hpp"
+#include "core/TestCase.hpp"
 
 namespace libmem {
 namespace validator {
@@ -46,15 +46,15 @@ namespace validator {
  * For: memset
  */
 template<typename Tag>
-class BasicFillTest : public FunctionTest<Tag> {
+class BasicFillTest : public TestCase<Tag> {
 public:
     const char* name() const override { return "BasicFill"; }
     
     TestResult execute(const TestContext& ctx) override {
         this->ctx_ = ctx;
-        auto buf = this->allocateSingle(ctx.size, ctx.dst_align);
+        auto buf = this->allocateSingleBuf(ctx.size, ctx.dst_align);
         
-        if (!buf.base) {
+        if (!buf.valid()) {
             return this->error("failed to allocate buffer");
         }
         
