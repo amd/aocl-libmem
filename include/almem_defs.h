@@ -46,6 +46,7 @@
 #define PAGE_SAFE_VECS(ptr)      (PAGE_SAFE_VECS_BYTES(ptr) >> 6)
 
 #define PREFETCH_NTA(addr) _mm_prefetch((const char *) (addr), _MM_HINT_NTA)
+#define PREFETCH_T0(addr)  _mm_prefetch((const char *) (addr), _MM_HINT_T0)
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)

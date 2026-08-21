@@ -1,4 +1,4 @@
-/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -29,105 +29,236 @@
 #include "almem_defs.h"
 #include <zen_cpu_info.h>
 
+#ifdef STRNLEN_ZEN4
+static inline size_t __attribute__((flatten)) _strnlen_zen4(const char *str, size_t maxlen)
+#else
 HIDDEN_SYMBOL size_t __attribute__((flatten)) __strlen_zen4(const char *str)
+#endif
 {
-    size_t offset;
-    __m512i z0, z1, z2, z3, z4, z5, z6;
-    uint64_t ret, ret1, ret2;
-
-    // Initialize a zeroed AVX-512 register for comparisons
-    z0 = _mm512_setzero_epi32();
-
-    // Calculate the offset to align the source pointer to 64 bytes
-    offset = (uintptr_t)str & (ZMM_SZ - 1);
-
-    // Handle cases where start of string is close to the end of a memory page
-    if (unlikely(((PAGE_SZ - ZMM_SZ) < ((PAGE_SZ -1) & (uintptr_t)str))))
+#ifdef STRNLEN_ZEN4
+    // Bytes below maxlen are always accessed: keep the window in-page.
+    if ((maxlen <= YMM_SZ) &&
+        ((((uintptr_t) str & (PAGE_SZ - 1)) + maxlen) <= PAGE_SZ))
     {
-        z6 = _mm512_set1_epi8(0xff);
-        //Mask to load only the valid bytes from the string without crossing the page boundary
-        __mmask64 mask = _bzhi_u64(UINT64_MAX, ZMM_SZ - offset);
-        z1 = _mm512_mask_loadu_epi8(z6, mask, str);
-        ret = _mm512_cmpeq_epu8_mask(z1, z0);
-        if (ret)
-            return _tzcnt_u64(ret);
+        __mmask32 mask = _bzhi_u32(UINT32_MAX, maxlen);
+        __m256i v = _mm256_maskz_loadu_epi8(mask, str);
+        __mmask32 m = _mm256_testn_epi8_mask(v, v);
+        return (size_t) _tzcnt_u32(m);
     }
-    // Load first 64 bytes from `str` into z1 and check for null terminator
+    if ((maxlen < ZMM_SZ) &&
+        (((uintptr_t) str & (PAGE_SZ - 1)) <= (PAGE_SZ - ZMM_SZ)))
+    {
+        __m256i v0 = _mm256_loadu_si256((__m256i *) str);
+        __mmask32 m0 = _mm256_testn_epi8_mask(v0, v0);
+        if (m0)
+        {
+            return (size_t) _tzcnt_u32(m0);
+        }
+        __mmask32 mask = _bzhi_u32(UINT32_MAX, maxlen - YMM_SZ);
+        __m256i v1 = _mm256_maskz_loadu_epi8(mask, str + YMM_SZ);
+        __mmask32 m1 = _mm256_testn_epi8_mask(v1, v1);
+        return m1 ? YMM_SZ + (size_t) _tzcnt_u32(m1) : maxlen;
+    }
+#endif
+
+    const char *p = str;
+    __m512i z1, z2, z3, z4, z5, z6;
+    __mmask64 match;
+
+    if (unlikely((PAGE_SZ - ZMM_SZ) < ((uintptr_t) p & (PAGE_SZ - 1))))
+    {
+        size_t safe = PAGE_SZ - ((uintptr_t) p & (PAGE_SZ - 1));
+#ifdef STRNLEN_ZEN4
+        safe = (safe > maxlen) ? maxlen : safe;
+#endif
+        __mmask64 smask = _bzhi_u64(UINT64_MAX, safe);
+        z1 = _mm512_mask_loadu_epi8(_mm512_set1_epi8((char) 0xff), smask, p);
+        match = _mm512_testn_epi8_mask(z1, z1);
+        if (match)
+        {
+            size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+            return (pos < maxlen) ? pos : maxlen;
+#else
+            return pos;
+#endif
+        }
+#ifdef STRNLEN_ZEN4
+        if (safe >= maxlen)
+        {
+            return maxlen;
+        }
+#endif
+        p += safe;
+    }
     else
     {
-        z1 = _mm512_loadu_si512(str);
-        ret = _mm512_cmpeq_epu8_mask(z1, z0);
-        if (ret)
-            return _tzcnt_u64(ret);
-    }
-
-    // Adjust the offset to align with cache line for the next load operation
-    offset = ZMM_SZ - offset;
-
-    // Process the next 7 vectors (7 * 64B) with offset adjustments
-    uint8_t cnt_vec = 7;
-    while(cnt_vec--)
-    {
-        z2 = _mm512_load_si512(str + offset);
-        ret = _mm512_cmpeq_epu8_mask(z2, z0);
-
-        if (ret)
-            return _tzcnt_u64(ret) + offset;
-
-        offset += ZMM_SZ;
-    }
-
-    // Ensure the next 4 * 64B vector loads in the main loop
-    // do not cross a page boundary to prevent potential page faults.
-    cnt_vec = 4 - ((((uintptr_t)str + offset) & (4 * ZMM_SZ - 1)) >> 6);
-    while (cnt_vec--)
-    {
-        z1 = _mm512_load_si512(str + offset);
-        ret = _mm512_cmpeq_epu8_mask(z1, z0);
-        if (ret)
-            return _tzcnt_u64(ret) + offset;
-        offset += ZMM_SZ;
-    }
-
-    // Main loop to process 4 vectors at a time for larger sizes(> 512B)
-    offset -= AVX512_VEC_4_SZ;
-    do
-    {
-        offset += AVX512_VEC_4_SZ;
-        // Load 4 vectors from `str`
-        z1 = _mm512_load_si512(str + offset);
-        z2 = _mm512_load_si512(str + offset + ZMM_SZ);
-        z3 = _mm512_load_si512(str + offset + 2 * ZMM_SZ);
-        z4 = _mm512_load_si512(str + offset + 3 * ZMM_SZ);
-
-        // Find the minimum of the loaded vectors to check for null terminator
-        z5 = _mm512_min_epu8(z1,z2);
-        z6 = _mm512_min_epu8(z3,z4);
-
-        // Compare the minimums to find the null terminator
-        ret = _mm512_cmpeq_epu8_mask(_mm512_min_epu8(z5, z6), z0);
-    } while (!ret);
-
-    // Check for null terminator in the first two vectors (z1, z2)
-    if ((ret1 = _mm512_cmpeq_epu8_mask(z5, z0)))
-    {
-        if ((ret2 = _mm512_cmpeq_epu8_mask(z1, z0)))
+        z1 = _mm512_loadu_si512(p);
+        match = _mm512_testn_epi8_mask(z1, z1);
+        if (match)
         {
-            return (_tzcnt_u64(ret2) + offset);
+            size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+            return (pos < maxlen) ? pos : maxlen;
+#else
+            return pos;
+#endif
         }
-        return (_tzcnt_u64(ret1) + ZMM_SZ + offset);
+#ifdef STRNLEN_ZEN4
+        if (maxlen <= ZMM_SZ)
+        {
+            return maxlen;
+        }
+#endif
+        p = (const char *) ((uintptr_t) p & ~(uintptr_t) (ZMM_SZ - 1)) + ZMM_SZ;
     }
-    // Check for null terminator in the last two vectors (z3, z4)
+
+    /* Second aligned probe (33-128 B). */
+    z1 = _mm512_load_si512(p);
+    match = _mm512_testn_epi8_mask(z1, z1);
+    if (match)
+    {
+        size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+        return (pos < maxlen) ? pos : maxlen;
+#else
+        return pos;
+#endif
+    }
+    p += ZMM_SZ;
+#ifdef STRNLEN_ZEN4
+    if ((size_t)(p - str) >= maxlen)
+    {
+        return maxlen;
+    }
+#endif
+
+    /* Third and fourth aligned probes (129-256 B). */
+    z1 = _mm512_load_si512(p);
+    match = _mm512_testn_epi8_mask(z1, z1);
+    if (match)
+    {
+        size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+        return (pos < maxlen) ? pos : maxlen;
+#else
+        return pos;
+#endif
+    }
+    p += ZMM_SZ;
+#ifdef STRNLEN_ZEN4
+    if ((size_t)(p - str) >= maxlen)
+    {
+        return maxlen;
+    }
+#endif
+
+    z1 = _mm512_load_si512(p);
+    match = _mm512_testn_epi8_mask(z1, z1);
+    if (match)
+    {
+        size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+        return (pos < maxlen) ? pos : maxlen;
+#else
+        return pos;
+#endif
+    }
+    p += ZMM_SZ;
+#ifdef STRNLEN_ZEN4
+    if ((size_t)(p - str) >= maxlen)
+    {
+        return maxlen;
+    }
+#endif
+
+    while ((uintptr_t) p & (4 * ZMM_SZ - 1))
+    {
+        z1 = _mm512_load_si512(p);
+        match = _mm512_testn_epi8_mask(z1, z1);
+        if (match)
+        {
+            size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+#ifdef STRNLEN_ZEN4
+            return (pos < maxlen) ? pos : maxlen;
+#else
+            return pos;
+#endif
+        }
+        p += ZMM_SZ;
+#ifdef STRNLEN_ZEN4
+        if ((size_t)(p - str) >= maxlen)
+        {
+            return maxlen;
+        }
+#endif
+    }
+
+#ifdef STRNLEN_ZEN4
+    size_t remaining = maxlen - (size_t)(p - str);
+#endif
+
+    while (1)
+    {
+#ifdef STRNLEN_ZEN4
+        if (unlikely(remaining < AVX512_VEC_4_SZ))
+        {
+            while (remaining > 0)
+            {
+                z1 = _mm512_load_si512(p);
+                match = _mm512_testn_epi8_mask(z1, z1);
+                if (match)
+                {
+                    size_t pos = (size_t) (p - str) + _tzcnt_u64(match);
+                    return (pos < maxlen) ? pos : maxlen;
+                }
+                p += ZMM_SZ;
+                remaining = (remaining > ZMM_SZ) ? remaining - ZMM_SZ : 0;
+            }
+            return maxlen;
+        }
+#endif
+        PREFETCH_T0(p + 12 * CACHELINE_SZ);
+        z1 = _mm512_load_si512(p);
+        z2 = _mm512_load_si512(p + ZMM_SZ);
+        z3 = _mm512_load_si512(p + 2 * ZMM_SZ);
+        z4 = _mm512_load_si512(p + 3 * ZMM_SZ);
+        z5 = _mm512_min_epu8(z1, z2);
+        z6 = _mm512_min_epu8(z3, z4);
+        z5 = _mm512_min_epu8(z5, z6);
+        match = _mm512_testn_epi8_mask(z5, z5);
+        if (unlikely(match))
+            break;
+        p += AVX512_VEC_4_SZ;
+#ifdef STRNLEN_ZEN4
+        remaining -= AVX512_VEC_4_SZ;
+#endif
+    }
+
+    __mmask64 m0 = _mm512_testn_epi8_mask(z1, z1);
+    __mmask64 m1 = _mm512_testn_epi8_mask(z2, z2);
+    __mmask64 m2 = _mm512_testn_epi8_mask(z3, z3);
+    size_t pos;
+    if (m0)
+        pos = (size_t) (p - str) + _tzcnt_u64(m0);
+    else if (m1)
+        pos = (size_t) (p - str) + ZMM_SZ + _tzcnt_u64(m1);
+    else if (m2)
+        pos = (size_t) (p - str) + 2 * ZMM_SZ + _tzcnt_u64(m2);
     else
     {
-        if ((ret2 =_mm512_cmpeq_epu8_mask(z3, z0)))
-        {
-            return (_tzcnt_u64(ret2) + 2 * ZMM_SZ + offset);
-        }
-        return  (_tzcnt_u64(ret) + 3 * ZMM_SZ + offset);
+        __mmask64 m3 = _mm512_testn_epi8_mask(z4, z4);
+        pos = (size_t) (p - str) + 3 * ZMM_SZ + _tzcnt_u64(m3);
     }
+#ifdef STRNLEN_ZEN4
+    return (pos < maxlen) ? pos : maxlen;
+#else
+    return pos;
+#endif
 }
+
+#ifndef STRNLEN_ZEN4
 #ifndef ALMEM_DYN_DISPATCH
-size_t strlen(const char *) __attribute__((weak,
-                        alias("__strlen_zen4")));
+size_t strlen(const char *) __attribute__((weak, alias("__strlen_zen4")));
+#endif
 #endif
