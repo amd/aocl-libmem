@@ -61,6 +61,20 @@ foreach(uarch ${uarch_list})
     endif ()
     set_target_properties(lib_zen${uarch} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
 
+    # Zen4 strcpy and strncpy only. The global -falign-labels=64 near doubles
+    # these two in pure NOP padding (strcpy 987 -> 1774 bytes) for no change in
+    # timing, so this is for size alone. Loops stay at 64; the smaller Zen5
+    # value cost 64B and 128B more than it gained.
+    if (${uarch} EQUAL 4 AND CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set(_ZEN4_ALIGN_FUNCS strcpy strncpy)
+        set(_ZEN4_FUNC_ALIGN "-falign-functions=64;-falign-labels=1;-falign-jumps=1;-falign-loops=64;-fno-reorder-blocks-and-partition")
+
+        foreach(_func ${_ZEN4_ALIGN_FUNCS})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_ZEN4_FUNC_ALIGN}")
+        endforeach()
+    endif ()
+
     # Per-function code-layout tuning (function/label/jump/loop alignment and
     # disabled LTO/block-reordering) validated only on Zen5. Guard it to Zen5 so
     # other architectures keep the compiler/global defaults.

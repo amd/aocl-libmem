@@ -45,6 +45,9 @@
 #define PAGE_SAFE_VECS_BYTES(ptr) (PAGE_SZ - ((uintptr_t)(ptr) & (PAGE_SZ - 1)))
 #define PAGE_SAFE_VECS(ptr)      (PAGE_SAFE_VECS_BYTES(ptr) >> 6)
 
+#define TAIL_MASK64(m)  ((__mmask64)((uint64_t)(m) ^ ((uint64_t)(m) - 1)))
+#define TAIL_MASK32(m)  ((__mmask32)((uint32_t)(m) ^ ((uint32_t)(m) - 1)))
+
 #define PREFETCH_NTA(addr) _mm_prefetch((const char *) (addr), _MM_HINT_NTA)
 #define PREFETCH_T0(addr)  _mm_prefetch((const char *) (addr), _MM_HINT_T0)
 
