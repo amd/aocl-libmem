@@ -80,9 +80,9 @@ foreach(uarch ${uarch_list})
     endif ()
 
     # Per-function code-layout tuning (function/label/jump/loop alignment and
-    # disabled LTO/block-reordering) validated only on Zen5. Guard it to Zen5 so
-    # other architectures keep the compiler/global defaults.
-    if (${uarch} EQUAL 5)
+    # disabled LTO/block-reordering) applied to Zen5 and later. Guard it to
+    # Zen5+ so earlier architectures keep the compiler/global defaults.
+    if (${uarch} GREATER_EQUAL 5)
         if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
             set(_LARGE_FUNC_ALIGN "-falign-functions=4096;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")
             set(_SMALL_FUNC_ALIGN "-falign-functions=64;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")

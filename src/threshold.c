@@ -50,7 +50,7 @@ static inline void compute_sys_thresholds(cpu_info *zen_info)
         // Zen5 rep-movsb crossover is later than earlier arches
         zen_info->zen_thresholds.repmov_start_threshold = REPMOV_START_THRESHOLD_ZEN5;
         zen_info->zen_thresholds.repmov_stop_threshold = zen_info->zen_cache_info.l2_per_core;
-        zen_info->zen_thresholds.repstore_start_threshold = zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.repstore_start_threshold = REPSTORE_START_THRESHOLD_ZEN5;
         zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_THRESHOLD_ZEN5(zen_info->zen_cache_info.l3_per_ccx);
     } else // Zen4 and earlier (NT stores start from 3/4 of L3 cache)
     {

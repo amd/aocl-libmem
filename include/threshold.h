@@ -64,6 +64,7 @@
  *   Pre-Zen5  - rep-movsb never wins, so no start threshold is defined.
  */
 #define REPMOV_START_THRESHOLD_ZEN5 (16 * 1024)
+#define REPSTORE_START_THRESHOLD_ZEN5 (64 * 1024)
 
 #define REPMOV_START_THRESHOLD_ZEN6 (16 * 1024)
 #define REPMOV_STOP_THRESHOLD_ZEN6 (256ULL * 1024 * 1024)
