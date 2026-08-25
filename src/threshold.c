@@ -37,33 +37,40 @@ HIDDEN_SYMBOL uint64_t __nt_stop_threshold __attribute__((aligned(64))) = 0xffff
 static inline void compute_sys_thresholds(cpu_info *zen_info)
 {
     get_cache_info(zen_info);
-    if (zen_info->zen_cpu_features.erms == ENABLED)
+
+    if (zen_info->zen_cpu_features.avx512_fp16 == ENABLED) // Zen6
     {
-        // Zen5/Zen6 rep-movsb crossover is later than earlier arches
-        if (zen_info->zen_cpu_features.movdiri == ENABLED || zen_info->zen_cpu_features.avx512_fp16 == ENABLED)
-            zen_info->zen_thresholds.repmov_start_threshold = REPMOV_START_THRESHOLD_ZEN5;
-        else
-            zen_info->zen_thresholds.repmov_start_threshold = REPMOV_START_THRESHOLD_DEFAULT;
+        zen_info->zen_thresholds.repmov_start_threshold = REPMOV_START_THRESHOLD_ZEN6;
+        zen_info->zen_thresholds.repmov_stop_threshold = REPMOV_STOP_THRESHOLD_ZEN6;
+        zen_info->zen_thresholds.repstore_start_threshold = REPSTORE_START_THRESHOLD_ZEN6;
+        /* rep-movsb stays ahead out to 256MB, so NT only opens once it ends */
+        zen_info->zen_thresholds.nt_start_threshold = zen_info->zen_thresholds.repmov_stop_threshold;
+    } else if (zen_info->zen_cpu_features.movdiri == ENABLED) // Zen5
+    {
+        // Zen5 rep-movsb crossover is later than earlier arches
+        zen_info->zen_thresholds.repmov_start_threshold = REPMOV_START_THRESHOLD_ZEN5;
         zen_info->zen_thresholds.repmov_stop_threshold = zen_info->zen_cache_info.l2_per_core;
         zen_info->zen_thresholds.repstore_start_threshold = zen_info->zen_cache_info.l2_per_core;
-        zen_info->zen_thresholds.repstore_stop_threshold = zen_info->zen_cache_info.l3_per_ccx;
-    } else
+        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_THRESHOLD_ZEN5(zen_info->zen_cache_info.l3_per_ccx);
+    } else // Zen4 and earlier (NT stores start from 3/4 of L3 cache)
     {
-        // ERMS unavailable: set repmov_start past any valid size so the runtime
-        // threshold (not a compile-time guard) keeps the rep-movsb tier off.
-        zen_info->zen_thresholds.repmov_start_threshold = REPMOV_DISABLED;
-        zen_info->zen_thresholds.repmov_stop_threshold = 0;
+        /* rep-movsb does not beat the vector loops at any size here */
+        zen_info->zen_thresholds.repmov_start_threshold = UINT64_MAX;
+        zen_info->zen_thresholds.repmov_stop_threshold = zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.repstore_start_threshold = zen_info->zen_cache_info.l2_per_core;
+        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_MOV_THRESHOLD(zen_info->zen_cache_info.l3_per_ccx);
+    }
+    zen_info->zen_thresholds.repstore_stop_threshold = zen_info->zen_cache_info.l3_per_ccx;
+    zen_info->zen_thresholds.nt_stop_threshold = -1;
+
+    if (zen_info->zen_cpu_features.erms != ENABLED)
+    {
+        // ERMS unavailable: collapse the rep-movsb window onto nt_start
+        zen_info->zen_thresholds.repmov_start_threshold = zen_info->zen_thresholds.nt_start_threshold;
+        zen_info->zen_thresholds.repmov_stop_threshold = zen_info->zen_thresholds.nt_start_threshold;
         zen_info->zen_thresholds.repstore_start_threshold = 0;
         zen_info->zen_thresholds.repstore_stop_threshold = 0;
     }
-    // Zen5/Zen6
-    if (zen_info->zen_cpu_features.movdiri == ENABLED ||
-        zen_info->zen_cpu_features.avx512_fp16 == ENABLED) // TODO: Check for zen6 thresholds 
-        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_THRESHOLD_ZEN5(zen_info->zen_cache_info.l3_per_ccx);
-    // Zen4 and earlier (NT stores start from 3/4 of L3 cache)
-    else
-        zen_info->zen_thresholds.nt_start_threshold = COMPUTE_NT_MOV_THRESHOLD(zen_info->zen_cache_info.l3_per_ccx);
-    zen_info->zen_thresholds.nt_stop_threshold = -1;
 }
 
 static inline void configure_thresholds()

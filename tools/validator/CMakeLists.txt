@@ -369,9 +369,17 @@ if(CPU STREQUAL "AMD")
         COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "l3_cache")
     math(EXPR L3_CACHE "${L3_CACHE_MB} * 1024 * 1024")
 
-    try_run(NT_TH_MB COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
-        COMPILE_DEFINITIONS -I${CPU_INCLUDE} ARGS "nt_threshold")
-    math(EXPR NT_TH "${NT_TH_MB} * 1024 * 1024")
+    # Reported on stdout in bytes rather than through the exit status, which
+    # cannot carry the 256MB Zen6 value. try_run only populates the output
+    # variable when it actually runs, so clear the cached result first.
+    unset(NT_TH_RESULT CACHE)
+    try_run(NT_TH_RESULT COMPILERESULT "${CMAKE_BINARY_DIR}/temp" SOURCES ${CPU_DETECT_SRC_FILES}
+        COMPILE_DEFINITIONS -I${CPU_INCLUDE} RUN_OUTPUT_VARIABLE NT_TH_OUTPUT ARGS "nt_threshold")
+    string(STRIP "${NT_TH_OUTPUT}" NT_TH)
+
+    if(NOT NT_TH MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "Could not determine NT threshold, got '${NT_TH}'")
+    endif()
 
     if(ISA STREQUAL "AVX512")
         set(TH_RANGE 512)

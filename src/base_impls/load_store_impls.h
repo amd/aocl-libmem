@@ -505,6 +505,39 @@
         }                                                                                                              \
     } while (0)
 
+/*
+ * Scalar head-tail copy for sizes 0..16.
+ * For 1..3 it copies the head, middle and tail bytes.
+ */
+#define SCALAR_HEAD_MID_TAIL(dst, src, size)                                                                           \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (likely((size) >= QWORD_SZ))                                                                                \
+        {                                                                                                              \
+            uint64_t _h = *(const uint64_t *) (src);                                                                   \
+            uint64_t _t = *(const uint64_t *) ((const char *) (src) + (size) - QWORD_SZ);                              \
+            *(uint64_t *) (dst) = _h;                                                                                  \
+            *(uint64_t *) ((char *) (dst) + (size) - QWORD_SZ) = _t;                                                   \
+        }                                                                                                              \
+        else if (likely((size) >= DWORD_SZ))                                                                           \
+        {                                                                                                              \
+            uint32_t _h = *(const uint32_t *) (src);                                                                   \
+            uint32_t _t = *(const uint32_t *) ((const char *) (src) + (size) - DWORD_SZ);                              \
+            *(uint32_t *) (dst) = _h;                                                                                  \
+            *(uint32_t *) ((char *) (dst) + (size) - DWORD_SZ) = _t;                                                   \
+        }                                                                                                              \
+        else if ((size) != 0)                                                                                          \
+        {                                                                                                              \
+            char _h = ((const char *) (src))[0];                                                                       \
+            char _m = ((const char *) (src))[(size) >> 1];                                                             \
+            char _t = ((const char *) (src))[(size) -1];                                                               \
+                                                                                                                       \
+            ((char *) (dst))[0] = _h;                                                                                  \
+            ((char *) (dst))[(size) >> 1] = _m;                                                                        \
+            ((char *) (dst))[(size) -1] = _t;                                                                          \
+        }                                                                                                              \
+    } while (0)
+
 #define SSE_HEAD_TAIL(dst, src, size)                                                                                  \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -512,6 +545,27 @@
         __m128i _t = _mm_loadu_si128((const __m128i *) ((const char *) (src) + (size) - XMM_SZ));                      \
         _mm_storeu_si128((__m128i *) (dst), _h);                                                                       \
         _mm_storeu_si128((__m128i *) ((char *) (dst) + (size) - XMM_SZ), _t);                                          \
+    } while (0)
+
+/*
+ *  Four xmm pairs.
+ */
+#define SSE_4X_HEAD_TAIL(dst, src, size)                                                                               \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        size_t _o1 = ((size) -XMM_SZ < XMM_SZ) ? ((size) -XMM_SZ) : XMM_SZ;                                            \
+        size_t _o2 = ((size) >= 2 * XMM_SZ) ? ((size) -2 * XMM_SZ) : 0;                                                 \
+        size_t _o3 = (size) -XMM_SZ;                                                                                   \
+                                                                                                                       \
+        __m128i _a = _mm_loadu_si128((const __m128i *) (src));                                                         \
+        __m128i _b = _mm_loadu_si128((const __m128i *) ((const char *) (src) + _o1));                                  \
+        __m128i _c = _mm_loadu_si128((const __m128i *) ((const char *) (src) + _o2));                                  \
+        __m128i _e = _mm_loadu_si128((const __m128i *) ((const char *) (src) + _o3));                                  \
+                                                                                                                       \
+        _mm_storeu_si128((__m128i *) (dst), _a);                                                                       \
+        _mm_storeu_si128((__m128i *) ((char *) (dst) + _o1), _b);                                                      \
+        _mm_storeu_si128((__m128i *) ((char *) (dst) + _o2), _c);                                                      \
+        _mm_storeu_si128((__m128i *) ((char *) (dst) + _o3), _e);                                                      \
     } while (0)
 
 #define AVX_HEAD_TAIL(dst, src, size)                                                                                  \
