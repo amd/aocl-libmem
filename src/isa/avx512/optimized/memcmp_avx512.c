@@ -40,27 +40,27 @@ extern cpu_info zen_info;
 
 static inline int __attribute__((flatten)) _memcmp_avx512(const void *mem1, const void *mem2, size_t size)
 {
-    if (unlikely(size == 0 || mem1 == mem2))
-        return 0;
-
-    if (size <= YMM_SZ)
-    {
-        /* 0-32B: single masked YMM compare. */
-        __mmask32 k = _bzhi_u32((uint32_t) -1, (uint32_t) size);
-        __m256i y0 = _mm256_maskz_loadu_epi8(k, mem1);
-        __m256i y1 = _mm256_maskz_loadu_epi8(k, mem2);
-        __mmask32 m = _mm256_cmpneq_epu8_mask(y0, y1);
-        if (m == 0)
-            return 0;
-        uint32_t pos = _tzcnt_u32(m);
-        return ((*(uint8_t *) (mem1 + pos)) - (*(uint8_t *) (mem2 + pos)));
-    }
-
     __m512i z0, z1;
     size_t offset, index = 0;
     __mmask64 mask;
 
-    if (likely(size <= ZMM_SZ))
+    if (unlikely(size > YMM_SZ))
+        goto gt_ymm;
+
+    __mmask32 k = _bzhi_u32((uint32_t) -1, (uint32_t) size);
+    __m256i y0 = _mm256_maskz_loadu_epi8(k, mem1);
+    __m256i y1 = _mm256_maskz_loadu_epi8(k, mem2);
+    __mmask32 m = _mm256_cmpneq_epu8_mask(y0, y1);
+    if (m == 0)
+        return 0;
+    uint32_t pos = _tzcnt_u32(m);
+    return ((*(uint8_t *) (mem1 + pos)) - (*(uint8_t *) (mem2 + pos)));
+
+gt_ymm:
+    if (unlikely(mem1 == mem2))
+        return 0;
+
+    if (size <= ZMM_SZ)
     {
         /* 33-64B: two overlapping YMM compares*/
         __m256i y0 = _mm256_loadu_si256((const __m256i *) mem1);
