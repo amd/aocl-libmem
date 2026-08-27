@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2025-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -173,24 +173,11 @@ static inline void dispatcher_init()
     cpu_variant_idx cpu_var_idx = SYSTEM;
     cpu_var_idx  = libmem_cpu_resolver();
 
-    _memcpy_variant     = (amd_memcpy_fn) libmem_cpu_impls[MEMCPY][cpu_var_idx];
-    _mempcpy_variant    = (amd_mempcpy_fn) libmem_cpu_impls[MEMPCPY][cpu_var_idx];
-    _memmove_variant    = (amd_memmove_fn) libmem_cpu_impls[MEMMOVE][cpu_var_idx];
-    _memset_variant     = (amd_memset_fn) libmem_cpu_impls[MEMSET][cpu_var_idx];
-    _memcmp_variant     = (amd_memcmp_fn) libmem_cpu_impls[MEMCMP][cpu_var_idx];
-    _memchr_variant     = (amd_memchr_fn) libmem_cpu_impls[MEMCHR][cpu_var_idx];
-    _strcpy_variant     = (amd_strcpy_fn) libmem_cpu_impls[STRCPY][cpu_var_idx];
-    _strncpy_variant    = (amd_strncpy_fn) libmem_cpu_impls[STRNCPY][cpu_var_idx];
-    _strcmp_variant     = (amd_strcmp_fn) libmem_cpu_impls[STRCMP][cpu_var_idx];
-    _strncmp_variant    = (amd_strncmp_fn) libmem_cpu_impls[STRNCMP][cpu_var_idx];
-    _strcat_variant     = (amd_strcat_fn) libmem_cpu_impls[STRCAT][cpu_var_idx];
-    _strncat_variant    = (amd_strncat_fn) libmem_cpu_impls[STRNCAT][cpu_var_idx];
-    _strstr_variant     = (amd_strstr_fn) libmem_cpu_impls[STRSTR][cpu_var_idx];
-    _strlen_variant     = (amd_strlen_fn) libmem_cpu_impls[STRLEN][cpu_var_idx];
-    _strnlen_variant    = (amd_strnlen_fn) libmem_cpu_impls[STRNLEN][cpu_var_idx];
-    _strchr_variant     = (amd_strchr_fn) libmem_cpu_impls[STRCHR][cpu_var_idx];
-    _strrchr_variant    = (amd_strrchr_fn) libmem_cpu_impls[STRRCHR][cpu_var_idx];
-    _strspn_variant     = (amd_strspn_fn) libmem_cpu_impls[STRSPN][cpu_var_idx];
+    /* _<fn>_variant = libmem_cpu_impls[<FN>][cpu_var_idx]; for every selected
+     * function (see ALMEM_FOREACH_CPU_FUNC in libmem.h). */
+#define _ALMEM_SET_CPU_VARIANT(fn, FN) _##fn##_variant = (amd_##fn##_fn) libmem_cpu_impls[FN][cpu_var_idx];
+
+    ALMEM_FOREACH_CPU_FUNC(_ALMEM_SET_CPU_VARIANT)
 
 #ifdef ALMEM_TUNABLES
     tunable_variant_idx tun_var_idx = libmem_tunable_resolver();
@@ -198,11 +185,9 @@ static inline void dispatcher_init()
     //pick the tunable implementation only with valid tunable config
     if (tun_var_idx != UNKNOWN)
     {
-        _memcpy_variant     = (amd_memcpy_fn) libmem_cpu_impls[MEMCPY][cpu_var_idx];
-        _mempcpy_variant    = (amd_mempcpy_fn) libmem_cpu_impls[MEMPCPY][cpu_var_idx];
-        _memmove_variant    = (amd_memmove_fn) libmem_cpu_impls[MEMMOVE][cpu_var_idx];
-        _memset_variant     = (amd_memset_fn) libmem_cpu_impls[MEMSET][cpu_var_idx];
-        _memcmp_variant     = (amd_memcmp_fn) libmem_cpu_impls[MEMCMP][cpu_var_idx];
+        ALMEM_FOREACH_TUN_FUNC(_ALMEM_SET_CPU_VARIANT)
     }
 #endif //end of tunables
+
+#undef _ALMEM_SET_CPU_VARIANT
 }

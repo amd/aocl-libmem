@@ -27,7 +27,9 @@ set(UARCH_SUPP_FUNCS ${DYN_DISP_SUPP_FUNCS})
 add_library(uarch_objlib INTERFACE)
 
 if (ALMEM_DYN_DISPATCH)
-    set(uarch_list RANGE ${MIN_ZEN_VER} ${MAX_ZEN_VER})
+    # Honour ALMEM_DISPATCH_ARCH (resolved to ALMEM_DISPATCH_ARCH_LIST in the
+    # parent scope); defaults to the full MIN..MAX Zen range.
+    set(uarch_list ${ALMEM_DISPATCH_ARCH_LIST})
 else ()
     # Use specific architecture version (either user-specified via ALMEM_ARCH or auto-detected)
     set(uarch_list ${ARCH_VER})
@@ -96,16 +98,22 @@ foreach(uarch ${uarch_list})
         set(_SMALL_FUNCS memcmp memchr mempcpy strcpy strlen strnlen strncpy strcmp strncmp strchr strcat strncat strspn strstr)
 
         foreach(_func ${_LARGE_FUNCS})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN}")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN}")
+            endif()
         endforeach()
         foreach(_func ${_LARGE_FUNCS_NOLTO})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN};-fno-lto")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN};-fno-lto")
+            endif()
         endforeach()
         foreach(_func ${_SMALL_FUNCS})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_SMALL_FUNC_ALIGN}")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_SMALL_FUNC_ALIGN}")
+            endif()
         endforeach()
     endif ()
 

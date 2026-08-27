@@ -84,6 +84,14 @@ option(ALMEM_TUNABLES "Enable Tunable Options" OFF)
 option(ALMEM_GCOV "Enable Code Coverage" OFF)
 
 set(ALMEM_ARCH "" CACHE STRING "Force specific Zen architecture (zen1, zen2, zen3, zen4, zen5, zen6). Leave empty for auto-detection.")
+
+# Subset of functions to build/intercept, e.g. "memcpy,memset". Empty = all supported functions.
+set(ALMEM_FUNCTIONS "" CACHE STRING "Comma/space separated list of functions to build (e.g. memcpy,memset). Empty builds all supported functions.")
+
+# Subset of Zen architectures to build under dynamic dispatch, e.g. "zen4,zen5".
+# Only honoured when ALMEM_DYN_DISPATCH is enabled; empty builds every supported Zen arch.
+set(ALMEM_DISPATCH_ARCH "" CACHE STRING "Comma/space separated list of Zen archs to build for dynamic dispatch (e.g. zen4,zen5). Empty builds all.")
+
 # Define supported Zen version range
 set(MIN_ZEN_VER 1)
 set(MAX_ZEN_VER 6)
@@ -127,6 +135,11 @@ if (ALMEM_ARCH)
     endif ()
 endif()
 
+# ALMEM_DISPATCH_ARCH is validated/parsed later, after the option precedence
+# rules below settle the effective value of ALMEM_DYN_DISPATCH (it is only
+# meaningful for dynamic-dispatch builds).
+set(ALMEM_DISPATCH_ARCH_VERS "")
+
 #reset ISA for invalid options
 if (NOT (${ALMEM_ISA} STREQUAL "avx2" OR ${ALMEM_ISA} STREQUAL "avx512"))
     if (${ALMEM_ISA} MATCHES "avx")
@@ -164,6 +177,41 @@ endif()
 
 if (ALMEM_TUNABLES)
     set(ALMEM_DYN_DISPATCH ON)
+endif()
+
+# Validate and process ALMEM_DISPATCH_ARCH option (now that ALMEM_DYN_DISPATCH
+# is settled). Produces ALMEM_DISPATCH_ARCH_VERS: an ordered, de-duplicated list
+# of Zen version numbers (e.g. "4;5") that dynamic dispatch should build. Empty
+# means "build every supported Zen arch" (the default). Only honoured for
+# dynamic-dispatch builds; ignored (with a warning) otherwise.
+if (ALMEM_DISPATCH_ARCH AND NOT ALMEM_DYN_DISPATCH)
+    message(WARNING "ALMEM_DISPATCH_ARCH is only honoured when ALMEM_DYN_DISPATCH is enabled; ignoring '${ALMEM_DISPATCH_ARCH}'.")
+elseif (ALMEM_DISPATCH_ARCH)
+    string(TOLOWER "${ALMEM_DISPATCH_ARCH}" _disp_arch_lower)
+    string(REPLACE "," ";" _disp_arch_list "${_disp_arch_lower}")
+    string(REPLACE " " ";" _disp_arch_list "${_disp_arch_list}")
+    foreach(_entry ${_disp_arch_list})
+        if (_entry STREQUAL "")
+            continue()
+        endif()
+        if (_entry MATCHES "^zen([0-9]+)$")
+            set(_ver "${CMAKE_MATCH_1}")
+            if (_ver GREATER_EQUAL ${MIN_ZEN_VER} AND _ver LESS_EQUAL ${MAX_ZEN_VER})
+                list(APPEND ALMEM_DISPATCH_ARCH_VERS ${_ver})
+            else()
+                message(WARNING "ALMEM_DISPATCH_ARCH: '${_entry}' out of supported range zen${MIN_ZEN_VER}..zen${MAX_ZEN_VER}; ignoring.")
+            endif()
+        else()
+            message(WARNING "ALMEM_DISPATCH_ARCH: invalid entry '${_entry}' (expected e.g. zen4); ignoring.")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES ALMEM_DISPATCH_ARCH_VERS)
+    list(SORT ALMEM_DISPATCH_ARCH_VERS)
+    if (NOT ALMEM_DISPATCH_ARCH_VERS)
+        message(WARNING "ALMEM_DISPATCH_ARCH: no valid archs parsed from '${ALMEM_DISPATCH_ARCH}'; building all supported Zen archs.")
+    else()
+        message(STATUS "ALMEM_DISPATCH_ARCH: restricting dynamic dispatch to Zen [${ALMEM_DISPATCH_ARCH_VERS}]")
+    endif()
 endif()
 
 # let the build system know the source directory
