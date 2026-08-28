@@ -56,9 +56,9 @@ struct InvokeAdapter {
      *                for compare, buffer for search/length).
      * @param src     Secondary buffer (source for copy/concat, second operand for
      *                compare, needle for strstr, accept for strspn). May be nullptr
-     *                for single-buffer operations (set, memchr, strchr, strlen, strnlen).
+     *                for single-buffer operations (set, memchr, strchr, strrchr, strlen, strnlen).
      * @param size    Size/length parameter. Ignored by unbounded string functions.
-     * @param int_arg Value argument for memset (fill byte) and memchr/strchr
+     * @param int_arg Value argument for memset (fill byte) and memchr/strchr/strrchr
      *                (search character). Ignored by other functions.
      */
     static ReturnType invoke(uint8_t* dst, const uint8_t* src,

@@ -219,7 +219,8 @@ private:
 
         if (std::is_same<Tag, StrstrTag>::value) {
             common::fillStrstrPos(buf.src, buf.dst, size, pos);
-        } else if (std::is_same<Tag, StrchrTag>::value) {
+        } else if (std::is_same<Tag, StrchrTag>::value ||
+                   std::is_same<Tag, StrrchrTag>::value) {
             common::fillSearchCharPos(buf.src, size, 'X', true, pos);
         } else if (std::is_same<Tag, MemchrTag>::value) {
             common::fillSearchCharPos(buf.src, size, 'X', false, pos);

@@ -170,7 +170,7 @@ inline void fillStrstrPos(uint8_t* haystack, uint8_t* needle, size_t size,
 }
 
 /**
- * Fill buffer for strchr/memchr benchmarking with target at the given position.
+ * Fill buffer for strchr/strrchr/memchr benchmarking with target at the given position.
  * Background is lowercase a-z (cannot contain the uppercase target 'X').
  *
  * @param buf       Buffer to fill
