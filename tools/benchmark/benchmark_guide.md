@@ -100,7 +100,7 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                           fbm          Fleetbench
                           dcperf       DCPerf (WDL and AI benchmarks)
 
-      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,g,b,d] -bestperf
+      <common_options>  = -x<core_id> -r [start] [end] -t "<iterator_value>" <LibMem_function> -perf [p,g,b,d] -bestperf -sys
 
                         -x <core_id> : Enter the CPU core on which you want to run the benchmark.
                         -r [start] [end] : start and end size range in Bytes.(Not applicable for Fleetbench)
@@ -119,6 +119,9 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
                                           d - Defalut report Glibc vs. LibMem
                         -bestperf        : Runs benchmark 3 times and selects the best throughput
                                           for each size from those iterations (specific to GBM and TBM)
+                        -sys             : Log system_info details (cpu freq, cache, bios, etc.).
+                                           Can also be used on its own: ./bench.py -sys
+                                           Optional -x CORE_ID (default 8) for per-core freq/prefetch.
 
       <GBM_specific_option> = -m <mode> -a <align> -s <cache_spill> -p <page_option> -o <overlap> -preload <y,n> -i<repetitions> -w<warm_up time>
 
@@ -164,6 +167,16 @@ build_dir/test/out/<libmem_function>/<time-stamp-counter>/
     Benchmark Help option
     $ ./bench.py -h
     $ ./bench.py dcperf -h
+
+    Collecting system info
+    $ ./bench.py -sys
+    Logs system info to out/SystemInfo/<timestamp>/system_info_<timestamp>.txt
+
+    $ ./bench.py -sys -x 16
+    Same, using core 16 for frequency and prefetch details
+
+    $ sudo ./bench.py -sys
+    Same, including BIOS and prefetch MSR details that need root
 
     Running Google Benchmark
     $ ./bench.py gbm memcpy -r 8B 16B -m c -t "1" -x 16

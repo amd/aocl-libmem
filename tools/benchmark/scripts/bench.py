@@ -25,6 +25,7 @@
  POSSIBILITY OF SUCH DAMAGE.
 """
 
+import contextlib
 import subprocess
 import os
 from os import environ as env
@@ -360,6 +361,62 @@ def run_command(cmd):
         output = f"Command '{e.cmd}' returned non-zero exit status {e.returncode}\n{e.output.decode()}"
     return output
 
+SYSTEM_INFO_FLAGS = ('-sys', '--system_info')
+BENCHMARK_NAMES = ('gbm', 'tbm', 'fbm', 'dcperf')
+
+@contextlib.contextmanager
+def as_invoking_user():
+    """Run the block as the user behind sudo, so created paths are not root owned."""
+    uid = os.environ.get('SUDO_UID')
+    gid = os.environ.get('SUDO_GID')
+    if os.geteuid() != 0 or uid is None or gid is None:
+        yield
+        return
+
+    orig_euid = os.geteuid()
+    orig_egid = os.getegid()
+    try:
+        os.setegid(int(gid))
+        os.seteuid(int(uid))
+        yield
+    finally:
+        os.seteuid(orig_euid)
+        os.setegid(orig_egid)
+
+def system_info_only_requested(argv):
+    """True when -sys is given without any benchmark subcommand."""
+    return (any(arg in SYSTEM_INFO_FLAGS for arg in argv)
+            and not any(arg in BENCHMARK_NAMES for arg in argv))
+
+def run_system_info_only(argv):
+    """Collect system info only."""
+    available_cores = subprocess.check_output("lscpu | grep 'CPU(s):' | \
+         awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
+
+    parser = argparse.ArgumentParser(prog='bench',
+                                     description='Log system_info details like cpu freq, cache info, '
+                                                 'bios info, etc.')
+    parser.add_argument("-sys", "--system_info", action="store_true",
+                            help="Logs system_info details.")
+    parser.add_argument("-x", "--core_id",
+                            help=f"CPU core_id whose frequency and prefetch details are logged.\n"
+                                 f"Default choice of core-id is 8.\n"
+                                 f"Valid range is [0..{int(available_cores) - 1}]",
+                            type=int, default=8)
+    args = parser.parse_args(argv)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_dir = os.path.join('out', 'SystemInfo', timestamp)
+    output_file = os.path.join(result_dir, f"system_info_{timestamp}.txt")
+
+    # Never create these as root: a root owned out/ would break later non-sudo runs.
+    with as_invoking_user():
+        os.makedirs(result_dir, exist_ok=True)
+        open(output_file, "w").close()
+
+    collect_system_info(output_file, args.core_id)
+    return output_file
+
 def collect_system_info(output_file, core_id):
     sudo_flag = check_root_access()
 
@@ -474,7 +531,8 @@ def main():
          awk '{print $2}' | head -n 1", shell=True).decode('utf-8').strip()
 
     parser = argparse.ArgumentParser(prog='bench', description='This program will perform the benchmarking: TBM, GBM, FBM, DCPerf',
-                                     epilog="See './bench.py [gbm, tbm, fbm, dcperf] -h' for more information on a specific benchmark")
+                                     epilog="See './bench.py [gbm, tbm, fbm, dcperf] -h' for more information on a specific benchmark.\n"
+                                            "Run './bench.py -sys [-x CORE_ID]' to only log system info.")
 
     # Create subparsers for different benchmarking tools
     subparsers = parser.add_subparsers(dest='benchmark', required=True)
@@ -511,7 +569,8 @@ def main():
                             type=int, default=8)
 
     common_options_parser.add_argument("-sys", "--system_info",
-                            help="Logs system_info details like cpu freq, cache info, bios info, etc.",
+                            help="Logs system_info details like cpu freq, cache info, bios info, etc.\n"
+                                 "Can also be used on its own ('./bench.py -sys') to log system info.",
                             action="store_true")
 
     common_options_parser.add_argument("-bestperf", "--best_performance",
@@ -763,6 +822,11 @@ def main():
     return vars(args)
 
 if __name__ == "__main__":
+    # numactl is only needed for benchmark runs, so dispatch -sys before checking it.
+    if system_info_only_requested(sys.argv[1:]):
+        print(f"System info logged to: {run_system_info_only(sys.argv[1:])}")
+        sys.exit(0)
+
     try:
         # Check if numactl is installed
         subprocess.check_output(['which', 'numactl'])

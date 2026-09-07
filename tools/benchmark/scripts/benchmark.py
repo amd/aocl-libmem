@@ -32,6 +32,7 @@
    ./benchmark.py gbm strcmp -m c
    ./benchmark.py gbm memmove -o f
    ./benchmark.py gbm strlen -r 8 4096
+   ./benchmark.py -sys [-x CORE_ID]
 """
 
 import sys
@@ -39,7 +40,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'external'))
 
-from bench import main as bench_main
+from bench import main as bench_main, system_info_only_requested, run_system_info_only
 
 
 class NewBench:
@@ -72,6 +73,11 @@ class NewBench:
 
 
 if __name__ == "__main__":
+    # numactl is only needed for benchmark runs, so dispatch -sys before checking it.
+    if system_info_only_requested(sys.argv[1:]):
+        print(f"System info logged to: {run_system_info_only(sys.argv[1:])}")
+        sys.exit(0)
+
     import subprocess
     try:
         subprocess.check_output(['which', 'numactl'])
