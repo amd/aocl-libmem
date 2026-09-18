@@ -26,54 +26,64 @@
 #include "zen_cpu_info.h"
 #include "libmem_impls.h"
 
-/* A Zen arch is only a resolvable target when its object was built
- * (ALMEM_ZEN<N>_ENABLED, driven by ALMEM_DISPATCH_ARCH). Archs that were not
- * built expand to nothing so the resolver falls through to the next-oldest
- * enabled arch, and ultimately to the system implementation. */
-
-/* __builtin_cpu_is("znver6") is only recognized starting with GCC 16.
- * On older compilers fall back to the manual CPUID-based resolver below,
- * which detects Zen6 via the AVX512_FP16 feature bit. */
-#if defined(__GNUC__) && (__GNUC__ >= 16)
+/* Only ALMEM_ZEN<N>_ENABLED archs are tested (from ALMEM_DISPATCH_ARCH); others
+ * are omitted so we fall through to the newest built kernel. Features are
+ * cumulative (Zen6 has FP16 and MOVDIRI), so a zen5-only build still matches
+ * Zen6 hardware. Builtin names: znver5 needs GCC 14, znver6 GCC 16. Older GCC
+ * in this range uses the feature builtin alone. Clang and other compilers use
+ * the CPUID resolver. */
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 13)
 
 #ifdef ALMEM_ZEN6_ENABLED
+#if defined(__GNUC__) && (__GNUC__ >= 16)
 #define _ALMEM_RESOLVE_zen6(func)                                                                                      \
-    if (__builtin_cpu_is("znver6"))                                                                                    \
+    if (__builtin_cpu_is("znver6") || __builtin_cpu_supports("avx512fp16"))                                            \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6);
+#else
+#define _ALMEM_RESOLVE_zen6(func)                                                                                      \
+    if (__builtin_cpu_supports("avx512fp16"))                                                                          \
+        return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen6);
+#endif
 #else
 #define _ALMEM_RESOLVE_zen6(func)
 #endif
 #ifdef ALMEM_ZEN5_ENABLED
+#if defined(__GNUC__) && (__GNUC__ >= 14)
 #define _ALMEM_RESOLVE_zen5(func)                                                                                      \
-    if (__builtin_cpu_is("znver5"))                                                                                    \
+    if (__builtin_cpu_is("znver5") || __builtin_cpu_supports("movdiri"))                                               \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5);
+#else
+#define _ALMEM_RESOLVE_zen5(func)                                                                                      \
+    if (__builtin_cpu_supports("movdiri"))                                                                             \
+        return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen5);
+#endif
 #else
 #define _ALMEM_RESOLVE_zen5(func)
 #endif
 #ifdef ALMEM_ZEN4_ENABLED
 #define _ALMEM_RESOLVE_zen4(func)                                                                                      \
-    if (__builtin_cpu_is("znver4"))                                                                                    \
+    if (__builtin_cpu_is("znver4") || __builtin_cpu_supports("avx512f"))                                                \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen4);
 #else
 #define _ALMEM_RESOLVE_zen4(func)
 #endif
 #ifdef ALMEM_ZEN3_ENABLED
 #define _ALMEM_RESOLVE_zen3(func)                                                                                      \
-    if (__builtin_cpu_is("znver3"))                                                                                    \
+    if (__builtin_cpu_is("znver3") || __builtin_cpu_supports("vpclmulqdq"))                                             \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen3);
 #else
 #define _ALMEM_RESOLVE_zen3(func)
 #endif
 #ifdef ALMEM_ZEN2_ENABLED
 #define _ALMEM_RESOLVE_zen2(func)                                                                                      \
-    if (__builtin_cpu_is("znver2"))                                                                                    \
+    if (__builtin_cpu_is("znver2") || __builtin_cpu_supports("rdpid"))                                                  \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen2);
 #else
 #define _ALMEM_RESOLVE_zen2(func)
 #endif
 #ifdef ALMEM_ZEN1_ENABLED
 #define _ALMEM_RESOLVE_zen1(func)                                                                                      \
-    if (__builtin_cpu_is("znver1"))                                                                                    \
+    if (__builtin_cpu_is("znver1") || __builtin_cpu_supports("rdseed"))                                                 \
         return __ALMEM_CONCAT(__ALMEM_PREFIX(func), zen1);
 #else
 #define _ALMEM_RESOLVE_zen1(func)
@@ -83,6 +93,8 @@
     __builtin_cpu_init();                                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \
+        if (__builtin_cpu_is("amd") == false)                                                                          \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system);                                                       \
         _ALMEM_RESOLVE_zen6(func) _ALMEM_RESOLVE_zen5(func) _ALMEM_RESOLVE_zen4(func) _ALMEM_RESOLVE_zen3(func)        \
             _ALMEM_RESOLVE_zen2(func) _ALMEM_RESOLVE_zen1(func) return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system);   \
     } while (0)
@@ -135,11 +147,13 @@
         uint32_t ebx = 0;                                                                                              \
         uint32_t ecx = 0;                                                                                              \
         uint32_t edx = 0;                                                                                              \
+        __builtin_cpu_init();                                                                                          \
+        if (__builtin_cpu_is("amd") == false)                                                                          \
+            return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system);                                                       \
         asm volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "0"(eax), "2"(ecx));                       \
         if (ebx & AVX512_MASK)                                                                                         \
         {                                                                                                              \
-            _ALMEM_CPUID_zen6(func) _ALMEM_CPUID_zen5(func)                                                            \
-                _ALMEM_CPUID_zen4(func) return __ALMEM_CONCAT(__ALMEM_PREFIX(func), system);                           \
+            _ALMEM_CPUID_zen6(func) _ALMEM_CPUID_zen5(func) _ALMEM_CPUID_zen4(func)                                    \
         }                                                                                                              \
         if (ebx & AVX2_MASK)                                                                                           \
         {                                                                                                              \

@@ -171,7 +171,8 @@ static inline tunable_variant_idx libmem_tunable_resolver(void)
 static inline void dispatcher_init()
 {
     cpu_variant_idx cpu_var_idx = SYSTEM;
-    cpu_var_idx  = libmem_cpu_resolver();
+    if (is_amd() == true)
+        cpu_var_idx  = libmem_cpu_resolver();
 
     /* _<fn>_variant = libmem_cpu_impls[<FN>][cpu_var_idx]; for every selected
      * function (see ALMEM_FOREACH_CPU_FUNC in libmem.h). */
