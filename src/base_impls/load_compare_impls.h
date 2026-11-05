@@ -96,5 +96,30 @@
      }                                                                                            \
      offset += 4 * VEC_SZ(vec);                                                                   \
  }
- 
- #endif //HEADER
+
+/*
+ * 1x vector load-compare for memcmp.
+ * Loads one vector from mem1 and mem2 at the given offset, compares via
+ * cmpeq + movemask, and returns the byte difference at the first mismatch.
+ * Falls through if all bytes match.
+ *
+ * Expects caller to have: mem1, mem2 (const void *).
+ *
+ * vec:       vector family (AVX2 or AVX512)
+ * load_type: ALIGNED or UNALIGNED
+ * off:       byte offset into mem1/mem2
+ */
+#define VEC_1X_LOAD_COMPARE_MEMCMP(vec, load_type, off)                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        VEC_DECL(vec) _a = ALM_LOAD_INSTR(vec, load_type)((const void *) (mem1 + (off)));                              \
+        VEC_DECL(vec) _b = ALM_LOAD_INSTR(vec, load_type)((const void *) (mem2 + (off)));                              \
+        uint32_t _m = ~_mm256_movemask_epi8(_mm256_cmpeq_epi8(_a, _b));                                                \
+        if (_m)                                                                                                        \
+        {                                                                                                              \
+            size_t _pos = (off) + _tzcnt_u32(_m);                                                                      \
+            return ((*(uint8_t *) (mem1 + _pos)) - (*(uint8_t *) (mem2 + _pos)));                                      \
+        }                                                                                                              \
+    } while (0)
+
+#endif //HEADER

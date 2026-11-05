@@ -53,9 +53,19 @@ static inline void __load_store_ble_scalar_head_tail(void *dst, const void *src,
     SCALAR_HEAD_TAIL(dst, src, size);
 }
 
+static inline void __load_store_ble_scalar_head_mid_tail(void *dst, const void *src, size_t size)
+{
+    SCALAR_HEAD_MID_TAIL(dst, src, size);
+}
+
 static inline void __load_store_ble_sse_head_tail(void *dst, const void *src, size_t size)
 {
     SSE_HEAD_TAIL(dst, src, size);
+}
+
+static inline void __load_store_ble_4sse_head_tail(void *dst, const void *src, size_t size)
+{
+    SSE_4X_HEAD_TAIL(dst, src, size);
 }
 
 static inline void __load_store_ble_avx_head_tail(void *dst, const void *src, size_t size)
@@ -230,7 +240,6 @@ static inline void *__load_store_ble_zmm_vec_head_tail(void *store_addr,
     }
     return store_addr;
 }
-
 
 static inline void __load_store_zmm_vec(void *store_addr,
             const void *load_addr, size_t offset)

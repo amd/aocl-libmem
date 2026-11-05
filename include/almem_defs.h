@@ -45,7 +45,18 @@
 #define PAGE_SAFE_VECS_BYTES(ptr) (PAGE_SZ - ((uintptr_t)(ptr) & (PAGE_SZ - 1)))
 #define PAGE_SAFE_VECS(ptr)      (PAGE_SAFE_VECS_BYTES(ptr) >> 6)
 
+#define TAIL_MASK64(m)  ((__mmask64)((uint64_t)(m) ^ ((uint64_t)(m) - 1)))
+#define TAIL_MASK32(m)  ((__mmask32)((uint32_t)(m) ^ ((uint32_t)(m) - 1)))
+
 #define PREFETCH_NTA(addr) _mm_prefetch((const char *) (addr), _MM_HINT_NTA)
+#define PREFETCH_T0(addr)  _mm_prefetch((const char *) (addr), _MM_HINT_T0)
+
+/* __builtin_prefetch(addr, rw, locality): rw=1 requests a prefetch for write
+ * (prefetchw), locality=3 keeps the line in all cache levels. */
+#define ALM_PREFETCH_FOR_WRITE 1
+#define ALM_PREFETCH_HIGH_LOCALITY 3
+
+#define PREFETCH_WRITE(addr) __builtin_prefetch((const void *) (addr), ALM_PREFETCH_FOR_WRITE, ALM_PREFETCH_HIGH_LOCALITY)
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)

@@ -23,10 +23,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define MEMCPY_AVX512_ZEN6
 #include "../../isa/avx512/optimized/memcpy_impl_avx512.c"
 #include "logger.h"
 
-HIDDEN_SYMBOL void *__memcpy_zen6(void *dst, const void *src, size_t size)
+/*
+ * Zen6 memcpy
+ */
+HIDDEN_SYMBOL void *__attribute__((flatten)) __memcpy_zen6(void *__restrict dst, const void *__restrict src,
+                                                           size_t size)
 {
     LOG_INFO("\n");
     return _memcpy_avx512_erms(dst, src, size);

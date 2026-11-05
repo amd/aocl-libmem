@@ -57,6 +57,7 @@ static const BenchmarkEntry BENCHMARKS[] = {
     {"strstr",   &BenchmarkRunner<common::traits::StrstrTag>::run},
     {"strspn",   &BenchmarkRunner<common::traits::StrspnTag>::run},
     {"strchr",   &BenchmarkRunner<common::traits::StrchrTag>::run},
+    {"strrchr",  &BenchmarkRunner<common::traits::StrrchrTag>::run},
 };
 
 static constexpr size_t NUM_BENCHMARKS = sizeof(BENCHMARKS) / sizeof(BENCHMARKS[0]);

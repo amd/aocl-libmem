@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -23,24 +23,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef STRNLEN_AVX512
-#define STRNLEN_AVX512
-
-#include "logger.h"
-#include "../../isa/avx512/optimized/strlen_avx512.c"
-
-#ifdef STRNLEN_AVX512
-#undef STRNLEN_AVX512
-#endif
+#define STRNLEN_ZEN4
+#include "strlen_zen4.c"
+#undef STRNLEN_ZEN4
 
 HIDDEN_SYMBOL size_t __attribute__((flatten)) __strnlen_zen4(const char *str, size_t maxlen)
 {
     LOG_INFO("\n");
-    return _strnlen_avx512(str, maxlen);
+    return _strnlen_zen4(str, maxlen);
 }
 #ifndef ALMEM_DYN_DISPATCH
 size_t strnlen(const char *, size_t) __attribute__((weak,
                         alias("__strnlen_zen4")));
 #endif
-
-#endif // STRNLEN_AVX512

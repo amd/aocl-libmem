@@ -1270,7 +1270,7 @@ private:
 /**
  * Tests: strnlen
  * - String's '\0' is the last byte before the trap page
- * - Tests both clamped and unclamped cases at the guard boundary
+ * - Tests clamped, unclamped, and past-the-guard maxlen at the guard boundary
  */
 template<typename Tag>
 class PageOverrunBoundedLengthTest : public PageOverrunTestCase<Tag> {
@@ -1289,6 +1289,19 @@ protected:
         if (ret != expected)
             return this->error("unclamped length mismatch: expected=%zu got=%zu", expected, ret);
 
+        // A maxlen reaching past the '\0' spans the trap page: the terminator,
+        // not maxlen, has to bound the loads. SIZE_MAX also catches str+maxlen
+        // pointer overflow.
+        const size_t over_maxlens[] = {size + 1, size + 16, size + 64,
+                                       size + PAGE_SZ, SIZE_MAX};
+        for (size_t maxlen : over_maxlens) {
+            ret = TestCase<Tag>::Traits::invoke(
+                reinterpret_cast<const char*>(buf.src), maxlen);
+
+            if (ret != expected)
+                return this->error("maxlen past guard mismatch: expected=%zu got=%zu (maxlen=%zu)",
+                                   expected, ret, maxlen);
+        }
 
         if (size > 1) {
             size_t clamped_max = size / 2;
@@ -1391,3 +1404,4 @@ protected:
 } // namespace libmem
 
 #endif // LIBMEM_VALIDATOR_PAGE_CROSS_TESTS_HPP
+

@@ -24,10 +24,20 @@
 
 set(TUNABLE_SUPP_FUNCS memcpy mempcpy memmove memset memcmp)
 
+# Keep only the tunable-capable functions that were selected via ALMEM_FUNCTIONS.
+set(_tun_sel "")
+foreach(_f ${TUNABLE_SUPP_FUNCS})
+    if (_f IN_LIST ALMEM_SELECTED_FUNCS)
+        list(APPEND _tun_sel ${_f})
+    endif()
+endforeach()
+set(TUNABLE_SUPP_FUNCS ${_tun_sel})
+
 add_library(tunable_objlib INTERFACE)
 
 set(tune_list avx2 avx512 erms threshold)
 
+if (TUNABLE_SUPP_FUNCS)
 foreach(tunable ${tune_list})
     set(TUNABLE_SRC_FILES "")
     foreach(func ${TUNABLE_SUPP_FUNCS})
@@ -49,3 +59,4 @@ foreach(tunable ${tune_list})
     set_target_properties(lib_${tunable} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
     target_sources(tunable_objlib INTERFACE $<TARGET_OBJECTS:lib_${tunable}>)
 endforeach()
+endif()

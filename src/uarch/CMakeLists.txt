@@ -27,7 +27,9 @@ set(UARCH_SUPP_FUNCS ${DYN_DISP_SUPP_FUNCS})
 add_library(uarch_objlib INTERFACE)
 
 if (ALMEM_DYN_DISPATCH)
-    set(uarch_list RANGE ${MIN_ZEN_VER} ${MAX_ZEN_VER})
+    # Honour ALMEM_DISPATCH_ARCH (resolved to ALMEM_DISPATCH_ARCH_LIST in the
+    # parent scope); defaults to the full MIN..MAX Zen range.
+    set(uarch_list ${ALMEM_DISPATCH_ARCH_LIST})
 else ()
     # Use specific architecture version (either user-specified via ALMEM_ARCH or auto-detected)
     set(uarch_list ${ARCH_VER})
@@ -61,10 +63,28 @@ foreach(uarch ${uarch_list})
     endif ()
     set_target_properties(lib_zen${uarch} PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_OPTIONS "${_MODULE_CC_FLAGS}")
 
+    # Zen4 string functions.
+    if (${uarch} EQUAL 4 AND CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set(_ZEN4_FUNC_ALIGN "-falign-functions=64;-falign-labels=1;-falign-jumps=1;-falign-loops=64;-fno-reorder-blocks-and-partition")
+        set(_CMP_FUNC_ALIGN "-falign-labels=1;-falign-jumps=32;-fno-ivopts;-fno-crossjumping")
+
+        set(_ZEN4_ALIGN_FUNCS strcpy strncpy)
+        set(_CMP_FUNCS strcmp strncmp)
+
+        foreach(_func ${_ZEN4_ALIGN_FUNCS})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_ZEN4_FUNC_ALIGN}")
+        endforeach()
+        foreach(_func ${_CMP_FUNCS})
+            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                COMPILE_OPTIONS "${_CMP_FUNC_ALIGN}")
+        endforeach()
+    endif ()
+
     # Per-function code-layout tuning (function/label/jump/loop alignment and
-    # disabled LTO/block-reordering) validated only on Zen5. Guard it to Zen5 so
-    # other architectures keep the compiler/global defaults.
-    if (${uarch} EQUAL 5)
+    # disabled LTO/block-reordering) applied to Zen5 and later. Guard it to
+    # Zen5+ so earlier architectures keep the compiler/global defaults.
+    if (${uarch} GREATER_EQUAL 5)
         if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
             set(_LARGE_FUNC_ALIGN "-falign-functions=4096;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")
             set(_SMALL_FUNC_ALIGN "-falign-functions=64;-falign-labels=1;-falign-jumps=1;-falign-loops=1;-fno-reorder-blocks-and-partition")
@@ -78,16 +98,22 @@ foreach(uarch ${uarch_list})
         set(_SMALL_FUNCS memcmp memchr mempcpy strcpy strlen strnlen strncpy strcmp strncmp strchr strcat strncat strspn strstr)
 
         foreach(_func ${_LARGE_FUNCS})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN}")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN}")
+            endif()
         endforeach()
         foreach(_func ${_LARGE_FUNCS_NOLTO})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN};-fno-lto")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_LARGE_FUNC_ALIGN};-fno-lto")
+            endif()
         endforeach()
         foreach(_func ${_SMALL_FUNCS})
-            set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
-                COMPILE_OPTIONS "${_SMALL_FUNC_ALIGN}")
+            if (_func IN_LIST UARCH_SUPP_FUNCS)
+                set_source_files_properties(zen${uarch}/${_func}_zen${uarch}.c PROPERTIES
+                    COMPILE_OPTIONS "${_SMALL_FUNC_ALIGN}")
+            endif()
         endforeach()
     endif ()
 

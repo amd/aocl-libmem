@@ -155,15 +155,26 @@ int main(int argc, char **argv)
     if (strcmp(cmd, "nt_threshold") == 0)
     {
         uint64_t l3_bytes = get_cache_bytes(&cpuid_regs, 0x3);
+        uint64_t nt_bytes;
+
         cpuid_regs.eax = 0x7;
         cpuid_regs.ecx = 0;
         __get_cpu_id(&cpuid_regs);
-        /* Zen5/Zen6: NT moves/stores start from L3 */
-        if ((cpuid_regs.ecx & MOVDIRI_MASK) ||
-            (cpuid_regs.edx & AVX512_FP16_MASK))
-            return (int) (COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes) >> 20); // TODO: Check for zen6 thresholds 
+        /* Zen6: NT moves start where the rep-movsb window ends */
+        if (cpuid_regs.edx & AVX512_FP16_MASK)
+            nt_bytes = REPMOV_STOP_THRESHOLD_ZEN6;
+        /* Zen5: NT moves/stores start from L3 */
+        else if (cpuid_regs.ecx & MOVDIRI_MASK)
+            nt_bytes = COMPUTE_NT_THRESHOLD_ZEN5(l3_bytes);
         /* Pre-Zen5: NT moves start from 3/4 of L3 */
-        return (int) (COMPUTE_NT_MOV_THRESHOLD(l3_bytes) >> 20);
+        else
+            nt_bytes = COMPUTE_NT_MOV_THRESHOLD(l3_bytes);
+
+        /* Reported on stdout in bytes: this threshold reaches 256MB on Zen6,
+         * which the 8-bit process exit status used by the other commands
+         * would truncate to 0. */
+        printf("%lu\n", (unsigned long) nt_bytes);
+        return 0;
     }
 
     if (strcmp(cmd, "aligned_vec_cpy_threshold") == 0)

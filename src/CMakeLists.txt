@@ -143,8 +143,84 @@ set(SUPP_MEM_FUNCS memcpy mempcpy memmove memset memcmp memchr)
 # String Functions
 set(SUPP_STR_FUNCS strcpy strncpy strcmp strncmp strcat strncat strstr strlen strnlen strchr strrchr strspn)
 
+# ---- Function selection (ALMEM_FUNCTIONS) -------------------------------
+# When ALMEM_FUNCTIONS is set (e.g. "memcpy,memset") only those functions are
+# built and intercepted; every other function transparently falls back to the
+# system/libc implementation. Empty (default) builds all supported functions.
+set(ALMEM_ALL_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
+
+if (ALMEM_FUNCTIONS)
+    string(TOLOWER "${ALMEM_FUNCTIONS}" _req_funcs)
+    string(REPLACE "," ";" _req_funcs "${_req_funcs}")
+    string(REPLACE " " ";" _req_funcs "${_req_funcs}")
+    set(ALMEM_SELECTED_FUNCS "")
+    foreach(_f ${_req_funcs})
+        if (_f STREQUAL "")
+            continue()
+        endif()
+        if (_f IN_LIST ALMEM_ALL_SUPP_FUNCS)
+            list(APPEND ALMEM_SELECTED_FUNCS ${_f})
+        else()
+            message(WARNING "ALMEM_FUNCTIONS: unknown function '${_f}' ignored.")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES ALMEM_SELECTED_FUNCS)
+    if (NOT ALMEM_SELECTED_FUNCS)
+        message(WARNING "ALMEM_FUNCTIONS: no valid functions parsed from '${ALMEM_FUNCTIONS}'; building all supported functions.")
+        set(ALMEM_SELECTED_FUNCS ${ALMEM_ALL_SUPP_FUNCS})
+    endif()
+else()
+    set(ALMEM_SELECTED_FUNCS ${ALMEM_ALL_SUPP_FUNCS})
+endif()
+
+# Rebuild the per-category lists in canonical order, keeping only selected funcs.
+set(_mem_sel "")
+foreach(_f ${SUPP_MEM_FUNCS})
+    if (_f IN_LIST ALMEM_SELECTED_FUNCS)
+        list(APPEND _mem_sel ${_f})
+    endif()
+endforeach()
+set(SUPP_MEM_FUNCS ${_mem_sel})
+
+set(_str_sel "")
+foreach(_f ${SUPP_STR_FUNCS})
+    if (_f IN_LIST ALMEM_SELECTED_FUNCS)
+        list(APPEND _str_sel ${_f})
+    endif()
+endforeach()
+set(SUPP_STR_FUNCS ${_str_sel})
+
+# Emit a per-function enable macro (ALMEM_FUNC_MEMCPY, ...) consumed by the
+# dispatch tables, ifunc resolvers and interface aliases.
+foreach(_f ${ALMEM_SELECTED_FUNCS})
+    string(TOUPPER ${_f} _fU)
+    add_definitions(-DALMEM_FUNC_${_fU}=1)
+endforeach()
+
+message(STATUS "ALMEM: building functions: ${ALMEM_SELECTED_FUNCS}")
+
 # Dynamic Dispatching Supported Functions
 set(DYN_DISP_SUPP_FUNCS ${SUPP_MEM_FUNCS} ${SUPP_STR_FUNCS})
+
+# ---- Dispatch arch selection (ALMEM_DISPATCH_ARCH) ----------------------
+# Resolve the list of Zen version numbers to build for dynamic dispatch and
+# advertise them to the dispatch tables / ifunc resolver via ALMEM_ZEN<N>_ENABLED
+# so that unbuilt archs fall back to the system implementation.
+if (ALMEM_DISPATCH_ARCH_VERS)
+    set(ALMEM_DISPATCH_ARCH_LIST ${ALMEM_DISPATCH_ARCH_VERS})
+else()
+    set(ALMEM_DISPATCH_ARCH_LIST "")
+    foreach(_v RANGE ${MIN_ZEN_VER} ${MAX_ZEN_VER})
+        list(APPEND ALMEM_DISPATCH_ARCH_LIST ${_v})
+    endforeach()
+endif()
+
+if (ALMEM_DYN_DISPATCH)
+    foreach(_v ${ALMEM_DISPATCH_ARCH_LIST})
+        add_definitions(-DALMEM_ZEN${_v}_ENABLED)
+    endforeach()
+    message(STATUS "ALMEM: dynamic dispatch archs: Zen [${ALMEM_DISPATCH_ARCH_LIST}]")
+endif()
 
 if (ALMEM_LOGGING)
     list(APPEND SOURCE_FILES logger.c)

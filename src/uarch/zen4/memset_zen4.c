@@ -1,4 +1,4 @@
-/* Copyright (C) 2024-25 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright (C) 2024-26 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -92,7 +92,7 @@ HIDDEN_SYMBOL void * __attribute__((flatten)) __memset_zen4(void * mem, int  val
                 offset += 4 * ZMM_SZ;
             } while (offset < (size - 4 * ZMM_SZ));
         }
-        else
+        else if (size < __nt_start_threshold)
         // ZMM temporal stores for sizes above L2 cache per core
         {
             do
@@ -103,6 +103,22 @@ HIDDEN_SYMBOL void * __attribute__((flatten)) __memset_zen4(void * mem, int  val
                 _mm512_store_si512(mem + offset + 3 * ZMM_SZ, z0);
                 offset += 4 * ZMM_SZ;
             } while (offset < (size - 4 * ZMM_SZ));
+        }
+        else
+        /* Beyond 3/4 of L3 the fill cannot be reused from cache, so stream it.
+         * Temporal stores here would evict the entire hierarchy and leave it
+         * full of dirty lines, making every later miss pay a writeback. */
+        {
+            do
+            {
+                _mm512_stream_si512(mem + offset + 0 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 1 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 2 * ZMM_SZ, z0);
+                _mm512_stream_si512(mem + offset + 3 * ZMM_SZ, z0);
+                offset += 4 * ZMM_SZ;
+            } while (offset < (size - 4 * ZMM_SZ));
+            /* NT stores are unordered w.r.t. the overlapping tail stores. */
+            _mm_sfence();
         }
         if (offset == size)
             return ret;

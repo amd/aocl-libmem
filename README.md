@@ -24,6 +24,7 @@ This release of AOCL-LibMem library supports the following functions:
 + strstr
 + strspn
 + strchr
++ strrchr
 
 # INSTALLATION
 INSTALLATION FROM AOCL-LIBMEM GIT REPOSITORY:

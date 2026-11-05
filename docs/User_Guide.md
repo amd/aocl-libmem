@@ -30,6 +30,7 @@ functions:
 -  strstr
 -  strspn
 -  strchr
+-  strrchr
 
 `Note:` _Behavior might be undefined if AVX512 is disabled in the BIOS configuration on the Zen4+ platform._
 

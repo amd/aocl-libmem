@@ -46,7 +46,7 @@ enum class FunctionCategory {
     COPY,       // memcpy, memmove, strcpy, strncpy
     SET,        // memset
     COMPARE,    // memcmp, strcmp, strncmp
-    SEARCH,     // memchr, strchr, strstr
+    SEARCH,     // memchr, strchr, strrchr, strstr
     LENGTH,     // strlen, strspn
     CONCAT      // strcat, strncat
 };
@@ -54,7 +54,7 @@ enum class FunctionCategory {
 enum class ReturnCategory {
     DEST_PTR,       // Returns destination pointer (memcpy, strcpy, etc.)
     END_PTR,        // Returns pointer past copied data (mempcpy)
-    FOUND_PTR,      // Returns pointer to found item or NULL (memchr, strchr, strstr)
+    FOUND_PTR,      // Returns pointer to found item or NULL (memchr, strchr, strrchr, strstr)
     COMPARISON,     // Returns int comparison result (memcmp, strcmp, strncmp)
     SIZE,           // Returns size_t (strlen, strspn)
     VOID            // Returns void (none currently)

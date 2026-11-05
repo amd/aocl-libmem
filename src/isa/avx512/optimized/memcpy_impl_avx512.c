@@ -34,25 +34,26 @@
 
 extern cpu_info zen_info;
 
+/* Every memmove variant shares the overlap check and the 16-vec tier. */
+#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512) || defined(MEMMOVE_AVX512_ZEN6)
+#define ALM_AVX512_MEMMOVE
+#endif
+
 /*
- * AVX-512 memcpy/memmove with tiered head/tail, aligned loop, ERMS, and NT:
- *   <=64B (memcpy):     masked AVX-512 load/store
- *   <=64B (memmove):    scalar/SSE/AVX head-tail (store-forwarding safe)
- *   65..128B:           2-vec head/tail
- *   129..256B:          4-vec head/tail
- *   257..512B:          8-vec head/tail
+ * AVX-512 memcpy/memmove size ladder:
+ *   <=64B:              masked zmm (memcpy), scalar/SSE/AVX head-tail (memmove),
+ *                       or scalar head/mid/tail + branchless 4-xmm (zen6)
+ *   65..512B:           2-, 4-, 8-vec head/tail
  *   513..1024B (move):  16-vec head/tail
- *   >512/1024B:         overlap check (memmove only), then (in check order):
- *     < repmov_start:   dst-aligned 4-vec temporal loop (hot path)
- *     >= nt_start:      NT streaming stores   (all variants)
- *     else:             ERMS (rep movsb)      (repmov_start <= size < nt_start,
- *                                              ERMS variants only)
+ *   larger:             overlap check (memmove only), then dst-aligned 4-vec
+ *                       temporal loop / ERMS / NT stores, per threshold
  *
- * memcpy:  __restrict (no overlap handling)
- * memmove: overlap-aware forward/backward via MEMMOVE_AVX512_ERMS guard
+ * memcpy is __restrict; memmove adds the overlap check and the 16-vec tier.
+ * The ZEN6 variants write-prefetch the temporal loop and run rep-movsb out to
+ * __repmov_stop_threshold, which reverses the ERMS/NT check order.
  */
 
-#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
+#ifdef ALM_AVX512_MEMMOVE
 static inline void *_memcpy_avx512_erms(void *dst, const void *src, size_t size)
 #else
 static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__restrict src, size_t size)
@@ -60,7 +61,19 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
 {
     register void *ret __asm__("rax") = dst;
 
-#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
+#if defined(MEMMOVE_AVX512_ZEN6)
+    if (likely(size <= XMM_SZ))
+    {
+        if (likely(size != 0))
+            __load_store_ble_scalar_head_mid_tail(dst, src, size);
+        return ret;
+    }
+    if (likely(size <= ZMM_SZ))
+    {
+        __load_store_ble_4sse_head_tail(dst, src, size);
+        return ret;
+    }
+#elif defined(ALM_AVX512_MEMMOVE)
     if (likely(size <= XMM_SZ))
     {
         __load_store_ble_scalar_head_tail(dst, src, size);
@@ -99,7 +112,7 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
         return ret;
     }
 
-#if defined(MEMMOVE_AVX512_ERMS) || defined(MEMMOVE_AVX512)
+#ifdef ALM_AVX512_MEMMOVE
     if (size <= 16 * ZMM_SZ)
     {
         __load_store_le_16zmm_vec(dst, src, size);
@@ -170,16 +183,21 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
     }
 #endif
 
-    /* dst-aligned temporal loop - hoisted ahead of the NT tier so the common
-     * case (513B..repmov_start) takes a single threshold compare on the hot
-     * path; the NT compare moves to the cold path below.
-     *
-     * Correctness: sound only while __repmov_start_threshold <=
-     * __nt_start_threshold. On ERMS parts that always holds (26KB <= L3). If
-     * ERMS is ever absent, __repmov_start_threshold == REPMOV_DISABLED
-     * (UINT64_MAX) makes this guard always-true and would shadow the NT tier,
-     * so the NT tier below MUST remain reachable in that configuration. */
+#ifdef MEMMOVE_AVX512_ZEN6
+    /* rep-movsb copies forward */
+    if (unlikely(size >= __repmov_start_threshold && size < __repmov_stop_threshold))
+    {
+        __erms_movsb((void *) dst, src, size);
+        return ret;
+    }
+#endif
+
+    /* dst-aligned temporal loop */
+#ifdef MEMMOVE_AVX512_ZEN6
+    if (likely(size < __repmov_stop_threshold))
+#else
     if (likely(size < __repmov_start_threshold))
+#endif
     {
         const char *sp = (const char *) src;
         char *dp = (char *) dst;
@@ -191,6 +209,15 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
 
         while (rem > 4 * ZMM_SZ)
         {
+#if defined(MEMCPY_AVX512_ZEN6) || defined(MEMMOVE_AVX512_ZEN6)
+            if (rem > 8 * ZMM_SZ)
+            {
+                PREFETCH_WRITE(dp + 4 * ZMM_SZ);
+                PREFETCH_WRITE(dp + 5 * ZMM_SZ);
+                PREFETCH_WRITE(dp + 6 * ZMM_SZ);
+                PREFETCH_WRITE(dp + 7 * ZMM_SZ);
+            }
+#endif
             __unaligned_load_aligned_store_4zmm_vec(dp, sp);
             ADVANCE_4VEC(AVX512, sp, dp, rem);
         }
@@ -199,9 +226,22 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
         return ret;
     }
 
-    /* NT streaming tier (all variants: NT outperforms temporal regardless of ERMS) */
+#if defined(MEMCPY_AVX512_ZEN6)
+    if (likely(size < __repmov_stop_threshold))
+    {
+        __erms_movsb((void *) dst, src, size);
+        return ret;
+    }
+
+    {
+#elif defined(MEMMOVE_AVX512_ZEN6)
+    /* Only copies past __repmov_stop_threshold get here. */
+    {
+#else
+    /* NT streaming tier */
     if (unlikely(size >= __nt_start_threshold))
     {
+#endif
         const char *sp = (const char *) src;
         char *dp = (char *) dst;
 
@@ -218,18 +258,25 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
         ALM_STORE_FENCE()
 
         __unaligned_load_store_4zmm_vec((char *) dst + size - 4 * ZMM_SZ, (const char *) src + size - 4 * ZMM_SZ);
+#if !defined(MEMCPY_AVX512_ZEN6) && !defined(MEMMOVE_AVX512_ZEN6)
         return ret;
     }
 
     /* ERMS tier (rep movsb) - repmov_start <= size < nt_start */
     __erms_movsb((void *) dst, src, size);
+#else
+    }
+#endif
     return ret;
 }
 
-/* The rep movsb tier is runtime threshold-gated, so the ERMS and non-ERMS
- * entry points share a single body. Provide the plain _memcpy_avx512 name for
- * the generic (non-uarch) dispatch sources. */
+/* The rep-movsb tier is threshold-gated at runtime, so the ERMS and non-ERMS
+ * entry points share one body; alias the plain name for generic dispatch. */
 #define _memcpy_avx512 _memcpy_avx512_erms
+
+#ifdef ALM_AVX512_MEMMOVE
+#undef ALM_AVX512_MEMMOVE
+#endif
 
 #ifdef MEMMOVE_AVX512
 #undef MEMMOVE_AVX512
@@ -237,6 +284,14 @@ static inline void *_memcpy_avx512_erms(void *__restrict dst, const void *__rest
 
 #ifdef MEMMOVE_AVX512_ERMS
 #undef MEMMOVE_AVX512_ERMS
+#endif
+
+#ifdef MEMMOVE_AVX512_ZEN6
+#undef MEMMOVE_AVX512_ZEN6
+#endif
+
+#ifdef MEMCPY_AVX512_ZEN6
+#undef MEMCPY_AVX512_ZEN6
 #endif
 
 #endif /* MEMCPY_IMPL_AVX512_H */

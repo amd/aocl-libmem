@@ -23,6 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define MEMCPY_AVX512_ZEN6
 #include "../../isa/avx512/optimized/memcpy_impl_avx512.c"
 #include "logger.h"
 
